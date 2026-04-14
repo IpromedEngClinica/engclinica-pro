@@ -46,10 +46,11 @@ const Empresas = () => {
             <thead>
               <tr className="border-b bg-muted/50">
                 <th className="text-left px-5 py-3 font-medium text-muted-foreground">Nome</th>
-                <th className="text-left px-5 py-3 font-medium text-muted-foreground">CNPJ</th>
                 <th className="text-left px-5 py-3 font-medium text-muted-foreground">Cidade</th>
-                <th className="text-left px-5 py-3 font-medium text-muted-foreground">Telefone</th>
-                <th className="text-left px-5 py-3 font-medium text-muted-foreground">Contrato</th>
+                <th className="text-left px-5 py-3 font-medium text-muted-foreground">Estado</th>
+                <th className="text-left px-5 py-3 font-medium text-muted-foreground">E-mail</th>
+                <th className="text-left px-5 py-3 font-medium text-muted-foreground">Contato</th>
+                <th className="text-left px-5 py-3 font-medium text-muted-foreground">CPF/CNPJ</th>
               </tr>
             </thead>
             <tbody>
@@ -58,16 +59,11 @@ const Empresas = () => {
                   <td className="px-5 py-3 font-medium text-foreground flex items-center gap-2">
                     <Building2 className="w-4 h-4 text-primary" /> {e.nome}
                   </td>
-                  <td className="px-5 py-3 text-muted-foreground">{e.cnpj}</td>
                   <td className="px-5 py-3 text-muted-foreground">{e.cidade}</td>
-                  <td className="px-5 py-3 text-muted-foreground">{e.telefone}</td>
-                  <td className="px-5 py-3">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-                      e.contrato === "Ativo" ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"
-                    }`}>
-                      {e.contrato}
-                    </span>
-                  </td>
+                  <td className="px-5 py-3 text-muted-foreground">{e.estado}</td>
+                  <td className="px-5 py-3 text-muted-foreground">{e.email}</td>
+                  <td className="px-5 py-3 text-muted-foreground">{e.contato}</td>
+                  <td className="px-5 py-3 text-muted-foreground">{e.cnpj}</td>
                 </tr>
               ))}
             </tbody>
