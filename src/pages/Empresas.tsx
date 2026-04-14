@@ -22,10 +22,12 @@ const Empresas = () => {
   return (
     <div className="p-6 lg:p-8">
       <PageHeader title="Empresas" description="Gerencie as empresas cadastradas">
-        <Button>
+        <Button onClick={() => setDialogOpen(true)}>
           <Plus className="w-4 h-4 mr-2" /> Nova Empresa
         </Button>
       </PageHeader>
+
+      <EmpresaFormDialog open={dialogOpen} onOpenChange={setDialogOpen} />
 
       <div className="bg-card rounded-xl border">
         <div className="px-5 py-4 border-b flex gap-3">
