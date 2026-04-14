@@ -4,14 +4,7 @@ import { Input } from "@/components/ui/input";
 import PageHeader from "@/components/PageHeader";
 import EquipamentoFormDialog from "@/components/EquipamentoFormDialog";
 import { useState } from "react";
-
-const mockEquipamentos = [
-  { id: 1, tipo: "Monitor Multiparâmetro", fabricante: "Philips", modelo: "MX800", serie: "SN-001234", empresa: "Hospital São Lucas", status: "Ativo", tag: "TAG-001", patrimonio: "PAT-001", setor: "UTI" },
-  { id: 2, tipo: "Ventilador Pulmonar", fabricante: "Dräger", modelo: "Savina 300", serie: "SN-005678", empresa: "Clínica Santa Maria", status: "Em manutenção", tag: "TAG-002", patrimonio: "PAT-002", setor: "Centro Cirúrgico" },
-  { id: 3, tipo: "Bisturi Elétrico", fabricante: "WEM", modelo: "SS-501", serie: "SN-009012", empresa: "Hospital Regional", status: "Ativo", tag: "TAG-003", patrimonio: "PAT-003", setor: "Bloco Cirúrgico" },
-  { id: 4, tipo: "Desfibrilador", fabricante: "CMOS Drake", modelo: "Life 400", serie: "SN-003456", empresa: "UPA Centro", status: "Desativado", tag: "TAG-004", patrimonio: "PAT-004", setor: "Emergência" },
-  { id: 5, tipo: "Bomba de Infusão", fabricante: "B.Braun", modelo: "Infusomat", serie: "SN-007890", empresa: "Hospital São Lucas", status: "Ativo", tag: "TAG-005", patrimonio: "PAT-005", setor: "UTI" },
-];
+import { useData } from "@/contexts/DataContext";
 
 const statusColor: Record<string, string> = {
   Ativo: "bg-success/10 text-success",
@@ -20,9 +13,10 @@ const statusColor: Record<string, string> = {
 };
 
 const Equipamentos = () => {
+  const { equipamentos } = useData();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const filtered = mockEquipamentos.filter((e) =>
+  const filtered = equipamentos.filter((e) =>
     e.tipo.toLowerCase().includes(search.toLowerCase()) ||
     e.empresa.toLowerCase().includes(search.toLowerCase()) ||
     e.fabricante.toLowerCase().includes(search.toLowerCase()) ||
