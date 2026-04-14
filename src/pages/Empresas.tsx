@@ -2,8 +2,8 @@ import { Building2, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import PageHeader from "@/components/PageHeader";
+import EmpresaFormDialog from "@/components/EmpresaFormDialog";
 import { useState } from "react";
-
 const mockEmpresas = [
   { id: 1, nome: "Hospital São Lucas", cnpj: "12.345.678/0001-01", cidade: "São Paulo", telefone: "(11) 3456-7890", contrato: "Ativo" },
   { id: 2, nome: "Clínica Santa Maria", cnpj: "98.765.432/0001-02", cidade: "Rio de Janeiro", telefone: "(21) 2345-6789", contrato: "Ativo" },
@@ -14,6 +14,7 @@ const mockEmpresas = [
 
 const Empresas = () => {
   const [search, setSearch] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
   const filtered = mockEmpresas.filter((e) =>
     e.nome.toLowerCase().includes(search.toLowerCase())
   );
@@ -21,10 +22,12 @@ const Empresas = () => {
   return (
     <div className="p-6 lg:p-8">
       <PageHeader title="Empresas" description="Gerencie as empresas cadastradas">
-        <Button>
+        <Button onClick={() => setDialogOpen(true)}>
           <Plus className="w-4 h-4 mr-2" /> Nova Empresa
         </Button>
       </PageHeader>
+
+      <EmpresaFormDialog open={dialogOpen} onOpenChange={setDialogOpen} />
 
       <div className="bg-card rounded-xl border">
         <div className="px-5 py-4 border-b flex gap-3">
