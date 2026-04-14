@@ -45,6 +45,7 @@ const EquipamentoFormDialog = ({ open, onOpenChange }: Props) => {
     serie: "",
     patrimonio: "",
     setor: "",
+    tag: "",
   });
 
   const update = (field: string, value: string) =>
@@ -71,7 +72,7 @@ const EquipamentoFormDialog = ({ open, onOpenChange }: Props) => {
     }
     toast({ title: "Equipamento cadastrado com sucesso!" });
     onOpenChange(false);
-    setForm({ tipo: "", fabricante: "", modelo: "", estado: "Ativo", proprietario: "", serie: "", patrimonio: "", setor: "" });
+    setForm({ tipo: "", fabricante: "", modelo: "", estado: "Ativo", proprietario: "", serie: "", patrimonio: "", setor: "", tag: "" });
     setAddingTipo(false);
     setNovoTipo("");
   };
@@ -162,6 +163,11 @@ const EquipamentoFormDialog = ({ open, onOpenChange }: Props) => {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>TAG</Label>
+              <Input placeholder="Ex: TAG-0001" value={form.tag} onChange={(e) => update("tag", e.target.value)} />
             </div>
 
             <div className="space-y-2">
