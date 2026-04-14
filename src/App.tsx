@@ -9,6 +9,7 @@ import Empresas from "./pages/Empresas";
 import Equipamentos from "./pages/Equipamentos";
 import Contratos from "./pages/Contratos";
 import OrdensServico from "./pages/OrdensServico";
+import TiposEquipamento from "./pages/TiposEquipamento";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
             <Route path="/equipamentos" element={<Equipamentos />} />
             <Route path="/contratos" element={<Contratos />} />
             <Route path="/ordens-servico" element={<OrdensServico />} />
+            <Route path="/campos-gerenciais/tipos-equipamento" element={<TiposEquipamento />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
