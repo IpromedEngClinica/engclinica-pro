@@ -14,6 +14,7 @@ const mockEmpresas = [
 
 const Empresas = () => {
   const [search, setSearch] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
   const filtered = mockEmpresas.filter((e) =>
     e.nome.toLowerCase().includes(search.toLowerCase())
   );
