@@ -6,22 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import SearchableSelect from "@/components/SearchableSelect";
 import { toast } from "@/hooks/use-toast";
-
-const initialTipos = [
-  "Monitor Multiparâmetro",
-  "Ventilador Pulmonar",
-  "Bisturi Elétrico",
-  "Desfibrilador",
-  "Bomba De Infusão",
-];
-
-const mockEmpresas = [
-  "Hospital São Lucas",
-  "Clínica Santa Maria",
-  "Hospital Regional",
-  "UPA Centro",
-  "Clínica Vida",
-];
+import { useData } from "@/contexts/DataContext";
 
 const capitalizeWords = (str: string) =>
   str.replace(/\b\w/g, (c) => c.toUpperCase());
@@ -32,7 +17,7 @@ interface Props {
 }
 
 const EquipamentoFormDialog = ({ open, onOpenChange }: Props) => {
-  const [tipos, setTipos] = useState<string[]>(initialTipos);
+  const { tipos, addTipo, empresas, addEquipamento } = useData();
   const [addingTipo, setAddingTipo] = useState(false);
   const [novoTipo, setNovoTipo] = useState("");
 
@@ -58,7 +43,7 @@ const EquipamentoFormDialog = ({ open, onOpenChange }: Props) => {
       toast({ title: "Tipo já cadastrado", variant: "destructive" });
       return;
     }
-    setTipos([...tipos, formatted]);
+    addTipo(formatted);
     update("tipo", formatted);
     setNovoTipo("");
     setAddingTipo(false);
@@ -70,6 +55,17 @@ const EquipamentoFormDialog = ({ open, onOpenChange }: Props) => {
       toast({ title: "Preencha os campos obrigatórios", variant: "destructive" });
       return;
     }
+    addEquipamento({
+      tipo: form.tipo,
+      fabricante: form.fabricante,
+      modelo: form.modelo,
+      status: form.estado,
+      empresa: form.proprietario,
+      serie: form.serie,
+      patrimonio: form.patrimonio,
+      setor: form.setor,
+      tag: form.tag,
+    });
     toast({ title: "Equipamento cadastrado com sucesso!" });
     onOpenChange(false);
     setForm({ tipo: "", fabricante: "", modelo: "", estado: "Ativo", proprietario: "", serie: "", patrimonio: "", setor: "", tag: "" });
@@ -79,17 +75,17 @@ const EquipamentoFormDialog = ({ open, onOpenChange }: Props) => {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Novo Equipamento</DialogTitle>
+          <DialogTitle className="text-xl">Novo Equipamento</DialogTitle>
         </DialogHeader>
 
         {/* Dados do Equipamento */}
-        <div className="rounded-lg border p-4 space-y-4">
+        <div className="rounded-lg border p-5 space-y-5">
           <h3 className="text-sm font-semibold text-foreground">Dados do Equipamento</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div className="space-y-2">
-              <Label>Tipo *</Label>
+              <Label className="text-sm">Tipo *</Label>
               {!addingTipo ? (
                 <SearchableSelect
                   value={form.tipo}
@@ -102,13 +98,7 @@ const EquipamentoFormDialog = ({ open, onOpenChange }: Props) => {
                 />
               ) : (
                 <div className="flex gap-2">
-                  <Input
-                    placeholder="Novo tipo..."
-                    value={novoTipo}
-                    onChange={(e) => setNovoTipo(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleAddTipo()}
-                    className="flex-1"
-                  />
+                  <Input placeholder="Novo tipo..." value={novoTipo} onChange={(e) => setNovoTipo(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleAddTipo()} className="flex-1" />
                   <Button type="button" size="sm" onClick={handleAddTipo}>Salvar</Button>
                   <Button type="button" size="sm" variant="ghost" onClick={() => { setAddingTipo(false); setNovoTipo(""); }}>Cancelar</Button>
                 </div>
@@ -116,21 +106,19 @@ const EquipamentoFormDialog = ({ open, onOpenChange }: Props) => {
             </div>
 
             <div className="space-y-2">
-              <Label>Fabricante *</Label>
+              <Label className="text-sm">Fabricante *</Label>
               <Input placeholder="Ex: Philips" value={form.fabricante} onChange={(e) => update("fabricante", e.target.value)} />
             </div>
 
             <div className="space-y-2">
-              <Label>Modelo</Label>
+              <Label className="text-sm">Modelo</Label>
               <Input placeholder="Ex: MX800" value={form.modelo} onChange={(e) => update("modelo", e.target.value)} />
             </div>
 
             <div className="space-y-2">
-              <Label>Estado</Label>
+              <Label className="text-sm">Estado</Label>
               <Select value={form.estado} onValueChange={(v) => update("estado", v)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Ativo">Ativo</SelectItem>
                   <SelectItem value="Desativado">Desativado</SelectItem>
@@ -142,49 +130,49 @@ const EquipamentoFormDialog = ({ open, onOpenChange }: Props) => {
         </div>
 
         {/* Proprietário e Identificação */}
-        <div className="rounded-lg border p-4 space-y-4">
+        <div className="rounded-lg border p-5 space-y-5">
           <h3 className="text-sm font-semibold text-foreground">Proprietário e Identificação</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div className="space-y-2">
-              <Label>Proprietário *</Label>
+              <Label className="text-sm">Proprietário *</Label>
               <SearchableSelect
                 value={form.proprietario}
                 onValueChange={(v) => update("proprietario", v)}
-                options={mockEmpresas}
+                options={empresas}
                 placeholder="Selecione a empresa"
                 emptyText="Nenhuma empresa encontrada."
               />
             </div>
 
             <div className="space-y-2">
-              <Label>TAG</Label>
+              <Label className="text-sm">TAG</Label>
               <Input placeholder="Ex: TAG-0001" value={form.tag} onChange={(e) => update("tag", e.target.value)} />
             </div>
 
             <div className="space-y-2">
-              <Label>Número de Série</Label>
+              <Label className="text-sm">Número de Série</Label>
               <Input placeholder="Ex: SN-001234" value={form.serie} onChange={(e) => update("serie", e.target.value)} />
             </div>
 
             <div className="space-y-2">
-              <Label>Patrimônio</Label>
+              <Label className="text-sm">Patrimônio</Label>
               <Input placeholder="Ex: PAT-0001" value={form.patrimonio} onChange={(e) => update("patrimonio", e.target.value)} />
             </div>
 
             <div className="space-y-2">
-              <Label>Setor</Label>
+              <Label className="text-sm">Setor</Label>
               <Input placeholder="Ex: UTI, Centro Cirúrgico" value={form.setor} onChange={(e) => update("setor", e.target.value)} />
             </div>
           </div>
         </div>
 
         {/* Procedimento - futuro */}
-        <div className="rounded-lg border p-4 opacity-50">
+        <div className="rounded-lg border p-5 opacity-50">
           <h3 className="text-sm font-semibold text-muted-foreground">Procedimento</h3>
           <p className="text-xs text-muted-foreground mt-1">Será implementado futuramente</p>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="pt-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button onClick={handleSave}>Salvar Equipamento</Button>
         </DialogFooter>

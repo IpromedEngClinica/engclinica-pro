@@ -11,28 +11,31 @@ import Contratos from "./pages/Contratos";
 import OrdensServico from "./pages/OrdensServico";
 import TiposEquipamento from "./pages/TiposEquipamento";
 import NotFound from "./pages/NotFound";
+import { DataProvider } from "./contexts/DataContext";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route element={<AppLayout />}>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/empresas" element={<Empresas />} />
-            <Route path="/equipamentos" element={<Equipamentos />} />
-            <Route path="/contratos" element={<Contratos />} />
-            <Route path="/ordens-servico" element={<OrdensServico />} />
-            <Route path="/campos-gerenciais/tipos-equipamento" element={<TiposEquipamento />} />
-          </Route>
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
+    <DataProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            <Route element={<AppLayout />}>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/empresas" element={<Empresas />} />
+              <Route path="/equipamentos" element={<Equipamentos />} />
+              <Route path="/contratos" element={<Contratos />} />
+              <Route path="/ordens-servico" element={<OrdensServico />} />
+              <Route path="/campos-gerenciais/tipos-equipamento" element={<TiposEquipamento />} />
+            </Route>
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </DataProvider>
   </QueryClientProvider>
 );
 
