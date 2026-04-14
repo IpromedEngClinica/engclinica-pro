@@ -11,6 +11,7 @@ import Contratos from "./pages/Contratos";
 import OrdensServico from "./pages/OrdensServico";
 import TiposEquipamento from "./pages/TiposEquipamento";
 import NotFound from "./pages/NotFound";
+import { DataProvider } from "./contexts/DataContext";
 
 const queryClient = new QueryClient();
 
