@@ -9,6 +9,7 @@ import Empresas from "./pages/Empresas";
 import Equipamentos from "./pages/Equipamentos";
 import Contratos from "./pages/Contratos";
 import OrdensServico from "./pages/OrdensServico";
+import TiposEquipamento from "./pages/TiposEquipamento";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();

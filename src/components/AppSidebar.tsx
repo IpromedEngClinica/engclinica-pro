@@ -28,6 +28,9 @@ const camposGerenciais = [
 const AppSidebar = () => {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
+  const [camposOpen, setCamposOpen] = useState(
+    location.pathname.startsWith("/campos-gerenciais")
+  );
 
   return (
     <aside
