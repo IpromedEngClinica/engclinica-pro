@@ -75,6 +75,44 @@ const AppSidebar = () => {
             </Link>
           );
         })}
+
+        {/* Campos Gerenciais */}
+        <div className="pt-2">
+          <button
+            onClick={() => setCamposOpen(!camposOpen)}
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground w-full"
+            title={collapsed ? "Campos Gerenciais" : undefined}
+          >
+            <Settings2 className="w-5 h-5 shrink-0" />
+            {!collapsed && (
+              <>
+                <span className="flex-1 text-left">Campos Gerenciais</span>
+                <ChevronDown className={`w-4 h-4 transition-transform ${camposOpen ? "rotate-180" : ""}`} />
+              </>
+            )}
+          </button>
+          {camposOpen && !collapsed && (
+            <div className="ml-4 mt-1 space-y-1">
+              {camposGerenciais.map((item) => {
+                const isActive = location.pathname === item.path;
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                      isActive
+                        ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                        : "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    }`}
+                  >
+                    <item.icon className="w-4 h-4 shrink-0" />
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </nav>
 
       {/* Collapse toggle */}
