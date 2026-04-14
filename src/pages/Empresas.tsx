@@ -2,8 +2,8 @@ import { Building2, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import PageHeader from "@/components/PageHeader";
+import EmpresaFormDialog from "@/components/EmpresaFormDialog";
 import { useState } from "react";
-
 const mockEmpresas = [
   { id: 1, nome: "Hospital São Lucas", cnpj: "12.345.678/0001-01", cidade: "São Paulo", telefone: "(11) 3456-7890", contrato: "Ativo" },
   { id: 2, nome: "Clínica Santa Maria", cnpj: "98.765.432/0001-02", cidade: "Rio de Janeiro", telefone: "(21) 2345-6789", contrato: "Ativo" },
