@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus } from "lucide-react";
+import SearchableSelect from "@/components/SearchableSelect";
 import { toast } from "@/hooks/use-toast";
 
 const initialTipos = [
@@ -33,8 +33,8 @@ interface Props {
 
 const EquipamentoFormDialog = ({ open, onOpenChange }: Props) => {
   const [tipos, setTipos] = useState<string[]>(initialTipos);
-  const [novoTipo, setNovoTipo] = useState("");
   const [addingTipo, setAddingTipo] = useState(false);
+  const [novoTipo, setNovoTipo] = useState("");
 
   const [form, setForm] = useState({
     tipo: "",
@@ -91,21 +91,15 @@ const EquipamentoFormDialog = ({ open, onOpenChange }: Props) => {
             <div className="space-y-2">
               <Label>Tipo *</Label>
               {!addingTipo ? (
-                <div className="flex gap-2">
-                  <Select value={form.tipo} onValueChange={(v) => update("tipo", v)}>
-                    <SelectTrigger className="flex-1">
-                      <SelectValue placeholder="Selecione o tipo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {tipos.map((t) => (
-                        <SelectItem key={t} value={t}>{t}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button type="button" variant="outline" size="icon" onClick={() => setAddingTipo(true)} title="Adicionar novo tipo">
-                    <Plus className="w-4 h-4" />
-                  </Button>
-                </div>
+                <SearchableSelect
+                  value={form.tipo}
+                  onValueChange={(v) => update("tipo", v)}
+                  options={tipos}
+                  placeholder="Selecione o tipo"
+                  emptyText="Nenhum tipo encontrado."
+                  onAddNew={() => setAddingTipo(true)}
+                  addNewLabel="Adicionar novo tipo"
+                />
               ) : (
                 <div className="flex gap-2">
                   <Input
@@ -153,16 +147,13 @@ const EquipamentoFormDialog = ({ open, onOpenChange }: Props) => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Proprietário *</Label>
-              <Select value={form.proprietario} onValueChange={(v) => update("proprietario", v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione a empresa" />
-                </SelectTrigger>
-                <SelectContent>
-                  {mockEmpresas.map((e) => (
-                    <SelectItem key={e} value={e}>{e}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={form.proprietario}
+                onValueChange={(v) => update("proprietario", v)}
+                options={mockEmpresas}
+                placeholder="Selecione a empresa"
+                emptyText="Nenhuma empresa encontrada."
+              />
             </div>
 
             <div className="space-y-2">
