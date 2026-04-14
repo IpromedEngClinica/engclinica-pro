@@ -7,6 +7,9 @@ import {
   ClipboardList,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  Settings2,
+  List,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -16,6 +19,10 @@ const menuItems = [
   { icon: Cpu, label: "Equipamentos", path: "/equipamentos" },
   { icon: FileText, label: "Contratos", path: "/contratos" },
   { icon: ClipboardList, label: "Ordens de Serviço", path: "/ordens-servico" },
+];
+
+const camposGerenciais = [
+  { icon: List, label: "Tipos de Equipamento", path: "/campos-gerenciais/tipos-equipamento" },
 ];
 
 const AppSidebar = () => {
