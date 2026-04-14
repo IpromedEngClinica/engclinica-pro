@@ -5,11 +5,11 @@ import PageHeader from "@/components/PageHeader";
 import EmpresaFormDialog from "@/components/EmpresaFormDialog";
 import { useState } from "react";
 const mockEmpresas = [
-  { id: 1, nome: "Hospital São Lucas", cnpj: "12.345.678/0001-01", cidade: "São Paulo", telefone: "(11) 3456-7890", contrato: "Ativo" },
-  { id: 2, nome: "Clínica Santa Maria", cnpj: "98.765.432/0001-02", cidade: "Rio de Janeiro", telefone: "(21) 2345-6789", contrato: "Ativo" },
-  { id: 3, nome: "Hospital Regional", cnpj: "11.222.333/0001-03", cidade: "Belo Horizonte", telefone: "(31) 3456-1234", contrato: "Vencido" },
-  { id: 4, nome: "UPA Centro", cnpj: "44.555.666/0001-04", cidade: "Curitiba", telefone: "(41) 3321-9876", contrato: "Ativo" },
-  { id: 5, nome: "Clínica Vida", cnpj: "77.888.999/0001-05", cidade: "Porto Alegre", telefone: "(51) 3456-5678", contrato: "Ativo" },
+  { id: 1, nome: "Hospital São Lucas", cnpj: "12.345.678/0001-01", cidade: "São Paulo", estado: "SP", email: "contato@saolucas.com", contato: "João Silva" },
+  { id: 2, nome: "Clínica Santa Maria", cnpj: "98.765.432/0001-02", cidade: "Rio de Janeiro", estado: "RJ", email: "admin@santamaria.com", contato: "Maria Souza" },
+  { id: 3, nome: "Hospital Regional", cnpj: "11.222.333/0001-03", cidade: "Belo Horizonte", estado: "MG", email: "contato@hregional.com", contato: "Carlos Lima" },
+  { id: 4, nome: "UPA Centro", cnpj: "44.555.666/0001-04", cidade: "Curitiba", estado: "PR", email: "upa@centro.com", contato: "Ana Costa" },
+  { id: 5, nome: "Clínica Vida", cnpj: "77.888.999/0001-05", cidade: "Porto Alegre", estado: "RS", email: "vida@clinica.com", contato: "Pedro Santos" },
 ];
 
 const Empresas = () => {
