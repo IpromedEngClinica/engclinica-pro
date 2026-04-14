@@ -2,24 +2,26 @@ import { Cpu, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import PageHeader from "@/components/PageHeader";
+import EquipamentoFormDialog from "@/components/EquipamentoFormDialog";
 import { useState } from "react";
 
 const mockEquipamentos = [
-  { id: 1, nome: "Monitor Multiparâmetro", marca: "Philips", modelo: "MX800", serie: "SN-001234", empresa: "Hospital São Lucas", status: "Ativo" },
-  { id: 2, nome: "Ventilador Pulmonar", marca: "Dräger", modelo: "Savina 300", serie: "SN-005678", empresa: "Clínica Santa Maria", status: "Em manutenção" },
-  { id: 3, nome: "Bisturi Elétrico", marca: "WEM", modelo: "SS-501", serie: "SN-009012", empresa: "Hospital Regional", status: "Ativo" },
-  { id: 4, nome: "Desfibrilador", marca: "CMOS Drake", modelo: "Life 400", serie: "SN-003456", empresa: "UPA Centro", status: "Inativo" },
-  { id: 5, nome: "Bomba de Infusão", marca: "B.Braun", modelo: "Infusomat", serie: "SN-007890", empresa: "Hospital São Lucas", status: "Ativo" },
+  { id: 1, nome: "Monitor Multiparâmetro", fabricante: "Philips", modelo: "MX800", serie: "SN-001234", empresa: "Hospital São Lucas", status: "Ativo" },
+  { id: 2, nome: "Ventilador Pulmonar", fabricante: "Dräger", modelo: "Savina 300", serie: "SN-005678", empresa: "Clínica Santa Maria", status: "Em manutenção" },
+  { id: 3, nome: "Bisturi Elétrico", fabricante: "WEM", modelo: "SS-501", serie: "SN-009012", empresa: "Hospital Regional", status: "Ativo" },
+  { id: 4, nome: "Desfibrilador", fabricante: "CMOS Drake", modelo: "Life 400", serie: "SN-003456", empresa: "UPA Centro", status: "Desativado" },
+  { id: 5, nome: "Bomba de Infusão", fabricante: "B.Braun", modelo: "Infusomat", serie: "SN-007890", empresa: "Hospital São Lucas", status: "Ativo" },
 ];
 
 const statusColor: Record<string, string> = {
   Ativo: "bg-success/10 text-success",
   "Em manutenção": "bg-warning/10 text-warning",
-  Inativo: "bg-destructive/10 text-destructive",
+  Desativado: "bg-destructive/10 text-destructive",
 };
 
 const Equipamentos = () => {
   const [search, setSearch] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
   const filtered = mockEquipamentos.filter((e) =>
     e.nome.toLowerCase().includes(search.toLowerCase()) || e.empresa.toLowerCase().includes(search.toLowerCase())
   );
@@ -27,10 +29,12 @@ const Equipamentos = () => {
   return (
     <div className="p-6 lg:p-8">
       <PageHeader title="Equipamentos" description="Gerencie os equipamentos cadastrados">
-        <Button>
+        <Button onClick={() => setDialogOpen(true)}>
           <Plus className="w-4 h-4 mr-2" /> Novo Equipamento
         </Button>
       </PageHeader>
+
+      <EquipamentoFormDialog open={dialogOpen} onOpenChange={setDialogOpen} />
 
       <div className="bg-card rounded-xl border">
         <div className="px-5 py-4 border-b flex gap-3">
@@ -44,10 +48,10 @@ const Equipamentos = () => {
             <thead>
               <tr className="border-b bg-muted/50">
                 <th className="text-left px-5 py-3 font-medium text-muted-foreground">Equipamento</th>
-                <th className="text-left px-5 py-3 font-medium text-muted-foreground">Marca</th>
+                <th className="text-left px-5 py-3 font-medium text-muted-foreground">Fabricante</th>
                 <th className="text-left px-5 py-3 font-medium text-muted-foreground">Modelo</th>
                 <th className="text-left px-5 py-3 font-medium text-muted-foreground">Nº Série</th>
-                <th className="text-left px-5 py-3 font-medium text-muted-foreground">Empresa</th>
+                <th className="text-left px-5 py-3 font-medium text-muted-foreground">Proprietário</th>
                 <th className="text-left px-5 py-3 font-medium text-muted-foreground">Status</th>
               </tr>
             </thead>
@@ -57,7 +61,7 @@ const Equipamentos = () => {
                   <td className="px-5 py-3 font-medium text-foreground flex items-center gap-2">
                     <Cpu className="w-4 h-4 text-primary" /> {e.nome}
                   </td>
-                  <td className="px-5 py-3 text-muted-foreground">{e.marca}</td>
+                  <td className="px-5 py-3 text-muted-foreground">{e.fabricante}</td>
                   <td className="px-5 py-3 text-muted-foreground">{e.modelo}</td>
                   <td className="px-5 py-3 text-muted-foreground">{e.serie}</td>
                   <td className="px-5 py-3 text-muted-foreground">{e.empresa}</td>
