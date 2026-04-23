@@ -5,6 +5,7 @@ import {
   Cpu,
   FileText,
   ClipboardList,
+  FileSignature,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -19,12 +20,14 @@ const menuItems = [
   { icon: Cpu, label: "Equipamentos", path: "/equipamentos" },
   { icon: FileText, label: "Contratos", path: "/contratos" },
   { icon: ClipboardList, label: "Ordens de Serviço", path: "/ordens-servico" },
+  { icon: FileSignature, label: "Orçamentos", path: "/orcamentos" },
 ];
 
 const camposGerenciais = [
   { icon: List, label: "Tipos de Equipamento", path: "/campos-gerenciais/tipos-equipamento" },
   { icon: List, label: "Tipos de OS", path: "/campos-gerenciais/tipos-os" },
   { icon: List, label: "Estados da OS", path: "/campos-gerenciais/estados-os" },
+  { icon: List, label: "Peças", path: "/campos-gerenciais/pecas" },
 ];
 
 const AppSidebar = () => {
