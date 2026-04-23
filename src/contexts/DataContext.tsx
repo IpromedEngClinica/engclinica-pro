@@ -103,6 +103,9 @@ interface DataContextType {
   estadosOS: string[];
   addEstadoOS: (estado: string) => void;
   removeEstadoOS: (index: number) => void;
+  ordensServico: OrdemServico[];
+  addOrdemServico: (os: Omit<OrdemServico, "id" | "numero">) => void;
+  nextOSNumber: () => string;
 }
 
 const DataContext = createContext<DataContextType | null>(null);
