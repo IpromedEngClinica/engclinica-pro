@@ -67,6 +67,21 @@ export interface Equipamento {
   tag: string;
 }
 
+export interface OrdemServico {
+  id: number;
+  numero: string;
+  dataCriacao: string; // ISO datetime-local string
+  estado: string;
+  responsavelTecnico: string;
+  solicitante: string; // empresa
+  equipamentoId: number | null;
+  tipoServico: string;
+  origemProblema: string;
+  descricaoServico: string;
+  acessorios: string[];
+  observacoes: string;
+}
+
 const initialEquipamentos: Equipamento[] = [
   { id: 1, tipo: "Monitor Multiparâmetro", fabricante: "Philips", modelo: "MX800", serie: "SN-001234", empresa: "Hospital São Lucas", status: "Ativo", tag: "TAG-001", patrimonio: "PAT-001", setor: "UTI" },
   { id: 2, tipo: "Ventilador Pulmonar", fabricante: "Dräger", modelo: "Savina 300", serie: "SN-005678", empresa: "Clínica Santa Maria", status: "Em manutenção", tag: "TAG-002", patrimonio: "PAT-002", setor: "Centro Cirúrgico" },
