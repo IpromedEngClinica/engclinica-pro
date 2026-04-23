@@ -121,6 +121,8 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [equipamentos, setEquipamentos] = useState<Equipamento[]>(initialEquipamentos);
   const [tiposOS, setTiposOS] = useState<string[]>(initialTiposOS);
   const [estadosOS, setEstadosOS] = useState<string[]>(initialEstadosOS);
+  const [ordensServico, setOrdensServico] = useState<OrdemServico[]>([]);
+  const [osCounter, setOsCounter] = useState(1);
 
   const addTipo = (tipo: string) => setTipos((prev) => [...prev, tipo]);
   const removeTipo = (index: number) => setTipos((prev) => prev.filter((_, i) => i !== index));
@@ -134,6 +136,17 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   const addEstadoOS = (estado: string) => setEstadosOS((prev) => [...prev, estado]);
   const removeEstadoOS = (index: number) => setEstadosOS((prev) => prev.filter((_, i) => i !== index));
+
+  const nextOSNumber = () => {
+    const year = new Date().getFullYear();
+    return `OS-${year}-${String(osCounter).padStart(4, "0")}`;
+  };
+
+  const addOrdemServico = (os: Omit<OrdemServico, "id" | "numero">) => {
+    const numero = nextOSNumber();
+    setOrdensServico((prev) => [...prev, { ...os, id: Date.now(), numero }]);
+    setOsCounter((c) => c + 1);
+  };
 
   return (
     <DataContext.Provider
@@ -150,6 +163,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         estadosOS,
         addEstadoOS,
         removeEstadoOS,
+        ordensServico,
+        addOrdemServico,
+        nextOSNumber,
       }}
     >
       {children}
