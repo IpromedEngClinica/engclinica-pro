@@ -54,6 +54,14 @@ const initialEstadosOS = [
   "Garantia De Fábrica",
 ];
 
+const initialPecas = [
+  "Bateria",
+  "Sensor SpO2",
+  "Cabo De Força",
+  "Filtro HEPA",
+  "Válvula Reguladora",
+];
+
 export interface Equipamento {
   id: number;
   tipo: string;
@@ -70,16 +78,56 @@ export interface Equipamento {
 export interface OrdemServico {
   id: number;
   numero: string;
-  dataCriacao: string; // ISO datetime-local string
+  dataCriacao: string;
   estado: string;
   responsavelTecnico: string;
-  solicitante: string; // empresa
+  solicitante: string;
   equipamentoId: number | null;
   tipoServico: string;
   origemProblema: string;
   descricaoServico: string;
   acessorios: string[];
   observacoes: string;
+}
+
+export interface OrcamentoItemPeca {
+  peca: string;
+  quantidade: number;
+  valorUnitario: number;
+  garantiaDias: number;
+}
+
+export interface OrcamentoItemServico {
+  tipoServico: string;
+  tipoEquipamento: string;
+  quantidade: number;
+  valorUnitario: number;
+  garantiaDias: number;
+}
+
+export type OrcamentoTipo = "Serviço" | "Peças" | "Peças + Serviços";
+export type FormaPagamento = "Dinheiro" | "Cartão" | "Boleto" | "Pix";
+export type ModoPagamento = "À vista" | "Parcelado" | "Entrada + Parcela";
+export type TipoFrete = "CIF" | "FOB";
+
+export interface Orcamento {
+  id: number;
+  numero: string;
+  osId: number | null;
+  dataCriacao: string;
+  tipo: OrcamentoTipo;
+  solicitante: string;
+  pecas: OrcamentoItemPeca[];
+  servicos: OrcamentoItemServico[];
+  formaPagamento: FormaPagamento;
+  modoPagamento: ModoPagamento;
+  numeroParcelas: number;
+  valorEntrada: number;
+  prazoEntrega: string;
+  validadeDias: number;
+  frete: TipoFrete;
+  detalhes: string;
+  responsavelOrcamentista: string;
 }
 
 const initialEquipamentos: Equipamento[] = [
@@ -103,9 +151,15 @@ interface DataContextType {
   estadosOS: string[];
   addEstadoOS: (estado: string) => void;
   removeEstadoOS: (index: number) => void;
+  pecas: string[];
+  addPeca: (peca: string) => void;
+  removePeca: (index: number) => void;
   ordensServico: OrdemServico[];
   addOrdemServico: (os: Omit<OrdemServico, "id" | "numero">) => void;
   nextOSNumber: () => string;
+  orcamentos: Orcamento[];
+  addOrcamento: (orc: Omit<Orcamento, "id">) => void;
+  buildOrcamentoNumero: (osNumero?: string | null) => string;
 }
 
 const DataContext = createContext<DataContextType | null>(null);
@@ -121,8 +175,11 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [equipamentos, setEquipamentos] = useState<Equipamento[]>(initialEquipamentos);
   const [tiposOS, setTiposOS] = useState<string[]>(initialTiposOS);
   const [estadosOS, setEstadosOS] = useState<string[]>(initialEstadosOS);
+  const [pecas, setPecas] = useState<string[]>(initialPecas);
   const [ordensServico, setOrdensServico] = useState<OrdemServico[]>([]);
   const [osCounter, setOsCounter] = useState(1);
+  const [orcamentos, setOrcamentos] = useState<Orcamento[]>([]);
+  const [orcCounter, setOrcCounter] = useState(1);
 
   const addTipo = (tipo: string) => setTipos((prev) => [...prev, tipo]);
   const removeTipo = (index: number) => setTipos((prev) => prev.filter((_, i) => i !== index));
@@ -137,6 +194,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const addEstadoOS = (estado: string) => setEstadosOS((prev) => [...prev, estado]);
   const removeEstadoOS = (index: number) => setEstadosOS((prev) => prev.filter((_, i) => i !== index));
 
+  const addPeca = (peca: string) => setPecas((prev) => [...prev, peca]);
+  const removePeca = (index: number) => setPecas((prev) => prev.filter((_, i) => i !== index));
+
   const nextOSNumber = () => {
     const year = new Date().getFullYear();
     return `OS-${year}-${String(osCounter).padStart(4, "0")}`;
@@ -146,6 +206,17 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     const numero = nextOSNumber();
     setOrdensServico((prev) => [...prev, { ...os, id: Date.now(), numero }]);
     setOsCounter((c) => c + 1);
+  };
+
+  const buildOrcamentoNumero = (osNumero?: string | null) => {
+    if (osNumero) return osNumero.replace(/^OS-/, "ORC-");
+    const year = new Date().getFullYear();
+    return `ORC-${year}-${String(orcCounter).padStart(4, "0")}`;
+  };
+
+  const addOrcamento = (orc: Omit<Orcamento, "id">) => {
+    setOrcamentos((prev) => [...prev, { ...orc, id: Date.now() }]);
+    if (!orc.osId) setOrcCounter((c) => c + 1);
   };
 
   return (
@@ -163,9 +234,15 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         estadosOS,
         addEstadoOS,
         removeEstadoOS,
+        pecas,
+        addPeca,
+        removePeca,
         ordensServico,
         addOrdemServico,
         nextOSNumber,
+        orcamentos,
+        addOrcamento,
+        buildOrcamentoNumero,
       }}
     >
       {children}
