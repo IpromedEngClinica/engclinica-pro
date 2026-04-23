@@ -23,6 +23,8 @@ const menuItems = [
 
 const camposGerenciais = [
   { icon: List, label: "Tipos de Equipamento", path: "/campos-gerenciais/tipos-equipamento" },
+  { icon: List, label: "Tipos de OS", path: "/campos-gerenciais/tipos-os" },
+  { icon: List, label: "Estados da OS", path: "/campos-gerenciais/estados-os" },
 ];
 
 const AppSidebar = () => {

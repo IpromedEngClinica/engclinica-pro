@@ -10,6 +10,8 @@ import Equipamentos from "./pages/Equipamentos";
 import Contratos from "./pages/Contratos";
 import OrdensServico from "./pages/OrdensServico";
 import TiposEquipamento from "./pages/TiposEquipamento";
+import TiposOS from "./pages/TiposOS";
+import EstadosOS from "./pages/EstadosOS";
 import NotFound from "./pages/NotFound";
 import { DataProvider } from "./contexts/DataContext";
 
@@ -30,6 +32,8 @@ const App = () => (
               <Route path="/contratos" element={<Contratos />} />
               <Route path="/ordens-servico" element={<OrdensServico />} />
               <Route path="/campos-gerenciais/tipos-equipamento" element={<TiposEquipamento />} />
+              <Route path="/campos-gerenciais/tipos-os" element={<TiposOS />} />
+              <Route path="/campos-gerenciais/estados-os" element={<EstadosOS />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
