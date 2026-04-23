@@ -58,12 +58,12 @@ const OrdensServico = () => {
             <thead>
               <tr className="border-b bg-muted/50">
                 <th className="text-left px-5 py-3 font-medium text-muted-foreground">Número</th>
-                <th className="text-left px-5 py-3 font-medium text-muted-foreground">Data</th>
                 <th className="text-left px-5 py-3 font-medium text-muted-foreground">Estado</th>
                 <th className="text-left px-5 py-3 font-medium text-muted-foreground">Solicitante</th>
                 <th className="text-left px-5 py-3 font-medium text-muted-foreground">Equipamento</th>
+                <th className="text-left px-5 py-3 font-medium text-muted-foreground">Técnico Executor</th>
                 <th className="text-left px-5 py-3 font-medium text-muted-foreground">Tipo de Serviço</th>
-                <th className="text-left px-5 py-3 font-medium text-muted-foreground">Responsável</th>
+                <th className="text-left px-5 py-3 font-medium text-muted-foreground">Data de Criação</th>
               </tr>
             </thead>
             <tbody>
@@ -72,7 +72,6 @@ const OrdensServico = () => {
                   <td className="px-5 py-3 font-medium text-primary flex items-center gap-2">
                     <ClipboardList className="w-4 h-4" /> {os.numero}
                   </td>
-                  <td className="px-5 py-3 text-muted-foreground">{formatDate(os.dataCriacao)}</td>
                   <td className="px-5 py-3">
                     <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
                       {os.estado}
@@ -80,8 +79,9 @@ const OrdensServico = () => {
                   </td>
                   <td className="px-5 py-3 text-foreground">{os.solicitante}</td>
                   <td className="px-5 py-3 text-muted-foreground">{equipamentoLabel(os.equipamentoId)}</td>
-                  <td className="px-5 py-3 text-muted-foreground">{os.tipoServico}</td>
                   <td className="px-5 py-3 text-muted-foreground">{os.responsavelTecnico}</td>
+                  <td className="px-5 py-3 text-muted-foreground">{os.tipoServico}</td>
+                  <td className="px-5 py-3 text-muted-foreground">{formatDate(os.dataCriacao)}</td>
                 </tr>
               ))}
               {filtered.length === 0 && (
