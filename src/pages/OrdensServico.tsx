@@ -1,15 +1,18 @@
-import { ClipboardList, Plus, Search } from "lucide-react";
+import { ClipboardList, FileSignature, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import PageHeader from "@/components/PageHeader";
 import { useMemo, useState } from "react";
-import { useData } from "@/contexts/DataContext";
+import { useData, OrdemServico } from "@/contexts/DataContext";
 import OrdemServicoFormDialog from "@/components/OrdemServicoFormDialog";
+import OrcamentoFormDialog from "@/components/OrcamentoFormDialog";
 
 const OrdensServico = () => {
   const { ordensServico, equipamentos } = useData();
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
+  const [orcOpen, setOrcOpen] = useState(false);
+  const [osParaOrcamento, setOsParaOrcamento] = useState<OrdemServico | null>(null);
 
   const equipamentoLabel = (id: number | null) => {
     const eq = equipamentos.find((e) => e.id === id);
@@ -32,6 +35,11 @@ const OrdensServico = () => {
         equipamentoLabel(os.equipamentoId).toLowerCase().includes(q)
     );
   }, [ordensServico, search, equipamentos]);
+
+  const handleGerarOrcamento = (os: OrdemServico) => {
+    setOsParaOrcamento(os);
+    setOrcOpen(true);
+  };
 
   return (
     <div className="p-6 lg:p-8">
@@ -64,6 +72,7 @@ const OrdensServico = () => {
                 <th className="text-left px-5 py-3 font-medium text-muted-foreground">Técnico Executor</th>
                 <th className="text-left px-5 py-3 font-medium text-muted-foreground">Tipo de Serviço</th>
                 <th className="text-left px-5 py-3 font-medium text-muted-foreground">Data de Criação</th>
+                <th className="text-right px-5 py-3 font-medium text-muted-foreground">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -82,11 +91,22 @@ const OrdensServico = () => {
                   <td className="px-5 py-3 text-muted-foreground">{os.responsavelTecnico}</td>
                   <td className="px-5 py-3 text-muted-foreground">{os.tipoServico}</td>
                   <td className="px-5 py-3 text-muted-foreground">{formatDate(os.dataCriacao)}</td>
+                  <td className="px-5 py-3 text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleGerarOrcamento(os)}
+                      title="Gerar orçamento a partir desta OS"
+                      className="text-primary hover:text-primary"
+                    >
+                      <FileSignature className="w-4 h-4 mr-1" /> Gerar Orçamento
+                    </Button>
+                  </td>
                 </tr>
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-5 py-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={8} className="px-5 py-8 text-center text-sm text-muted-foreground">
                     Nenhuma ordem de serviço cadastrada
                   </td>
                 </tr>
@@ -97,6 +117,14 @@ const OrdensServico = () => {
       </div>
 
       <OrdemServicoFormDialog open={open} onOpenChange={setOpen} />
+      <OrcamentoFormDialog
+        open={orcOpen}
+        onOpenChange={(v) => {
+          setOrcOpen(v);
+          if (!v) setOsParaOrcamento(null);
+        }}
+        fromOS={osParaOrcamento}
+      />
     </div>
   );
 };
