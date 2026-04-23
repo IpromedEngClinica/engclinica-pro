@@ -16,6 +16,44 @@ const initialEmpresas = [
   "Clínica Vida",
 ];
 
+const initialTiposOS = [
+  "Manutenção Preventiva",
+  "Calibração",
+  "Manutenção Corretiva",
+  "Visita Técnica",
+  "Teste De Segurança Elétrica",
+  "Instalação",
+  "Certificação",
+  "Garantia De Serviço",
+  "Garantia De Fábrica",
+  "Entrada De Equipamentos",
+  "Orçamentar",
+  "Orçamento Não Aprovado",
+  "Reparo Externo",
+  "Laudo De Obsolescência",
+  "Devolução Sem Reparo",
+  "Despesas",
+  "Qualificação Térmica",
+];
+
+const initialEstadosOS = [
+  "Aberta",
+  "Fechada",
+  "Cancelada",
+  "Aguardando Peças",
+  "Aguardando Aprovação Do Orçamento",
+  "Serviço Finalizado",
+  "Análise Completa",
+  "Reparo Externo",
+  "Orçamento Aprovado",
+  "Entrada De Equipamentos Para Orçamento",
+  "Orçamento Não Aprovado",
+  "Liberado Para Entrega",
+  "Enviado Para Autorizada",
+  "Garantia De Serviço",
+  "Garantia De Fábrica",
+];
+
 export interface Equipamento {
   id: number;
   tipo: string;
@@ -44,6 +82,12 @@ interface DataContextType {
   empresas: string[];
   equipamentos: Equipamento[];
   addEquipamento: (eq: Omit<Equipamento, "id">) => void;
+  tiposOS: string[];
+  addTipoOS: (tipo: string) => void;
+  removeTipoOS: (index: number) => void;
+  estadosOS: string[];
+  addEstadoOS: (estado: string) => void;
+  removeEstadoOS: (index: number) => void;
 }
 
 const DataContext = createContext<DataContextType | null>(null);
@@ -57,21 +101,39 @@ export const useData = () => {
 export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [tipos, setTipos] = useState<string[]>(initialTipos);
   const [equipamentos, setEquipamentos] = useState<Equipamento[]>(initialEquipamentos);
+  const [tiposOS, setTiposOS] = useState<string[]>(initialTiposOS);
+  const [estadosOS, setEstadosOS] = useState<string[]>(initialEstadosOS);
 
-  const addTipo = (tipo: string) => {
-    setTipos((prev) => [...prev, tipo]);
-  };
-
-  const removeTipo = (index: number) => {
-    setTipos((prev) => prev.filter((_, i) => i !== index));
-  };
+  const addTipo = (tipo: string) => setTipos((prev) => [...prev, tipo]);
+  const removeTipo = (index: number) => setTipos((prev) => prev.filter((_, i) => i !== index));
 
   const addEquipamento = (eq: Omit<Equipamento, "id">) => {
     setEquipamentos((prev) => [...prev, { ...eq, id: Date.now() }]);
   };
 
+  const addTipoOS = (tipo: string) => setTiposOS((prev) => [...prev, tipo]);
+  const removeTipoOS = (index: number) => setTiposOS((prev) => prev.filter((_, i) => i !== index));
+
+  const addEstadoOS = (estado: string) => setEstadosOS((prev) => [...prev, estado]);
+  const removeEstadoOS = (index: number) => setEstadosOS((prev) => prev.filter((_, i) => i !== index));
+
   return (
-    <DataContext.Provider value={{ tipos, addTipo, removeTipo, empresas: initialEmpresas, equipamentos, addEquipamento }}>
+    <DataContext.Provider
+      value={{
+        tipos,
+        addTipo,
+        removeTipo,
+        empresas: initialEmpresas,
+        equipamentos,
+        addEquipamento,
+        tiposOS,
+        addTipoOS,
+        removeTipoOS,
+        estadosOS,
+        addEstadoOS,
+        removeEstadoOS,
+      }}
+    >
       {children}
     </DataContext.Provider>
   );
