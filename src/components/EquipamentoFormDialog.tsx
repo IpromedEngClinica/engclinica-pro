@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,35 +6,65 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import SearchableSelect from "@/components/SearchableSelect";
 import { toast } from "@/hooks/use-toast";
-import { useData } from "@/contexts/DataContext";
+import { useData, Equipamento } from "@/contexts/DataContext";
 
 const capitalizeWords = (str: string) =>
   str.replace(/\b\w/g, (c) => c.toUpperCase());
 
+export type DialogMode = "create" | "edit" | "view";
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  mode?: DialogMode;
+  equipamento?: Equipamento | null;
 }
 
-const EquipamentoFormDialog = ({ open, onOpenChange }: Props) => {
-  const { tipos, addTipo, empresas, addEquipamento } = useData();
+const emptyForm = {
+  tipo: "",
+  fabricante: "",
+  modelo: "",
+  estado: "Ativo",
+  proprietario: "",
+  serie: "",
+  patrimonio: "",
+  setor: "",
+  tag: "",
+};
+
+const EquipamentoFormDialog = ({ open, onOpenChange, mode = "create", equipamento = null }: Props) => {
+  const { tipos, addTipo, empresas, addEquipamento, updateEquipamento } = useData();
   const [addingTipo, setAddingTipo] = useState(false);
   const [novoTipo, setNovoTipo] = useState("");
+  const [form, setForm] = useState(emptyForm);
 
-  const [form, setForm] = useState({
-    tipo: "",
-    fabricante: "",
-    modelo: "",
-    estado: "Ativo",
-    proprietario: "",
-    serie: "",
-    patrimonio: "",
-    setor: "",
-    tag: "",
-  });
+  const readOnly = mode === "view";
 
-  const update = (field: string, value: string) =>
+  useEffect(() => {
+    if (!open) return;
+    setAddingTipo(false);
+    setNovoTipo("");
+    if (equipamento && (mode === "edit" || mode === "view")) {
+      setForm({
+        tipo: equipamento.tipo,
+        fabricante: equipamento.fabricante,
+        modelo: equipamento.modelo,
+        estado: equipamento.status,
+        proprietario: equipamento.empresa,
+        serie: equipamento.serie,
+        patrimonio: equipamento.patrimonio,
+        setor: equipamento.setor,
+        tag: equipamento.tag,
+      });
+    } else {
+      setForm(emptyForm);
+    }
+  }, [open, equipamento, mode]);
+
+  const update = (field: string, value: string) => {
+    if (readOnly) return;
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
 
   const handleAddTipo = () => {
     const formatted = capitalizeWords(novoTipo.trim());
@@ -55,7 +85,7 @@ const EquipamentoFormDialog = ({ open, onOpenChange }: Props) => {
       toast({ title: "Preencha os campos obrigatórios", variant: "destructive" });
       return;
     }
-    addEquipamento({
+    const payload = {
       tipo: form.tipo,
       fabricante: form.fabricante,
       modelo: form.modelo,
@@ -65,19 +95,25 @@ const EquipamentoFormDialog = ({ open, onOpenChange }: Props) => {
       patrimonio: form.patrimonio,
       setor: form.setor,
       tag: form.tag,
-    });
-    toast({ title: "Equipamento cadastrado com sucesso!" });
+    };
+    if (mode === "edit" && equipamento) {
+      updateEquipamento(equipamento.id, payload);
+      toast({ title: "Equipamento atualizado com sucesso!" });
+    } else {
+      addEquipamento(payload);
+      toast({ title: "Equipamento cadastrado com sucesso!" });
+    }
     onOpenChange(false);
-    setForm({ tipo: "", fabricante: "", modelo: "", estado: "Ativo", proprietario: "", serie: "", patrimonio: "", setor: "", tag: "" });
-    setAddingTipo(false);
-    setNovoTipo("");
   };
+
+  const title =
+    mode === "view" ? "Visualizar Equipamento" : mode === "edit" ? "Editar Equipamento" : "Novo Equipamento";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-xl">Novo Equipamento</DialogTitle>
+          <DialogTitle className="text-xl">{title}</DialogTitle>
         </DialogHeader>
 
         {/* Dados do Equipamento */}
@@ -86,7 +122,9 @@ const EquipamentoFormDialog = ({ open, onOpenChange }: Props) => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div className="space-y-2">
               <Label className="text-sm">Tipo *</Label>
-              {!addingTipo ? (
+              {readOnly ? (
+                <Input value={form.tipo} disabled />
+              ) : !addingTipo ? (
                 <SearchableSelect
                   value={form.tipo}
                   onValueChange={(v) => update("tipo", v)}
@@ -107,24 +145,28 @@ const EquipamentoFormDialog = ({ open, onOpenChange }: Props) => {
 
             <div className="space-y-2">
               <Label className="text-sm">Fabricante *</Label>
-              <Input placeholder="Ex: Philips" value={form.fabricante} onChange={(e) => update("fabricante", e.target.value)} />
+              <Input placeholder="Ex: Philips" value={form.fabricante} onChange={(e) => update("fabricante", e.target.value)} disabled={readOnly} />
             </div>
 
             <div className="space-y-2">
               <Label className="text-sm">Modelo</Label>
-              <Input placeholder="Ex: MX800" value={form.modelo} onChange={(e) => update("modelo", e.target.value)} />
+              <Input placeholder="Ex: MX800" value={form.modelo} onChange={(e) => update("modelo", e.target.value)} disabled={readOnly} />
             </div>
 
             <div className="space-y-2">
               <Label className="text-sm">Estado</Label>
-              <Select value={form.estado} onValueChange={(v) => update("estado", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Ativo">Ativo</SelectItem>
-                  <SelectItem value="Desativado">Desativado</SelectItem>
-                  <SelectItem value="Em manutenção">Em manutenção</SelectItem>
-                </SelectContent>
-              </Select>
+              {readOnly ? (
+                <Input value={form.estado} disabled />
+              ) : (
+                <Select value={form.estado} onValueChange={(v) => update("estado", v)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Ativo">Ativo</SelectItem>
+                    <SelectItem value="Desativado">Desativado</SelectItem>
+                    <SelectItem value="Em manutenção">Em manutenção</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </div>
         </div>
@@ -135,46 +177,46 @@ const EquipamentoFormDialog = ({ open, onOpenChange }: Props) => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div className="space-y-2">
               <Label className="text-sm">Proprietário *</Label>
-              <SearchableSelect
-                value={form.proprietario}
-                onValueChange={(v) => update("proprietario", v)}
-                options={empresas}
-                placeholder="Selecione a empresa"
-                emptyText="Nenhuma empresa encontrada."
-              />
+              {readOnly ? (
+                <Input value={form.proprietario} disabled />
+              ) : (
+                <SearchableSelect
+                  value={form.proprietario}
+                  onValueChange={(v) => update("proprietario", v)}
+                  options={empresas}
+                  placeholder="Selecione a empresa"
+                  emptyText="Nenhuma empresa encontrada."
+                />
+              )}
             </div>
 
             <div className="space-y-2">
               <Label className="text-sm">TAG</Label>
-              <Input placeholder="Ex: TAG-0001" value={form.tag} onChange={(e) => update("tag", e.target.value)} />
+              <Input placeholder="Ex: TAG-0001" value={form.tag} onChange={(e) => update("tag", e.target.value)} disabled={readOnly} />
             </div>
 
             <div className="space-y-2">
               <Label className="text-sm">Número de Série</Label>
-              <Input placeholder="Ex: SN-001234" value={form.serie} onChange={(e) => update("serie", e.target.value)} />
+              <Input placeholder="Ex: SN-001234" value={form.serie} onChange={(e) => update("serie", e.target.value)} disabled={readOnly} />
             </div>
 
             <div className="space-y-2">
               <Label className="text-sm">Patrimônio</Label>
-              <Input placeholder="Ex: PAT-0001" value={form.patrimonio} onChange={(e) => update("patrimonio", e.target.value)} />
+              <Input placeholder="Ex: PAT-0001" value={form.patrimonio} onChange={(e) => update("patrimonio", e.target.value)} disabled={readOnly} />
             </div>
 
             <div className="space-y-2">
               <Label className="text-sm">Setor</Label>
-              <Input placeholder="Ex: UTI, Centro Cirúrgico" value={form.setor} onChange={(e) => update("setor", e.target.value)} />
+              <Input placeholder="Ex: UTI, Centro Cirúrgico" value={form.setor} onChange={(e) => update("setor", e.target.value)} disabled={readOnly} />
             </div>
           </div>
         </div>
 
-        {/* Procedimento - futuro */}
-        <div className="rounded-lg border p-5 opacity-50">
-          <h3 className="text-sm font-semibold text-muted-foreground">Procedimento</h3>
-          <p className="text-xs text-muted-foreground mt-1">Será implementado futuramente</p>
-        </div>
-
         <DialogFooter className="pt-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={handleSave}>Salvar Equipamento</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            {readOnly ? "Fechar" : "Cancelar"}
+          </Button>
+          {!readOnly && <Button onClick={handleSave}>Salvar Equipamento</Button>}
         </DialogFooter>
       </DialogContent>
     </Dialog>

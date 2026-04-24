@@ -1,10 +1,10 @@
-import { Cpu, Plus, Search } from "lucide-react";
+import { Cpu, Plus, Search, Eye, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import PageHeader from "@/components/PageHeader";
-import EquipamentoFormDialog from "@/components/EquipamentoFormDialog";
+import EquipamentoFormDialog, { DialogMode } from "@/components/EquipamentoFormDialog";
 import { useState } from "react";
-import { useData } from "@/contexts/DataContext";
+import { useData, Equipamento } from "@/contexts/DataContext";
 
 const statusColor: Record<string, string> = {
   Ativo: "bg-success/10 text-success",
@@ -16,6 +16,9 @@ const Equipamentos = () => {
   const { equipamentos } = useData();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [mode, setMode] = useState<DialogMode>("create");
+  const [selected, setSelected] = useState<Equipamento | null>(null);
+
   const filtered = equipamentos.filter((e) =>
     e.tipo.toLowerCase().includes(search.toLowerCase()) ||
     e.empresa.toLowerCase().includes(search.toLowerCase()) ||
@@ -24,15 +27,19 @@ const Equipamentos = () => {
     e.serie.toLowerCase().includes(search.toLowerCase())
   );
 
+  const openCreate = () => { setSelected(null); setMode("create"); setDialogOpen(true); };
+  const openView = (e: Equipamento) => { setSelected(e); setMode("view"); setDialogOpen(true); };
+  const openEdit = (e: Equipamento) => { setSelected(e); setMode("edit"); setDialogOpen(true); };
+
   return (
     <div className="p-6 lg:p-8">
       <PageHeader title="Equipamentos" description="Gerencie os equipamentos cadastrados">
-        <Button onClick={() => setDialogOpen(true)}>
+        <Button onClick={openCreate}>
           <Plus className="w-4 h-4 mr-2" /> Novo Equipamento
         </Button>
       </PageHeader>
 
-      <EquipamentoFormDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+      <EquipamentoFormDialog open={dialogOpen} onOpenChange={setDialogOpen} mode={mode} equipamento={selected} />
 
       <div className="bg-card rounded-xl border">
         <div className="px-5 py-4 border-b flex gap-3">
@@ -54,6 +61,7 @@ const Equipamentos = () => {
                 <th className="text-left px-5 py-3 font-medium text-muted-foreground">Nº Série</th>
                 <th className="text-left px-5 py-3 font-medium text-muted-foreground">Patrimônio</th>
                 <th className="text-left px-5 py-3 font-medium text-muted-foreground">Setor</th>
+                <th className="text-right px-5 py-3 font-medium text-muted-foreground">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -72,6 +80,16 @@ const Equipamentos = () => {
                   <td className="px-5 py-3 text-muted-foreground">{e.serie}</td>
                   <td className="px-5 py-3 text-muted-foreground">{e.patrimonio}</td>
                   <td className="px-5 py-3 text-muted-foreground">{e.setor}</td>
+                  <td className="px-5 py-3">
+                    <div className="flex justify-end gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => openView(e)} title="Visualizar">
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => openEdit(e)} title="Editar">
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

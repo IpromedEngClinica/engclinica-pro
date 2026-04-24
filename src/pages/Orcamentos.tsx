@@ -1,10 +1,10 @@
-import { FileText, Plus, Search } from "lucide-react";
+import { FileText, Plus, Search, Eye, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import PageHeader from "@/components/PageHeader";
 import { useMemo, useState } from "react";
-import { useData } from "@/contexts/DataContext";
-import OrcamentoFormDialog from "@/components/OrcamentoFormDialog";
+import { useData, Orcamento } from "@/contexts/DataContext";
+import OrcamentoFormDialog, { DialogMode } from "@/components/OrcamentoFormDialog";
 
 const formatBRL = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -18,6 +18,8 @@ const Orcamentos = () => {
   const { orcamentos } = useData();
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<DialogMode>("create");
+  const [selected, setSelected] = useState<Orcamento | null>(null);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -29,10 +31,14 @@ const Orcamentos = () => {
     );
   }, [orcamentos, search]);
 
+  const openCreate = () => { setSelected(null); setMode("create"); setOpen(true); };
+  const openView = (o: Orcamento) => { setSelected(o); setMode("view"); setOpen(true); };
+  const openEdit = (o: Orcamento) => { setSelected(o); setMode("edit"); setOpen(true); };
+
   return (
     <div className="p-6 lg:p-8">
       <PageHeader title="Orçamentos" description="Gerencie os orçamentos de peças e serviços">
-        <Button onClick={() => setOpen(true)}>
+        <Button onClick={openCreate}>
           <Plus className="w-4 h-4 mr-2" /> Novo Orçamento
         </Button>
       </PageHeader>
@@ -60,6 +66,7 @@ const Orcamentos = () => {
                 <th className="text-left px-5 py-3 font-medium text-muted-foreground">Valor Total</th>
                 <th className="text-left px-5 py-3 font-medium text-muted-foreground">Responsável</th>
                 <th className="text-left px-5 py-3 font-medium text-muted-foreground">Data</th>
+                <th className="text-right px-5 py-3 font-medium text-muted-foreground">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -84,12 +91,22 @@ const Orcamentos = () => {
                     <td className="px-5 py-3 font-medium text-foreground">{formatBRL(total)}</td>
                     <td className="px-5 py-3 text-muted-foreground">{o.responsavelOrcamentista}</td>
                     <td className="px-5 py-3 text-muted-foreground">{formatDate(o.dataCriacao)}</td>
+                    <td className="px-5 py-3">
+                      <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => openView(o)} title="Visualizar">
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => openEdit(o)} title="Editar">
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-5 py-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={8} className="px-5 py-8 text-center text-sm text-muted-foreground">
                     Nenhum orçamento cadastrado
                   </td>
                 </tr>
@@ -99,7 +116,12 @@ const Orcamentos = () => {
         </div>
       </div>
 
-      <OrcamentoFormDialog open={open} onOpenChange={setOpen} />
+      <OrcamentoFormDialog
+        open={open}
+        onOpenChange={setOpen}
+        mode={mode}
+        orcamento={selected}
+      />
     </div>
   );
 };

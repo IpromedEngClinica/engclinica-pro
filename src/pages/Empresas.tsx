@@ -1,33 +1,54 @@
-import { Building2, Plus, Search } from "lucide-react";
+import { Building2, Plus, Search, Eye, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import PageHeader from "@/components/PageHeader";
-import EmpresaFormDialog from "@/components/EmpresaFormDialog";
+import EmpresaFormDialog, { DialogMode } from "@/components/EmpresaFormDialog";
 import { useState } from "react";
-const mockEmpresas = [
-  { id: 1, nome: "Hospital São Lucas", cnpj: "12.345.678/0001-01", cidade: "São Paulo", estado: "SP", email: "contato@saolucas.com", contato: "João Silva" },
-  { id: 2, nome: "Clínica Santa Maria", cnpj: "98.765.432/0001-02", cidade: "Rio de Janeiro", estado: "RJ", email: "admin@santamaria.com", contato: "Maria Souza" },
-  { id: 3, nome: "Hospital Regional", cnpj: "11.222.333/0001-03", cidade: "Belo Horizonte", estado: "MG", email: "contato@hregional.com", contato: "Carlos Lima" },
-  { id: 4, nome: "UPA Centro", cnpj: "44.555.666/0001-04", cidade: "Curitiba", estado: "PR", email: "upa@centro.com", contato: "Ana Costa" },
-  { id: 5, nome: "Clínica Vida", cnpj: "77.888.999/0001-05", cidade: "Porto Alegre", estado: "RS", email: "vida@clinica.com", contato: "Pedro Santos" },
-];
+import { useData, Empresa } from "@/contexts/DataContext";
 
 const Empresas = () => {
+  const { empresasList } = useData();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const filtered = mockEmpresas.filter((e) =>
+  const [mode, setMode] = useState<DialogMode>("create");
+  const [selected, setSelected] = useState<Empresa | null>(null);
+
+  const filtered = empresasList.filter((e) =>
     e.nome.toLowerCase().includes(search.toLowerCase())
   );
+
+  const openCreate = () => {
+    setSelected(null);
+    setMode("create");
+    setDialogOpen(true);
+  };
+
+  const openView = (e: Empresa) => {
+    setSelected(e);
+    setMode("view");
+    setDialogOpen(true);
+  };
+
+  const openEdit = (e: Empresa) => {
+    setSelected(e);
+    setMode("edit");
+    setDialogOpen(true);
+  };
 
   return (
     <div className="p-6 lg:p-8">
       <PageHeader title="Empresas" description="Gerencie as empresas cadastradas">
-        <Button onClick={() => setDialogOpen(true)}>
+        <Button onClick={openCreate}>
           <Plus className="w-4 h-4 mr-2" /> Nova Empresa
         </Button>
       </PageHeader>
 
-      <EmpresaFormDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+      <EmpresaFormDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        mode={mode}
+        empresa={selected}
+      />
 
       <div className="bg-card rounded-xl border">
         <div className="px-5 py-4 border-b flex gap-3">
@@ -48,9 +69,11 @@ const Empresas = () => {
                 <th className="text-left px-5 py-3 font-medium text-muted-foreground">Nome</th>
                 <th className="text-left px-5 py-3 font-medium text-muted-foreground">Cidade</th>
                 <th className="text-left px-5 py-3 font-medium text-muted-foreground">Estado</th>
+                <th className="text-left px-5 py-3 font-medium text-muted-foreground">Telefone</th>
                 <th className="text-left px-5 py-3 font-medium text-muted-foreground">E-mail</th>
                 <th className="text-left px-5 py-3 font-medium text-muted-foreground">Contato</th>
                 <th className="text-left px-5 py-3 font-medium text-muted-foreground">CPF/CNPJ</th>
+                <th className="text-right px-5 py-3 font-medium text-muted-foreground">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -61,11 +84,29 @@ const Empresas = () => {
                   </td>
                   <td className="px-5 py-3 text-muted-foreground">{e.cidade}</td>
                   <td className="px-5 py-3 text-muted-foreground">{e.estado}</td>
+                  <td className="px-5 py-3 text-muted-foreground">{e.telefone || e.celular || "—"}</td>
                   <td className="px-5 py-3 text-muted-foreground">{e.email}</td>
                   <td className="px-5 py-3 text-muted-foreground">{e.contato}</td>
-                  <td className="px-5 py-3 text-muted-foreground">{e.cnpj}</td>
+                  <td className="px-5 py-3 text-muted-foreground">{e.cpfCnpj}</td>
+                  <td className="px-5 py-3">
+                    <div className="flex justify-end gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => openView(e)} title="Visualizar">
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => openEdit(e)} title="Editar">
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </td>
                 </tr>
               ))}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-5 py-8 text-center text-sm text-muted-foreground">
+                    Nenhuma empresa cadastrada
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

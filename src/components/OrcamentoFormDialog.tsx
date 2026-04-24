@@ -16,12 +16,17 @@ import {
   OrcamentoItemPeca,
   OrcamentoItemServico,
   OrdemServico,
+  Orcamento,
 } from "@/contexts/DataContext";
+
+export type DialogMode = "create" | "edit" | "view";
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   fromOS?: OrdemServico | null;
+  mode?: DialogMode;
+  orcamento?: Orcamento | null;
 }
 
 const nowDateTimeLocal = () => {
@@ -38,8 +43,10 @@ const fretes: TipoFrete[] = ["CIF", "FOB"];
 const formatBRL = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-const OrcamentoFormDialog = ({ open, onOpenChange, fromOS }: Props) => {
-  const { empresas, pecas, tiposOS, tipos, addOrcamento, buildOrcamentoNumero } = useData();
+const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orcamento = null }: Props) => {
+  const { empresas, pecas, tiposOS, tipos, equipamentos, addOrcamento, updateOrcamento, buildOrcamentoNumero } = useData();
+
+  const readOnly = mode === "view";
 
   const [tipo, setTipo] = useState<OrcamentoTipo>("Serviço");
   const [solicitante, setSolicitante] = useState("");
@@ -59,6 +66,27 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS }: Props) => {
 
   useEffect(() => {
     if (!open) return;
+
+    // Modo edição/visualização de orçamento existente
+    if (orcamento && (mode === "edit" || mode === "view")) {
+      setNumeroPreview(orcamento.numero);
+      setDataCriacao(orcamento.dataCriacao);
+      setTipo(orcamento.tipo);
+      setSolicitante(orcamento.solicitante);
+      setPecasItems(orcamento.pecas);
+      setServicosItems(orcamento.servicos);
+      setFormaPagamento(orcamento.formaPagamento);
+      setModoPagamento(orcamento.modoPagamento);
+      setNumeroParcelas(orcamento.numeroParcelas);
+      setValorEntrada(orcamento.valorEntrada);
+      setPrazoEntrega(orcamento.prazoEntrega);
+      setValidadeDias(orcamento.validadeDias);
+      setFrete(orcamento.frete);
+      setDetalhes(orcamento.detalhes);
+      setResponsavel(orcamento.responsavelOrcamentista);
+      return;
+    }
+
     const numero = buildOrcamentoNumero(fromOS?.numero ?? null);
     setNumeroPreview(numero);
     setDataCriacao(nowDateTimeLocal());
@@ -72,13 +100,17 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS }: Props) => {
     setResponsavel("Ícaro Rezende");
 
     if (fromOS) {
+      // Puxar o tipo de equipamento a partir do equipamento da OS
+      const eq = equipamentos.find((e) => e.id === fromOS.equipamentoId);
+      const tipoEquip = eq?.tipo ?? "";
+
       setTipo("Serviço");
       setSolicitante(fromOS.solicitante);
       setPecasItems([]);
       setServicosItems([
         {
           tipoServico: fromOS.tipoServico,
-          tipoEquipamento: "",
+          tipoEquipamento: tipoEquip,
           quantidade: 1,
           valorUnitario: 0,
           garantiaDias: 90,
@@ -92,7 +124,7 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS }: Props) => {
       setServicosItems([]);
       setDetalhes("");
     }
-  }, [open, fromOS, buildOrcamentoNumero]);
+  }, [open, fromOS, orcamento, mode, buildOrcamentoNumero, equipamentos]);
 
   const incluiPecas = tipo === "Peças" || tipo === "Peças + Serviços";
   const incluiServicos = tipo === "Serviço" || tipo === "Peças + Serviços";
@@ -154,9 +186,9 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS }: Props) => {
       return;
     }
 
-    addOrcamento({
+    const payload = {
       numero: numeroPreview,
-      osId: fromOS?.id ?? null,
+      osId: orcamento?.osId ?? fromOS?.id ?? null,
       dataCriacao,
       tipo,
       solicitante,
@@ -171,20 +203,31 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS }: Props) => {
       frete,
       detalhes,
       responsavelOrcamentista: responsavel,
-    });
+    };
 
-    toast({ title: "Orçamento criado com sucesso!" });
+    if (mode === "edit" && orcamento) {
+      updateOrcamento(orcamento.id, payload);
+      toast({ title: "Orçamento atualizado com sucesso!" });
+    } else {
+      addOrcamento(payload);
+      toast({ title: "Orçamento criado com sucesso!" });
+    }
     onOpenChange(false);
   };
+
+  const dialogTitle =
+    mode === "view" ? `Visualizar Orçamento ${numeroPreview}` :
+    mode === "edit" ? `Editar Orçamento ${numeroPreview}` :
+    fromOS ? `Novo Orçamento (a partir da ${fromOS.numero})` : "Novo Orçamento";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-xl">
-            {fromOS ? `Novo Orçamento (a partir da ${fromOS.numero})` : "Novo Orçamento"}
-          </DialogTitle>
+          <DialogTitle className="text-xl">{dialogTitle}</DialogTitle>
         </DialogHeader>
+
+        <fieldset disabled={readOnly} className={readOnly ? "space-y-4 [&_button]:pointer-events-none" : "space-y-4"}>
 
         {/* Identificação */}
         <div className="rounded-lg border p-5 space-y-5">
@@ -515,11 +558,17 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS }: Props) => {
           />
         </div>
 
+        </fieldset>
+
         <DialogFooter className="pt-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
+            {readOnly ? "Fechar" : "Cancelar"}
           </Button>
-          <Button onClick={handleSave}>Salvar Orçamento</Button>
+          {!readOnly && (
+            <Button onClick={handleSave}>
+              {mode === "edit" ? "Salvar Alterações" : "Salvar Orçamento"}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
