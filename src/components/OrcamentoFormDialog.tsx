@@ -191,6 +191,7 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orca
       osId: orcamento?.osId ?? fromOS?.id ?? null,
       dataCriacao,
       tipo,
+      status: orcamento?.status ?? "Pendente" as const,
       solicitante,
       pecas: incluiPecas ? pecasItems : [],
       servicos: incluiServicos ? servicosItems : [],

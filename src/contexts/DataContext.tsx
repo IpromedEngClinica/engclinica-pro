@@ -119,6 +119,15 @@ export type OrcamentoTipo = "Serviço" | "Peças" | "Peças + Serviços";
 export type FormaPagamento = "Dinheiro" | "Cartão" | "Boleto" | "Pix";
 export type ModoPagamento = "À vista" | "Parcelado" | "Entrada + Parcela";
 export type TipoFrete = "CIF" | "FOB";
+export type OrcamentoStatus = "Pendente" | "Aprovado" | "Reprovado" | "Faturado" | "Cancelado";
+
+export const ORCAMENTO_STATUSES: OrcamentoStatus[] = [
+  "Pendente",
+  "Aprovado",
+  "Reprovado",
+  "Faturado",
+  "Cancelado",
+];
 
 export interface Orcamento {
   id: number;
@@ -126,6 +135,7 @@ export interface Orcamento {
   osId: number | null;
   dataCriacao: string;
   tipo: OrcamentoTipo;
+  status: OrcamentoStatus;
   solicitante: string;
   pecas: OrcamentoItemPeca[];
   servicos: OrcamentoItemServico[];
@@ -183,6 +193,7 @@ interface DataContextType {
   orcamentos: Orcamento[];
   addOrcamento: (orc: Omit<Orcamento, "id">) => void;
   updateOrcamento: (id: number, orc: Omit<Orcamento, "id">) => void;
+  updateOrcamentoStatus: (id: number, status: OrcamentoStatus) => void;
   buildOrcamentoNumero: (osNumero?: string | null) => string;
 }
 
@@ -261,6 +272,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const updateOrcamento = (id: number, orc: Omit<Orcamento, "id">) => {
     setOrcamentos((prev) => prev.map((it) => (it.id === id ? { ...orc, id } : it)));
   };
+  const updateOrcamentoStatus = (id: number, status: OrcamentoStatus) => {
+    setOrcamentos((prev) => prev.map((it) => (it.id === id ? { ...it, status } : it)));
+  };
 
   return (
     <DataContext.Provider
@@ -291,6 +305,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         orcamentos,
         addOrcamento,
         updateOrcamento,
+        updateOrcamentoStatus,
         buildOrcamentoNumero,
       }}
     >
