@@ -16,12 +16,17 @@ import {
   OrcamentoItemPeca,
   OrcamentoItemServico,
   OrdemServico,
+  Orcamento,
 } from "@/contexts/DataContext";
+
+export type DialogMode = "create" | "edit" | "view";
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   fromOS?: OrdemServico | null;
+  mode?: DialogMode;
+  orcamento?: Orcamento | null;
 }
 
 const nowDateTimeLocal = () => {
