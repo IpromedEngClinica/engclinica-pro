@@ -558,11 +558,17 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orca
           />
         </div>
 
+        </fieldset>
+
         <DialogFooter className="pt-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
+            {readOnly ? "Fechar" : "Cancelar"}
           </Button>
-          <Button onClick={handleSave}>Salvar Orçamento</Button>
+          {!readOnly && (
+            <Button onClick={handleSave}>
+              {mode === "edit" ? "Salvar Alterações" : "Salvar Orçamento"}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
