@@ -305,6 +305,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         orcamentos,
         addOrcamento,
         updateOrcamento,
+        updateOrcamentoStatus,
         buildOrcamentoNumero,
       }}
     >
