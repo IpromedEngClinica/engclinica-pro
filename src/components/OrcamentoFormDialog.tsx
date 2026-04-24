@@ -186,9 +186,9 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orca
       return;
     }
 
-    addOrcamento({
+    const payload = {
       numero: numeroPreview,
-      osId: fromOS?.id ?? null,
+      osId: orcamento?.osId ?? fromOS?.id ?? null,
       dataCriacao,
       tipo,
       solicitante,
@@ -203,19 +203,28 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orca
       frete,
       detalhes,
       responsavelOrcamentista: responsavel,
-    });
+    };
 
-    toast({ title: "Orçamento criado com sucesso!" });
+    if (mode === "edit" && orcamento) {
+      updateOrcamento(orcamento.id, payload);
+      toast({ title: "Orçamento atualizado com sucesso!" });
+    } else {
+      addOrcamento(payload);
+      toast({ title: "Orçamento criado com sucesso!" });
+    }
     onOpenChange(false);
   };
+
+  const dialogTitle =
+    mode === "view" ? `Visualizar Orçamento ${numeroPreview}` :
+    mode === "edit" ? `Editar Orçamento ${numeroPreview}` :
+    fromOS ? `Novo Orçamento (a partir da ${fromOS.numero})` : "Novo Orçamento";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-xl">
-            {fromOS ? `Novo Orçamento (a partir da ${fromOS.numero})` : "Novo Orçamento"}
-          </DialogTitle>
+          <DialogTitle className="text-xl">{dialogTitle}</DialogTitle>
         </DialogHeader>
 
         {/* Identificação */}
