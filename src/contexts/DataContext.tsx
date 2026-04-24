@@ -193,6 +193,7 @@ interface DataContextType {
   orcamentos: Orcamento[];
   addOrcamento: (orc: Omit<Orcamento, "id">) => void;
   updateOrcamento: (id: number, orc: Omit<Orcamento, "id">) => void;
+  updateOrcamentoStatus: (id: number, status: OrcamentoStatus) => void;
   buildOrcamentoNumero: (osNumero?: string | null) => string;
 }
 
