@@ -227,6 +227,8 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orca
           <DialogTitle className="text-xl">{dialogTitle}</DialogTitle>
         </DialogHeader>
 
+        <fieldset disabled={readOnly} className={readOnly ? "space-y-4 [&_button]:pointer-events-none" : "space-y-4"}>
+
         {/* Identificação */}
         <div className="rounded-lg border p-5 space-y-5">
           <h3 className="text-sm font-semibold">Identificação</h3>
