@@ -119,6 +119,15 @@ export type OrcamentoTipo = "Serviço" | "Peças" | "Peças + Serviços";
 export type FormaPagamento = "Dinheiro" | "Cartão" | "Boleto" | "Pix";
 export type ModoPagamento = "À vista" | "Parcelado" | "Entrada + Parcela";
 export type TipoFrete = "CIF" | "FOB";
+export type OrcamentoStatus = "Pendente" | "Aprovado" | "Reprovado" | "Faturado" | "Cancelado";
+
+export const ORCAMENTO_STATUSES: OrcamentoStatus[] = [
+  "Pendente",
+  "Aprovado",
+  "Reprovado",
+  "Faturado",
+  "Cancelado",
+];
 
 export interface Orcamento {
   id: number;
@@ -126,6 +135,7 @@ export interface Orcamento {
   osId: number | null;
   dataCriacao: string;
   tipo: OrcamentoTipo;
+  status: OrcamentoStatus;
   solicitante: string;
   pecas: OrcamentoItemPeca[];
   servicos: OrcamentoItemServico[];
