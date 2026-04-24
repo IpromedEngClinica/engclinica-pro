@@ -8,14 +8,6 @@ const initialTipos = [
   "Bomba De Infusão",
 ];
 
-const initialEmpresas = [
-  "Hospital São Lucas",
-  "Clínica Santa Maria",
-  "Hospital Regional",
-  "UPA Centro",
-  "Clínica Vida",
-];
-
 const initialTiposOS = [
   "Manutenção Preventiva",
   "Calibração",
@@ -61,6 +53,24 @@ const initialPecas = [
   "Filtro HEPA",
   "Válvula Reguladora",
 ];
+
+export interface Empresa {
+  id: number;
+  nome: string;
+  nomeFantasia: string;
+  cpfCnpj: string;
+  cep: string;
+  rua: string;
+  numero: string;
+  complemento: string;
+  bairro: string;
+  cidade: string;
+  estado: string;
+  contato: string;
+  email: string;
+  celular: string;
+  telefone: string;
+}
 
 export interface Equipamento {
   id: number;
@@ -130,6 +140,14 @@ export interface Orcamento {
   responsavelOrcamentista: string;
 }
 
+const initialEmpresas: Empresa[] = [
+  { id: 1, nome: "Hospital São Lucas", nomeFantasia: "São Lucas", cpfCnpj: "12.345.678/0001-01", cep: "01310-100", rua: "Av. Paulista", numero: "1000", complemento: "", bairro: "Bela Vista", cidade: "São Paulo", estado: "SP", contato: "João Silva", email: "contato@saolucas.com", celular: "(11) 99999-1111", telefone: "(11) 3333-1111" },
+  { id: 2, nome: "Clínica Santa Maria", nomeFantasia: "Santa Maria", cpfCnpj: "98.765.432/0001-02", cep: "20040-020", rua: "Rua da Assembleia", numero: "200", complemento: "Sala 5", bairro: "Centro", cidade: "Rio de Janeiro", estado: "RJ", contato: "Maria Souza", email: "admin@santamaria.com", celular: "(21) 98888-2222", telefone: "(21) 2222-2222" },
+  { id: 3, nome: "Hospital Regional", nomeFantasia: "HR", cpfCnpj: "11.222.333/0001-03", cep: "30130-010", rua: "Av. Afonso Pena", numero: "500", complemento: "", bairro: "Centro", cidade: "Belo Horizonte", estado: "MG", contato: "Carlos Lima", email: "contato@hregional.com", celular: "(31) 97777-3333", telefone: "(31) 3333-3333" },
+  { id: 4, nome: "UPA Centro", nomeFantasia: "UPA", cpfCnpj: "44.555.666/0001-04", cep: "80010-000", rua: "Rua XV de Novembro", numero: "100", complemento: "", bairro: "Centro", cidade: "Curitiba", estado: "PR", contato: "Ana Costa", email: "upa@centro.com", celular: "(41) 96666-4444", telefone: "(41) 4444-4444" },
+  { id: 5, nome: "Clínica Vida", nomeFantasia: "Vida", cpfCnpj: "77.888.999/0001-05", cep: "90010-150", rua: "Rua dos Andradas", numero: "300", complemento: "", bairro: "Centro Histórico", cidade: "Porto Alegre", estado: "RS", contato: "Pedro Santos", email: "vida@clinica.com", celular: "(51) 95555-5555", telefone: "(51) 5555-5555" },
+];
+
 const initialEquipamentos: Equipamento[] = [
   { id: 1, tipo: "Monitor Multiparâmetro", fabricante: "Philips", modelo: "MX800", serie: "SN-001234", empresa: "Hospital São Lucas", status: "Ativo", tag: "TAG-001", patrimonio: "PAT-001", setor: "UTI" },
   { id: 2, tipo: "Ventilador Pulmonar", fabricante: "Dräger", modelo: "Savina 300", serie: "SN-005678", empresa: "Clínica Santa Maria", status: "Em manutenção", tag: "TAG-002", patrimonio: "PAT-002", setor: "Centro Cirúrgico" },
@@ -142,9 +160,13 @@ interface DataContextType {
   tipos: string[];
   addTipo: (tipo: string) => void;
   removeTipo: (index: number) => void;
+  empresasList: Empresa[];
   empresas: string[];
+  addEmpresa: (e: Omit<Empresa, "id">) => void;
+  updateEmpresa: (id: number, e: Omit<Empresa, "id">) => void;
   equipamentos: Equipamento[];
   addEquipamento: (eq: Omit<Equipamento, "id">) => void;
+  updateEquipamento: (id: number, eq: Omit<Equipamento, "id">) => void;
   tiposOS: string[];
   addTipoOS: (tipo: string) => void;
   removeTipoOS: (index: number) => void;
@@ -156,9 +178,11 @@ interface DataContextType {
   removePeca: (index: number) => void;
   ordensServico: OrdemServico[];
   addOrdemServico: (os: Omit<OrdemServico, "id" | "numero">) => void;
+  updateOrdemServico: (id: number, os: Omit<OrdemServico, "id" | "numero">) => void;
   nextOSNumber: () => string;
   orcamentos: Orcamento[];
   addOrcamento: (orc: Omit<Orcamento, "id">) => void;
+  updateOrcamento: (id: number, orc: Omit<Orcamento, "id">) => void;
   buildOrcamentoNumero: (osNumero?: string | null) => string;
 }
 
@@ -172,6 +196,7 @@ export const useData = () => {
 
 export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [tipos, setTipos] = useState<string[]>(initialTipos);
+  const [empresasList, setEmpresasList] = useState<Empresa[]>(initialEmpresas);
   const [equipamentos, setEquipamentos] = useState<Equipamento[]>(initialEquipamentos);
   const [tiposOS, setTiposOS] = useState<string[]>(initialTiposOS);
   const [estadosOS, setEstadosOS] = useState<string[]>(initialEstadosOS);
@@ -184,8 +209,18 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const addTipo = (tipo: string) => setTipos((prev) => [...prev, tipo]);
   const removeTipo = (index: number) => setTipos((prev) => prev.filter((_, i) => i !== index));
 
+  const addEmpresa = (e: Omit<Empresa, "id">) => {
+    setEmpresasList((prev) => [...prev, { ...e, id: Date.now() }]);
+  };
+  const updateEmpresa = (id: number, e: Omit<Empresa, "id">) => {
+    setEmpresasList((prev) => prev.map((it) => (it.id === id ? { ...e, id } : it)));
+  };
+
   const addEquipamento = (eq: Omit<Equipamento, "id">) => {
     setEquipamentos((prev) => [...prev, { ...eq, id: Date.now() }]);
+  };
+  const updateEquipamento = (id: number, eq: Omit<Equipamento, "id">) => {
+    setEquipamentos((prev) => prev.map((it) => (it.id === id ? { ...eq, id } : it)));
   };
 
   const addTipoOS = (tipo: string) => setTiposOS((prev) => [...prev, tipo]);
@@ -207,6 +242,11 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     setOrdensServico((prev) => [...prev, { ...os, id: Date.now(), numero }]);
     setOsCounter((c) => c + 1);
   };
+  const updateOrdemServico = (id: number, os: Omit<OrdemServico, "id" | "numero">) => {
+    setOrdensServico((prev) =>
+      prev.map((it) => (it.id === id ? { ...it, ...os } : it))
+    );
+  };
 
   const buildOrcamentoNumero = (osNumero?: string | null) => {
     if (osNumero) return osNumero.replace(/^OS-/, "ORC-");
@@ -218,6 +258,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     setOrcamentos((prev) => [...prev, { ...orc, id: Date.now() }]);
     if (!orc.osId) setOrcCounter((c) => c + 1);
   };
+  const updateOrcamento = (id: number, orc: Omit<Orcamento, "id">) => {
+    setOrcamentos((prev) => prev.map((it) => (it.id === id ? { ...orc, id } : it)));
+  };
 
   return (
     <DataContext.Provider
@@ -225,9 +268,13 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         tipos,
         addTipo,
         removeTipo,
-        empresas: initialEmpresas,
+        empresasList,
+        empresas: empresasList.map((e) => e.nome),
+        addEmpresa,
+        updateEmpresa,
         equipamentos,
         addEquipamento,
+        updateEquipamento,
         tiposOS,
         addTipoOS,
         removeTipoOS,
@@ -239,9 +286,11 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         removePeca,
         ordensServico,
         addOrdemServico,
+        updateOrdemServico,
         nextOSNumber,
         orcamentos,
         addOrcamento,
+        updateOrcamento,
         buildOrcamentoNumero,
       }}
     >
