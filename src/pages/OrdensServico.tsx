@@ -1,16 +1,18 @@
-import { ClipboardList, FileSignature, Plus, Search } from "lucide-react";
+import { ClipboardList, FileSignature, Plus, Search, Eye, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import PageHeader from "@/components/PageHeader";
 import { useMemo, useState } from "react";
 import { useData, OrdemServico } from "@/contexts/DataContext";
-import OrdemServicoFormDialog from "@/components/OrdemServicoFormDialog";
+import OrdemServicoFormDialog, { DialogMode } from "@/components/OrdemServicoFormDialog";
 import OrcamentoFormDialog from "@/components/OrcamentoFormDialog";
 
 const OrdensServico = () => {
   const { ordensServico, equipamentos } = useData();
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<DialogMode>("create");
+  const [selected, setSelected] = useState<OrdemServico | null>(null);
   const [orcOpen, setOrcOpen] = useState(false);
   const [osParaOrcamento, setOsParaOrcamento] = useState<OrdemServico | null>(null);
 
@@ -36,6 +38,10 @@ const OrdensServico = () => {
     );
   }, [ordensServico, search, equipamentos]);
 
+  const openCreate = () => { setSelected(null); setMode("create"); setOpen(true); };
+  const openView = (os: OrdemServico) => { setSelected(os); setMode("view"); setOpen(true); };
+  const openEdit = (os: OrdemServico) => { setSelected(os); setMode("edit"); setOpen(true); };
+
   const handleGerarOrcamento = (os: OrdemServico) => {
     setOsParaOrcamento(os);
     setOrcOpen(true);
@@ -44,7 +50,7 @@ const OrdensServico = () => {
   return (
     <div className="p-6 lg:p-8">
       <PageHeader title="Ordens de Serviço" description="Gerencie as ordens de serviço">
-        <Button onClick={() => setOpen(true)}>
+        <Button onClick={openCreate}>
           <Plus className="w-4 h-4 mr-2" /> Nova OS
         </Button>
       </PageHeader>
@@ -91,16 +97,24 @@ const OrdensServico = () => {
                   <td className="px-5 py-3 text-muted-foreground">{os.responsavelTecnico}</td>
                   <td className="px-5 py-3 text-muted-foreground">{os.tipoServico}</td>
                   <td className="px-5 py-3 text-muted-foreground">{formatDate(os.dataCriacao)}</td>
-                  <td className="px-5 py-3 text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleGerarOrcamento(os)}
-                      title="Gerar orçamento a partir desta OS"
-                      className="text-primary hover:text-primary"
-                    >
-                      <FileSignature className="w-4 h-4 mr-1" /> Gerar Orçamento
-                    </Button>
+                  <td className="px-5 py-3">
+                    <div className="flex justify-end gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => openView(os)} title="Visualizar">
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => openEdit(os)} title="Editar">
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleGerarOrcamento(os)}
+                        title="Gerar orçamento a partir desta OS"
+                        className="text-primary"
+                      >
+                        <FileSignature className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -116,7 +130,7 @@ const OrdensServico = () => {
         </div>
       </div>
 
-      <OrdemServicoFormDialog open={open} onOpenChange={setOpen} />
+      <OrdemServicoFormDialog open={open} onOpenChange={setOpen} mode={mode} os={selected} />
       <OrcamentoFormDialog
         open={orcOpen}
         onOpenChange={(v) => {
