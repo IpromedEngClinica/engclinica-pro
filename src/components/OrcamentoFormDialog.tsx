@@ -43,8 +43,10 @@ const fretes: TipoFrete[] = ["CIF", "FOB"];
 const formatBRL = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-const OrcamentoFormDialog = ({ open, onOpenChange, fromOS }: Props) => {
-  const { empresas, pecas, tiposOS, tipos, addOrcamento, buildOrcamentoNumero } = useData();
+const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orcamento = null }: Props) => {
+  const { empresas, pecas, tiposOS, tipos, equipamentos, addOrcamento, updateOrcamento, buildOrcamentoNumero } = useData();
+
+  const readOnly = mode === "view";
 
   const [tipo, setTipo] = useState<OrcamentoTipo>("Serviço");
   const [solicitante, setSolicitante] = useState("");
@@ -64,6 +66,27 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS }: Props) => {
 
   useEffect(() => {
     if (!open) return;
+
+    // Modo edição/visualização de orçamento existente
+    if (orcamento && (mode === "edit" || mode === "view")) {
+      setNumeroPreview(orcamento.numero);
+      setDataCriacao(orcamento.dataCriacao);
+      setTipo(orcamento.tipo);
+      setSolicitante(orcamento.solicitante);
+      setPecasItems(orcamento.pecas);
+      setServicosItems(orcamento.servicos);
+      setFormaPagamento(orcamento.formaPagamento);
+      setModoPagamento(orcamento.modoPagamento);
+      setNumeroParcelas(orcamento.numeroParcelas);
+      setValorEntrada(orcamento.valorEntrada);
+      setPrazoEntrega(orcamento.prazoEntrega);
+      setValidadeDias(orcamento.validadeDias);
+      setFrete(orcamento.frete);
+      setDetalhes(orcamento.detalhes);
+      setResponsavel(orcamento.responsavelOrcamentista);
+      return;
+    }
+
     const numero = buildOrcamentoNumero(fromOS?.numero ?? null);
     setNumeroPreview(numero);
     setDataCriacao(nowDateTimeLocal());
@@ -77,13 +100,17 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS }: Props) => {
     setResponsavel("Ícaro Rezende");
 
     if (fromOS) {
+      // Puxar o tipo de equipamento a partir do equipamento da OS
+      const eq = equipamentos.find((e) => e.id === fromOS.equipamentoId);
+      const tipoEquip = eq?.tipo ?? "";
+
       setTipo("Serviço");
       setSolicitante(fromOS.solicitante);
       setPecasItems([]);
       setServicosItems([
         {
           tipoServico: fromOS.tipoServico,
-          tipoEquipamento: "",
+          tipoEquipamento: tipoEquip,
           quantidade: 1,
           valorUnitario: 0,
           garantiaDias: 90,
@@ -97,7 +124,7 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS }: Props) => {
       setServicosItems([]);
       setDetalhes("");
     }
-  }, [open, fromOS, buildOrcamentoNumero]);
+  }, [open, fromOS, orcamento, mode, buildOrcamentoNumero, equipamentos]);
 
   const incluiPecas = tipo === "Peças" || tipo === "Peças + Serviços";
   const incluiServicos = tipo === "Serviço" || tipo === "Peças + Serviços";
