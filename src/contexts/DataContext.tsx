@@ -272,6 +272,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const updateOrcamento = (id: number, orc: Omit<Orcamento, "id">) => {
     setOrcamentos((prev) => prev.map((it) => (it.id === id ? { ...orc, id } : it)));
   };
+  const updateOrcamentoStatus = (id: number, status: OrcamentoStatus) => {
+    setOrcamentos((prev) => prev.map((it) => (it.id === id ? { ...it, status } : it)));
+  };
 
   return (
     <DataContext.Provider
