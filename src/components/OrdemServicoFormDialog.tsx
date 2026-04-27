@@ -333,7 +333,8 @@ const OrdemServicoFormDialog = ({ open, onOpenChange, mode = "create", os = null
           />
         </div>
 
-        <DialogFooter className="pt-2">
+        </div>
+        <DialogFooter className="px-6 pb-6 pt-2 border-t">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {readOnly ? "Fechar" : "Cancelar"}
           </Button>
