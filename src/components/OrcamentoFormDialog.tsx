@@ -307,6 +307,17 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orca
               <Input value={responsavel} onChange={(e) => setResponsavel(e.target.value)} />
             </div>
             <div className="space-y-2 sm:col-span-3">
+              <Label className="text-sm">Identificador do Orçamento</Label>
+              <Input
+                placeholder="Ex: Equipamento, n° de série, patrimônio ou descrição curta"
+                value={identificador}
+                onChange={(e) => setIdentificador(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Primeira linha da identificação técnica — aparece nas listagens e no PDF.
+              </p>
+            </div>
+            <div className="space-y-2 sm:col-span-3">
               <Label className="text-sm">Solicitante *</Label>
               <SearchableSelect
                 value={solicitante}
