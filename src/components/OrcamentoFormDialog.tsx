@@ -63,6 +63,7 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orca
   const [frete, setFrete] = useState<TipoFrete>("CIF");
   const [detalhes, setDetalhes] = useState("");
   const [responsavel, setResponsavel] = useState("Ícaro Rezende");
+  const [identificador, setIdentificador] = useState("");
   const [numeroPreview, setNumeroPreview] = useState("");
 
   useEffect(() => {
