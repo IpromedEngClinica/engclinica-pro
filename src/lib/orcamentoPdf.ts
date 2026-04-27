@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { Orcamento, Empresa } from "@/contexts/DataContext";
+import logoUrl from "@/assets/aci-logo.png";
 
 const formatBRL = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -10,18 +11,36 @@ const formatDate = (iso: string) => {
   return new Date(iso).toLocaleDateString("pt-BR");
 };
 
-// Tema minimalista: vermelho corporativo + cinza
-const RED: [number, number, number] = [200, 30, 30];
-const DARK: [number, number, number] = [40, 40, 40];
-const GRAY: [number, number, number] = [120, 120, 120];
-const LIGHT: [number, number, number] = [240, 240, 240];
+// Paleta minimalista — quase sem vermelho, apenas como acento sutil
+const ACCENT: [number, number, number] = [180, 35, 35]; // vermelho ACI (uso pontual)
+const DARK: [number, number, number] = [45, 55, 72];
+const TEXT: [number, number, number] = [60, 70, 85];
+const MUTED: [number, number, number] = [130, 138, 150];
+const BORDER: [number, number, number] = [225, 228, 232];
+const SOFT: [number, number, number] = [247, 248, 250];
 
 const COMPANY_FOOTER =
   "ACI Comércio LTDA - Assistência Técnica Hospitalar e Engenharia Clínica\n" +
   "Rua José Martins da Silva, 215 - Cerâmica - Juiz de Fora – MG - CEP 36.080-370\n" +
   "Pabx (32) 3221-7944 - E-mail: acicomercio@yahoo.com.br - CNPJ: 71.208.094/0001-37";
 
-export function generateOrcamentoPdf(orc: Orcamento, empresa?: Empresa) {
+// Carrega a logo como dataURL para embutir no PDF
+async function loadLogoDataUrl(): Promise<string | null> {
+  try {
+    const res = await fetch(logoUrl);
+    const blob = await res.blob();
+    return await new Promise((resolve) => {
+      const r = new FileReader();
+      r.onloadend = () => resolve(r.result as string);
+      r.onerror = () => resolve(null);
+      r.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+export async function generateOrcamentoPdf(orc: Orcamento, empresa?: Empresa) {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
@@ -31,52 +50,76 @@ export function generateOrcamentoPdf(orc: Orcamento, empresa?: Empresa) {
   const totalServ = orc.servicos.reduce((s, i) => s + i.quantidade * i.valorUnitario, 0);
   const total = totalPecas + totalServ;
 
-  // ===== Header =====
-  doc.setFillColor(...RED);
-  doc.rect(0, 0, pageW, 28, "F");
+  const logo = await loadLogoDataUrl();
 
-  doc.setTextColor(255, 255, 255);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.text("ACI", margin, 14);
+  // ===== Header =====
+  // Fundo branco com leve faixa inferior cinza
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, 0, pageW, 32, "F");
+
+  // Logo
+  if (logo) {
+    try {
+      doc.addImage(logo, "PNG", margin, 8, 38, 18);
+    } catch {
+      // ignore
+    }
+  } else {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.setTextColor(...ACCENT);
+    doc.text("ACI", margin, 18);
+  }
+
+  // Bloco de identificação do orçamento (lado direito)
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
-  doc.text("Equipamentos Hospitalares", margin, 19);
+  doc.setTextColor(...MUTED);
+  doc.text("ORÇAMENTO", pageW - margin, 12, { align: "right" });
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
-  doc.text(`Orçamento Nº ${orc.numero}`, pageW - margin, 14, { align: "right" });
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.text(formatDate(orc.dataCriacao), pageW - margin, 20, { align: "right" });
-  doc.text(`Status: ${orc.status}`, pageW - margin, 25, { align: "right" });
+  doc.setTextColor(...DARK);
+  doc.text(`Nº ${orc.numero}`, pageW - margin, 18, { align: "right" });
 
-  let y = 38;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(...TEXT);
+  doc.text(`Emissão: ${formatDate(orc.dataCriacao)}`, pageW - margin, 23, { align: "right" });
+  doc.text(`Validade: ${orc.validadeDias} dias`, pageW - margin, 27, { align: "right" });
+
+  // Linha de acento sutil
+  doc.setDrawColor(...ACCENT);
+  doc.setLineWidth(0.6);
+  doc.line(margin, 32, pageW - margin, 32);
+
+  let y = 40;
 
   const sectionTitle = (title: string) => {
-    doc.setFillColor(...LIGHT);
-    doc.rect(margin, y - 4, pageW - margin * 2, 7, "F");
-    doc.setTextColor(...RED);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.text(title.toUpperCase(), margin + 2, y + 1);
-    y += 8;
     doc.setTextColor(...DARK);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.text(title.toUpperCase(), margin, y);
+    doc.setDrawColor(...BORDER);
+    doc.setLineWidth(0.2);
+    doc.line(margin, y + 1.5, pageW - margin, y + 1.5);
+    y += 6;
+    doc.setTextColor(...TEXT);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
+    doc.setFontSize(8.5);
   };
 
   const kv = (label: string, value: string, x: number, w: number) => {
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(...GRAY);
-    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(...MUTED);
+    doc.setFontSize(7);
     doc.text(label.toUpperCase(), x, y);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(...DARK);
-    doc.setFontSize(9);
+    doc.setFontSize(8.5);
     const lines = doc.splitTextToSize(value || "—", w);
-    doc.text(lines, x, y + 4);
-    return lines.length * 4 + 4;
+    doc.text(lines, x, y + 3.5);
+    return lines.length * 3.6 + 3.5;
   };
 
   // ===== Cliente =====
@@ -89,13 +132,13 @@ export function generateOrcamentoPdf(orc: Orcamento, empresa?: Empresa) {
     margin + colW + 6,
     colW
   );
-  y += Math.max(h1, h2) + 2;
+  y += Math.max(h1, h2);
   if (empresa) {
     const h3 = kv("CNPJ / CPF", empresa.cpfCnpj, margin, colW);
     const h4 = kv("Contato", `${empresa.contato} • ${empresa.telefone}`, margin + colW + 6, colW);
-    y += Math.max(h3, h4) + 2;
+    y += Math.max(h3, h4);
   }
-  y += 2;
+  y += 4;
 
   // ===== Peças =====
   if (orc.pecas.length > 0) {
@@ -111,20 +154,22 @@ export function generateOrcamentoPdf(orc: Orcamento, empresa?: Empresa) {
         `${p.garantiaDias} dias`,
         formatBRL(p.quantidade * p.valorUnitario),
       ]),
-      theme: "grid",
-      headStyles: { fillColor: RED, textColor: 255, fontSize: 9 },
-      bodyStyles: { fontSize: 9, textColor: DARK },
-      alternateRowStyles: { fillColor: [250, 250, 250] },
+      theme: "plain",
+      headStyles: { fillColor: SOFT, textColor: DARK, fontSize: 8, fontStyle: "bold", lineColor: BORDER, lineWidth: 0.1 },
+      bodyStyles: { fontSize: 8, textColor: TEXT, lineColor: BORDER, lineWidth: 0.1 },
       margin: { left: margin, right: margin },
-      styles: { cellPadding: 2 },
+      styles: { cellPadding: 2.2 },
     });
     // @ts-ignore
     y = doc.lastAutoTable.finalY + 2;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(...MUTED);
+    doc.text("Subtotal Peças", pageW - margin - 30, y + 4);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
     doc.setTextColor(...DARK);
-    doc.text(`Total Peças: ${formatBRL(totalPecas)}`, pageW - margin, y + 4, { align: "right" });
-    y += 10;
+    doc.text(formatBRL(totalPecas), pageW - margin, y + 4, { align: "right" });
+    y += 9;
   }
 
   // ===== Serviços =====
@@ -142,22 +187,24 @@ export function generateOrcamentoPdf(orc: Orcamento, empresa?: Empresa) {
         `${s.garantiaDias} dias`,
         formatBRL(s.quantidade * s.valorUnitario),
       ]),
-      theme: "grid",
-      headStyles: { fillColor: RED, textColor: 255, fontSize: 9 },
-      bodyStyles: { fontSize: 9, textColor: DARK },
-      alternateRowStyles: { fillColor: [250, 250, 250] },
+      theme: "plain",
+      headStyles: { fillColor: SOFT, textColor: DARK, fontSize: 8, fontStyle: "bold", lineColor: BORDER, lineWidth: 0.1 },
+      bodyStyles: { fontSize: 8, textColor: TEXT, lineColor: BORDER, lineWidth: 0.1 },
       margin: { left: margin, right: margin },
-      styles: { cellPadding: 2 },
+      styles: { cellPadding: 2.2 },
     });
     // @ts-ignore
     y = doc.lastAutoTable.finalY + 2;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(...MUTED);
+    doc.text("Subtotal Serviços", pageW - margin - 35, y + 4);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.text(`Total Serviços: ${formatBRL(totalServ)}`, pageW - margin, y + 4, { align: "right" });
-    y += 10;
+    doc.setTextColor(...DARK);
+    doc.text(formatBRL(totalServ), pageW - margin, y + 4, { align: "right" });
+    y += 9;
   }
 
-  // Quebra se necessário
   if (y > pageH - 90) { doc.addPage(); y = 20; }
 
   // ===== Dados do Orçamento =====
@@ -166,7 +213,7 @@ export function generateOrcamentoPdf(orc: Orcamento, empresa?: Empresa) {
   const a1 = kv("Responsável", orc.responsavelOrcamentista, margin, w3);
   const a2 = kv("Prazo de Entrega", orc.prazoEntrega || "—", margin + w3 + 6, w3);
   const a3 = kv("Validade", `${orc.validadeDias} dias`, margin + (w3 + 6) * 2, w3);
-  y += Math.max(a1, a2, a3) + 1;
+  y += Math.max(a1, a2, a3);
   const b1 = kv("Frete", orc.frete, margin, w3);
   const b2 = kv("Tipo", orc.tipo, margin + w3 + 6, w3);
   const b3 = kv("Status", orc.status, margin + (w3 + 6) * 2, w3);
@@ -176,11 +223,11 @@ export function generateOrcamentoPdf(orc: Orcamento, empresa?: Empresa) {
   if (orc.detalhes) {
     if (y > pageH - 70) { doc.addPage(); y = 20; }
     sectionTitle("Informações Técnicas");
-    doc.setFontSize(9);
-    doc.setTextColor(...DARK);
+    doc.setFontSize(8.5);
+    doc.setTextColor(...TEXT);
     const lines = doc.splitTextToSize(orc.detalhes, pageW - margin * 2);
     doc.text(lines, margin, y);
-    y += lines.length * 4 + 4;
+    y += lines.length * 3.8 + 4;
   }
 
   // ===== Pagamento =====
@@ -200,32 +247,36 @@ export function generateOrcamentoPdf(orc: Orcamento, empresa?: Empresa) {
   const p3 = kv("Parcelamento", parcelaInfo, margin + (w3 + 6) * 2, w3);
   y += Math.max(p1, p2, p3) + 4;
 
-  // Total destaque
-  doc.setFillColor(...RED);
-  doc.rect(margin, y, pageW - margin * 2, 12, "F");
-  doc.setTextColor(255, 255, 255);
+  // ===== Total destaque (limpo, sem fundo vermelho) =====
+  doc.setDrawColor(...BORDER);
+  doc.setLineWidth(0.3);
+  doc.line(margin, y, pageW - margin, y);
+  y += 5;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(...MUTED);
+  doc.text("VALOR TOTAL", margin, y + 2);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  doc.text("VALOR TOTAL", margin + 4, y + 8);
-  doc.setFontSize(13);
-  doc.text(formatBRL(total), pageW - margin - 4, y + 8, { align: "right" });
+  doc.setFontSize(14);
+  doc.setTextColor(...ACCENT);
+  doc.text(formatBRL(total), pageW - margin, y + 2, { align: "right" });
 
-  // ===== Footer em todas as páginas =====
+  // ===== Footer =====
   const totalPages = doc.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
     const fy = pageH - 16;
-    doc.setDrawColor(...RED);
-    doc.setLineWidth(0.5);
+    doc.setDrawColor(...BORDER);
+    doc.setLineWidth(0.2);
     doc.line(margin, fy - 2, pageW - margin, fy - 2);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
-    doc.setTextColor(...GRAY);
+    doc.setFontSize(7);
+    doc.setTextColor(...MUTED);
     const fLines = COMPANY_FOOTER.split("\n");
     fLines.forEach((line, idx) => {
-      doc.text(line, pageW / 2, fy + idx * 3.2, { align: "center" });
+      doc.text(line, pageW / 2, fy + idx * 3, { align: "center" });
     });
-    doc.setFontSize(7);
+    doc.setFontSize(6.5);
     doc.text(`Página ${i} de ${totalPages}`, pageW - margin, pageH - 4, { align: "right" });
   }
 
