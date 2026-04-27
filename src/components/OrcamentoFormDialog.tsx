@@ -617,9 +617,9 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orca
           />
         </div>
 
-        </fieldset>
+        </div>
 
-        <DialogFooter className="px-6 pb-6 pt-2 border-t">
+        <DialogFooter className="px-6 py-4 border-t shrink-0 bg-background">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {readOnly ? "Fechar" : "Cancelar"}
           </Button>
