@@ -333,6 +333,18 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orca
                       options={pecas}
                       placeholder="Selecione a peça"
                       emptyText="Nenhuma peça encontrada."
+                      addNewLabel="Cadastrar nova peça"
+                      onAddNew={() => {
+                        const nome = window.prompt("Nome da nova peça:")?.trim();
+                        if (!nome) return;
+                        if (pecas.includes(nome)) {
+                          updatePecaItem(i, { peca: nome });
+                          return;
+                        }
+                        addPeca(nome);
+                        updatePecaItem(i, { peca: nome });
+                        toast({ title: `Peça "${nome}" cadastrada` });
+                      }}
                     />
                   </div>
                   <div className="md:col-span-2 space-y-2">
