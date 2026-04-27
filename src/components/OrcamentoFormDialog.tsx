@@ -203,6 +203,7 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orca
       frete,
       detalhes,
       responsavelOrcamentista: responsavel,
+      status: orcamento?.status ?? ("Pendente" as const),
     };
 
     if (mode === "edit" && orcamento) {
