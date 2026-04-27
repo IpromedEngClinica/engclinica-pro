@@ -232,12 +232,12 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orca
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+        <DialogHeader className="px-6 pt-6">
           <DialogTitle className="text-xl">{dialogTitle}</DialogTitle>
         </DialogHeader>
 
-        <fieldset disabled={readOnly} className={readOnly ? "space-y-4 [&_button]:pointer-events-none" : "space-y-4"}>
+        <fieldset disabled={readOnly} className={cn("flex-1 overflow-y-auto px-6 py-4 space-y-4", readOnly && "[&_button]:pointer-events-none")}>
 
         {/* Identificação */}
         <div className="rounded-lg border p-5 space-y-5">
