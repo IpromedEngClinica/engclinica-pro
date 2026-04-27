@@ -136,7 +136,14 @@ const Orcamentos = () => {
                 return (
                   <tr key={o.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                     <td className="px-5 py-3 font-medium text-primary">
-                      <span className="inline-flex items-center gap-2"><FileText className="w-4 h-4" /> {o.numero}</span>
+                      <div className="flex flex-col">
+                        <span className="inline-flex items-center gap-2"><FileText className="w-4 h-4" /> {o.numero}</span>
+                        {o.identificador && (
+                          <span className="text-xs text-muted-foreground font-normal mt-0.5 max-w-[260px] truncate" title={o.identificador}>
+                            {o.identificador}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-5 py-3">
                       <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
