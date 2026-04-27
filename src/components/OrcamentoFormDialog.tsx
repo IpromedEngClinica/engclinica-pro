@@ -86,6 +86,7 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orca
       setFrete(orcamento.frete);
       setDetalhes(orcamento.detalhes);
       setResponsavel(orcamento.responsavelOrcamentista);
+      setIdentificador(orcamento.identificador || "");
       return;
     }
 
