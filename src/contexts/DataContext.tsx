@@ -142,6 +142,7 @@ export interface Orcamento {
   detalhes: string;
   responsavelOrcamentista: string;
   status: OrcamentoStatus;
+  identificador: string;
 }
 
 const initialEmpresas: Empresa[] = [
