@@ -63,6 +63,7 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orca
   const [frete, setFrete] = useState<TipoFrete>("CIF");
   const [detalhes, setDetalhes] = useState("");
   const [responsavel, setResponsavel] = useState("Ícaro Rezende");
+  const [identificador, setIdentificador] = useState("");
   const [numeroPreview, setNumeroPreview] = useState("");
 
   useEffect(() => {
@@ -85,6 +86,7 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orca
       setFrete(orcamento.frete);
       setDetalhes(orcamento.detalhes);
       setResponsavel(orcamento.responsavelOrcamentista);
+      setIdentificador(orcamento.identificador || "");
       return;
     }
 
@@ -104,9 +106,15 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orca
       // Puxar o tipo de equipamento a partir do equipamento da OS
       const eq = equipamentos.find((e) => e.id === fromOS.equipamentoId);
       const tipoEquip = eq?.tipo ?? "";
+      const ident = eq
+        ? [eq.tipo, eq.fabricante, eq.modelo, eq.serie && `Série ${eq.serie}`, eq.patrimonio && `Pat. ${eq.patrimonio}`]
+            .filter(Boolean)
+            .join(" • ")
+        : "";
 
       setTipo("Serviço");
       setSolicitante(fromOS.solicitante);
+      setIdentificador(ident);
       setPecasItems([]);
       setServicosItems([
         {
@@ -121,6 +129,7 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orca
     } else {
       setTipo("Serviço");
       setSolicitante("");
+      setIdentificador("");
       setPecasItems([]);
       setServicosItems([]);
       setDetalhes("");
@@ -212,6 +221,7 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orca
       frete,
       detalhes,
       responsavelOrcamentista: responsavel,
+      identificador,
       status: orcamento?.status ?? ("Pendente" as const),
     };
 
@@ -232,12 +242,12 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orca
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-hidden flex flex-col p-0">
-        <DialogHeader className="px-6 pt-6">
+      <DialogContent className="sm:max-w-5xl h-[90vh] max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
+        <DialogHeader className="px-6 pt-6 pb-3 border-b shrink-0">
           <DialogTitle className="text-xl">{dialogTitle}</DialogTitle>
         </DialogHeader>
 
-        <fieldset disabled={readOnly} className={cn("flex-1 overflow-y-auto px-6 py-4 space-y-4", readOnly && "[&_button]:pointer-events-none")}>
+        <div className={cn("flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4", readOnly && "[&_input]:pointer-events-none [&_button]:pointer-events-none [&_textarea]:pointer-events-none")}>
 
         {/* Identificação */}
         <div className="rounded-lg border p-5 space-y-5">
@@ -295,6 +305,17 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orca
             <div className="space-y-2">
               <Label className="text-sm">Responsável Orçamentista</Label>
               <Input value={responsavel} onChange={(e) => setResponsavel(e.target.value)} />
+            </div>
+            <div className="space-y-2 sm:col-span-3">
+              <Label className="text-sm">Identificador do Orçamento</Label>
+              <Input
+                placeholder="Ex: Equipamento, n° de série, patrimônio ou descrição curta"
+                value={identificador}
+                onChange={(e) => setIdentificador(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Primeira linha da identificação técnica — aparece nas listagens e no PDF.
+              </p>
             </div>
             <div className="space-y-2 sm:col-span-3">
               <Label className="text-sm">Solicitante *</Label>
@@ -607,9 +628,9 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orca
           />
         </div>
 
-        </fieldset>
+        </div>
 
-        <DialogFooter className="px-6 pb-6 pt-2 border-t">
+        <DialogFooter className="px-6 py-4 border-t shrink-0 bg-background">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {readOnly ? "Fechar" : "Cancelar"}
           </Button>
