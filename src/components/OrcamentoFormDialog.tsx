@@ -242,6 +242,43 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orca
         {/* Identificação */}
         <div className="rounded-lg border p-5 space-y-5">
           <h3 className="text-sm font-semibold">Identificação</h3>
+
+          {/* Tipo de Orçamento — Cards de seleção */}
+          <div className="space-y-2">
+            <Label className="text-sm">Tipo de Orçamento *</Label>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {([
+                { value: "Serviço", icon: Wrench, desc: "Apenas mão de obra" },
+                { value: "Peças", icon: Package, desc: "Apenas peças" },
+                { value: "Peças + Serviços", icon: Layers, desc: "Peças e serviços" },
+              ] as { value: OrcamentoTipo; icon: typeof Wrench; desc: string }[]).map((opt) => {
+                const Icon = opt.icon;
+                const active = tipo === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => !readOnly && setTipo(opt.value)}
+                    className={cn(
+                      "flex flex-col items-start gap-1 rounded-lg border-2 p-4 text-left transition-all",
+                      active
+                        ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                        : "border-border hover:border-primary/40 hover:bg-muted/30"
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Icon className={cn("w-4 h-4", active ? "text-primary" : "text-muted-foreground")} />
+                      <span className={cn("text-sm font-medium", active && "text-primary")}>
+                        {opt.value}
+                      </span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">{opt.desc}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
             <div className="space-y-2">
               <Label className="text-sm">Número</Label>
@@ -256,16 +293,10 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orca
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-sm">Tipo de Orçamento *</Label>
-              <SearchableSelect
-                value={tipo}
-                onValueChange={(v) => setTipo(v as OrcamentoTipo)}
-                options={tiposOrcamento}
-                placeholder="Selecione o tipo"
-                emptyText="Nenhum tipo encontrado."
-              />
+              <Label className="text-sm">Responsável Orçamentista</Label>
+              <Input value={responsavel} onChange={(e) => setResponsavel(e.target.value)} />
             </div>
-            <div className="space-y-2 sm:col-span-2">
+            <div className="space-y-2 sm:col-span-3">
               <Label className="text-sm">Solicitante *</Label>
               <SearchableSelect
                 value={solicitante}
@@ -274,10 +305,6 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orca
                 placeholder="Selecione a empresa"
                 emptyText="Nenhuma empresa encontrada."
               />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm">Responsável Orçamentista</Label>
-              <Input value={responsavel} onChange={(e) => setResponsavel(e.target.value)} />
             </div>
           </div>
         </div>
