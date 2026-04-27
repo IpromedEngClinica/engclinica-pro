@@ -178,12 +178,20 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orca
       toast({ title: "Selecione o solicitante", variant: "destructive" });
       return;
     }
-    if (incluiPecas && pecasItems.length === 0) {
+    if (incluiPecas && pecasItems.length === 0 && incluiServicos && servicosItems.length === 0) {
+      toast({ title: "Adicione ao menos uma peça ou um serviço", variant: "destructive" });
+      return;
+    }
+    if (incluiPecas && !incluiServicos && pecasItems.length === 0) {
       toast({ title: "Adicione ao menos uma peça", variant: "destructive" });
       return;
     }
-    if (incluiServicos && servicosItems.length === 0) {
+    if (incluiServicos && !incluiPecas && servicosItems.length === 0) {
       toast({ title: "Adicione ao menos um serviço", variant: "destructive" });
+      return;
+    }
+    if (incluiPecas && incluiServicos && pecasItems.length === 0 && servicosItems.length === 0) {
+      toast({ title: "Adicione ao menos uma peça ou um serviço", variant: "destructive" });
       return;
     }
 
