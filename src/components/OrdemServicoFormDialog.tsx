@@ -145,10 +145,11 @@ const OrdemServicoFormDialog = ({ open, onOpenChange, mode = "create", os = null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+        <DialogHeader className="px-6 pt-6">
           <DialogTitle className="text-xl">{title}</DialogTitle>
         </DialogHeader>
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
 
         {/* Identificação */}
         <div className="rounded-lg border p-5 space-y-5">
