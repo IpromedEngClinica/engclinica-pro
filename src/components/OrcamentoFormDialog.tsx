@@ -221,6 +221,7 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orca
       frete,
       detalhes,
       responsavelOrcamentista: responsavel,
+      identificador,
       status: orcamento?.status ?? ("Pendente" as const),
     };
 
