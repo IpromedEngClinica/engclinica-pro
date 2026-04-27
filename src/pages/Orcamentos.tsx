@@ -77,9 +77,9 @@ const Orcamentos = () => {
     toast({ title: `Orçamento ${o.numero} marcado como ${status}` });
   };
 
-  const handlePdf = (o: Orcamento) => {
+  const handlePdf = async (o: Orcamento) => {
     const empresa = empresasList.find((e) => e.nome === o.solicitante);
-    generateOrcamentoPdf(o, empresa);
+    await generateOrcamentoPdf(o, empresa);
   };
 
   return (
@@ -166,6 +166,39 @@ const Orcamentos = () => {
                     <td className="px-5 py-3 text-muted-foreground">{formatDate(o.dataCriacao)}</td>
                     <td className="px-5 py-3">
                       <div className="flex justify-end gap-1">
+                        {o.status !== "Aprovado" && o.status !== "Faturado" && o.status !== "Cancelado" && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleStatusChange(o, "Aprovado")}
+                            title="Aprovar"
+                            className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                        {o.status !== "Reprovado" && o.status !== "Cancelado" && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleStatusChange(o, "Reprovado")}
+                            title="Reprovar"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <XCircle className="w-4 h-4" />
+                          </Button>
+                        )}
+                        {o.status !== "Cancelado" && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleStatusChange(o, "Cancelado")}
+                            title="Cancelar"
+                            className="text-gray-600 hover:text-gray-700 hover:bg-gray-100"
+                          >
+                            <Ban className="w-4 h-4" />
+                          </Button>
+                        )}
                         <Button variant="ghost" size="icon" onClick={() => handlePdf(o)} title="Gerar PDF">
                           <FileDown className="w-4 h-4" />
                         </Button>

@@ -204,7 +204,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [empresasList, setEmpresasList] = useState<Empresa[]>(initialEmpresas);
   const [equipamentos, setEquipamentos] = useState<Equipamento[]>(initialEquipamentos);
   const [tiposOS, setTiposOS] = useState<string[]>(initialTiposOS);
-  const [estadosOS, setEstadosOS] = useState<string[]>(initialEstadosOS);
+  const [estadosOS, setEstadosOS] = useState<string[]>(
+    [...initialEstadosOS].sort((a, b) => a.localeCompare(b, "pt-BR"))
+  );
   const [pecas, setPecas] = useState<string[]>(initialPecas);
   const [ordensServico, setOrdensServico] = useState<OrdemServico[]>([]);
   const [osCounter, setOsCounter] = useState(1);
@@ -231,7 +233,8 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const addTipoOS = (tipo: string) => setTiposOS((prev) => [...prev, tipo]);
   const removeTipoOS = (index: number) => setTiposOS((prev) => prev.filter((_, i) => i !== index));
 
-  const addEstadoOS = (estado: string) => setEstadosOS((prev) => [...prev, estado]);
+  const addEstadoOS = (estado: string) =>
+    setEstadosOS((prev) => [...prev, estado].sort((a, b) => a.localeCompare(b, "pt-BR")));
   const removeEstadoOS = (index: number) => setEstadosOS((prev) => prev.filter((_, i) => i !== index));
 
   const addPeca = (peca: string) => setPecas((prev) => [...prev, peca]);
