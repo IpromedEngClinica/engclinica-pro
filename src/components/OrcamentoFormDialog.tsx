@@ -106,9 +106,15 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orca
       // Puxar o tipo de equipamento a partir do equipamento da OS
       const eq = equipamentos.find((e) => e.id === fromOS.equipamentoId);
       const tipoEquip = eq?.tipo ?? "";
+      const ident = eq
+        ? [eq.tipo, eq.fabricante, eq.modelo, eq.serie && `Série ${eq.serie}`, eq.patrimonio && `Pat. ${eq.patrimonio}`]
+            .filter(Boolean)
+            .join(" • ")
+        : "";
 
       setTipo("Serviço");
       setSolicitante(fromOS.solicitante);
+      setIdentificador(ident);
       setPecasItems([]);
       setServicosItems([
         {
@@ -123,6 +129,7 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orca
     } else {
       setTipo("Serviço");
       setSolicitante("");
+      setIdentificador("");
       setPecasItems([]);
       setServicosItems([]);
       setDetalhes("");
