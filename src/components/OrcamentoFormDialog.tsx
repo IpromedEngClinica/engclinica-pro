@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import SearchableSelect from "@/components/SearchableSelect";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Wrench, Package, Layers } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import {
   useData,
@@ -44,7 +45,7 @@ const formatBRL = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orcamento = null }: Props) => {
-  const { empresas, pecas, tiposOS, tipos, equipamentos, addOrcamento, updateOrcamento, buildOrcamentoNumero } = useData();
+  const { empresas, pecas, addPeca, tiposOS, tipos, equipamentos, addOrcamento, updateOrcamento, buildOrcamentoNumero } = useData();
 
   const readOnly = mode === "view";
 
