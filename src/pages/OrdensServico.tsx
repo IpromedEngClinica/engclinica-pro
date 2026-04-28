@@ -105,8 +105,10 @@ const OrdensServico = () => {
                   <td className="px-5 py-3 text-muted-foreground">{formatDate(os.dataCriacao)}</td>
                   <td className="px-5 py-3">
                     <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => openView(os)} title="Visualizar">
-                        <Eye className="w-4 h-4" />
+                      <Button variant="ghost" size="icon" asChild title="Visualizar">
+                        <Link to={`/ordens-servico/${os.id}`}>
+                          <Eye className="w-4 h-4" />
+                        </Link>
                       </Button>
                       <Button variant="ghost" size="icon" onClick={() => openEdit(os)} title="Editar">
                         <Pencil className="w-4 h-4" />
