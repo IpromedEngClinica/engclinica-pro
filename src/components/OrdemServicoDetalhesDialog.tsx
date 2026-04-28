@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { Pencil, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +11,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import SearchableSelect from "@/components/SearchableSelect";
+import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
+import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import { useData, OrdemServico } from "@/contexts/DataContext";
 import { toast } from "@/hooks/use-toast";
 
@@ -54,6 +55,8 @@ const OrdemServicoDetalhesDialog = ({ open, onOpenChange, os }: Props) => {
   } = useData();
 
   const [editing, setEditing] = useState(false);
+  const [empresaOpen, setEmpresaOpen] = useState(false);
+  const [equipOpen, setEquipOpen] = useState(false);
   const [form, setForm] = useState(() => ({
     dataCriacao: "",
     estado: "",
@@ -147,7 +150,7 @@ const OrdemServicoDetalhesDialog = ({ open, onOpenChange, os }: Props) => {
     setEditing(false);
   };
 
-  const closeAndNavigate = () => onOpenChange(false);
+  
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -284,13 +287,13 @@ const OrdemServicoDetalhesDialog = ({ open, onOpenChange, os }: Props) => {
                 ) : empresa ? (
                   <>
                     <Field label="Nome">
-                      <Link
-                        to={`/empresas?view=${empresa.id}`}
-                        onClick={closeAndNavigate}
+                      <button
+                        type="button"
+                        onClick={() => setEmpresaOpen(true)}
                         className="text-primary hover:underline font-medium"
                       >
                         {empresa.nome}
-                      </Link>
+                      </button>
                     </Field>
                     <Field label="Contato">{empresa.contato || "—"}</Field>
                     <Field label="E-mail">{empresa.email || "—"}</Field>
@@ -327,13 +330,13 @@ const OrdemServicoDetalhesDialog = ({ open, onOpenChange, os }: Props) => {
                 ) : equipamento ? (
                   <>
                     <Field label="Tipo">
-                      <Link
-                        to={`/equipamentos?view=${equipamento.id}`}
-                        onClick={closeAndNavigate}
+                      <button
+                        type="button"
+                        onClick={() => setEquipOpen(true)}
                         className="text-primary hover:underline font-medium"
                       >
                         {equipamento.tipo}
-                      </Link>
+                      </button>
                     </Field>
                     <Field label="Fabricante">{equipamento.fabricante || "—"}</Field>
                     <Field label="Modelo">{equipamento.modelo || "—"}</Field>
@@ -362,6 +365,16 @@ const OrdemServicoDetalhesDialog = ({ open, onOpenChange, os }: Props) => {
           </div>
         </div>
       </DialogContent>
+      <EmpresaDetalhesDialog
+        open={empresaOpen}
+        onOpenChange={setEmpresaOpen}
+        empresa={empresa ?? null}
+      />
+      <EquipamentoDetalhesDialog
+        open={equipOpen}
+        onOpenChange={setEquipOpen}
+        equipamento={equipamento ?? null}
+      />
     </Dialog>
   );
 };
