@@ -3,19 +3,25 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import PageHeader from "@/components/PageHeader";
 import { useMemo, useState } from "react";
-import { useData, OrdemServico } from "@/contexts/DataContext";
+import { useData, OrdemServico, Empresa, Equipamento } from "@/contexts/DataContext";
 import OrdemServicoFormDialog, { DialogMode } from "@/components/OrdemServicoFormDialog";
 import OrdemServicoDetalhesDialog from "@/components/OrdemServicoDetalhesDialog";
+import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
+import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import OrcamentoFormDialog from "@/components/OrcamentoFormDialog";
 
 const OrdensServico = () => {
-  const { ordensServico, equipamentos } = useData();
+  const { ordensServico, equipamentos, empresasList } = useData();
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<DialogMode>("create");
   const [selected, setSelected] = useState<OrdemServico | null>(null);
   const [detalhesOpen, setDetalhesOpen] = useState(false);
   const [osDetalhes, setOsDetalhes] = useState<OrdemServico | null>(null);
+  const [empresaOpen, setEmpresaOpen] = useState(false);
+  const [empresaSel, setEmpresaSel] = useState<Empresa | null>(null);
+  const [equipOpen, setEquipOpen] = useState(false);
+  const [equipSel, setEquipSel] = useState<Equipamento | null>(null);
   const [orcOpen, setOrcOpen] = useState(false);
   const [osParaOrcamento, setOsParaOrcamento] = useState<OrdemServico | null>(null);
 
@@ -48,6 +54,23 @@ const OrdensServico = () => {
   const handleGerarOrcamento = (os: OrdemServico) => {
     setOsParaOrcamento(os);
     setOrcOpen(true);
+  };
+
+  const openEmpresa = (nome: string) => {
+    const emp = empresasList.find((e) => e.nome === nome);
+    if (emp) { setEmpresaSel(emp); setEmpresaOpen(true); }
+  };
+  const openEquipamento = (id: number | null) => {
+    const eq = equipamentos.find((e) => e.id === id);
+    if (eq) { setEquipSel(eq); setEquipOpen(true); }
+  };
+  const openOSById = (id: number) => {
+    const os = ordensServico.find((o) => o.id === id);
+    if (os) {
+      setEquipOpen(false);
+      setOsDetalhes(os);
+      setDetalhesOpen(true);
+    }
   };
 
   return (
@@ -101,8 +124,28 @@ const OrdensServico = () => {
                       {os.estado}
                     </span>
                   </td>
-                  <td className="px-5 py-3 text-foreground">{os.solicitante}</td>
-                  <td className="px-5 py-3 text-muted-foreground">{equipamentoLabel(os.equipamentoId)}</td>
+                  <td className="px-5 py-3">
+                    <button
+                      type="button"
+                      onClick={() => openEmpresa(os.solicitante)}
+                      className="text-primary hover:underline text-left"
+                    >
+                      {os.solicitante}
+                    </button>
+                  </td>
+                  <td className="px-5 py-3">
+                    {os.equipamentoId ? (
+                      <button
+                        type="button"
+                        onClick={() => openEquipamento(os.equipamentoId)}
+                        className="text-primary hover:underline text-left"
+                      >
+                        {equipamentoLabel(os.equipamentoId)}
+                      </button>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
                   <td className="px-5 py-3 text-muted-foreground">{os.responsavelTecnico}</td>
                   <td className="px-5 py-3 text-muted-foreground">{os.tipoServico}</td>
                   <td className="px-5 py-3 text-muted-foreground">{formatDate(os.dataCriacao)}</td>
