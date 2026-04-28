@@ -9,6 +9,7 @@ import Empresas from "./pages/Empresas";
 import Equipamentos from "./pages/Equipamentos";
 import Contratos from "./pages/Contratos";
 import OrdensServico from "./pages/OrdensServico";
+import OrdemServicoDetalhes from "./pages/OrdemServicoDetalhes";
 import Orcamentos from "./pages/Orcamentos";
 import TiposEquipamento from "./pages/TiposEquipamento";
 import TiposOS from "./pages/TiposOS";
@@ -33,6 +34,7 @@ const App = () => (
               <Route path="/equipamentos" element={<Equipamentos />} />
               <Route path="/contratos" element={<Contratos />} />
               <Route path="/ordens-servico" element={<OrdensServico />} />
+              <Route path="/ordens-servico/:id" element={<OrdemServicoDetalhes />} />
               <Route path="/orcamentos" element={<Orcamentos />} />
               <Route path="/campos-gerenciais/tipos-equipamento" element={<TiposEquipamento />} />
               <Route path="/campos-gerenciais/tipos-os" element={<TiposOS />} />

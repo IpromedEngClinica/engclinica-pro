@@ -1,4 +1,5 @@
 import { ClipboardList, FileSignature, Plus, Search, Eye, Pencil } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import PageHeader from "@/components/PageHeader";
@@ -84,8 +85,13 @@ const OrdensServico = () => {
             <tbody>
               {filtered.map((os) => (
                 <tr key={os.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                  <td className="px-5 py-3 font-medium text-primary flex items-center gap-2">
-                    <ClipboardList className="w-4 h-4" /> {os.numero}
+                  <td className="px-5 py-3 font-medium">
+                    <Link
+                      to={`/ordens-servico/${os.id}`}
+                      className="text-primary hover:underline flex items-center gap-2"
+                    >
+                      <ClipboardList className="w-4 h-4" /> {os.numero}
+                    </Link>
                   </td>
                   <td className="px-5 py-3">
                     <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
