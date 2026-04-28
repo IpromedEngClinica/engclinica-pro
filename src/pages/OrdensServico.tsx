@@ -191,6 +191,17 @@ const OrdensServico = () => {
         }}
         os={osDetalhes}
       />
+      <EmpresaDetalhesDialog
+        open={empresaOpen}
+        onOpenChange={(v) => { setEmpresaOpen(v); if (!v) setEmpresaSel(null); }}
+        empresa={empresaSel}
+      />
+      <EquipamentoDetalhesDialog
+        open={equipOpen}
+        onOpenChange={(v) => { setEquipOpen(v); if (!v) setEquipSel(null); }}
+        equipamento={equipSel}
+        onSelectOS={openOSById}
+      />
       <OrcamentoFormDialog
         open={orcOpen}
         onOpenChange={(v) => {
