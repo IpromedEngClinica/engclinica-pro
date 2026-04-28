@@ -287,13 +287,13 @@ const OrdemServicoDetalhesDialog = ({ open, onOpenChange, os }: Props) => {
                 ) : empresa ? (
                   <>
                     <Field label="Nome">
-                      <Link
-                        to={`/empresas?view=${empresa.id}`}
-                        onClick={closeAndNavigate}
+                      <button
+                        type="button"
+                        onClick={() => setEmpresaOpen(true)}
                         className="text-primary hover:underline font-medium"
                       >
                         {empresa.nome}
-                      </Link>
+                      </button>
                     </Field>
                     <Field label="Contato">{empresa.contato || "—"}</Field>
                     <Field label="E-mail">{empresa.email || "—"}</Field>
@@ -330,13 +330,13 @@ const OrdemServicoDetalhesDialog = ({ open, onOpenChange, os }: Props) => {
                 ) : equipamento ? (
                   <>
                     <Field label="Tipo">
-                      <Link
-                        to={`/equipamentos?view=${equipamento.id}`}
-                        onClick={closeAndNavigate}
+                      <button
+                        type="button"
+                        onClick={() => setEquipOpen(true)}
                         className="text-primary hover:underline font-medium"
                       >
                         {equipamento.tipo}
-                      </Link>
+                      </button>
                     </Field>
                     <Field label="Fabricante">{equipamento.fabricante || "—"}</Field>
                     <Field label="Modelo">{equipamento.modelo || "—"}</Field>
