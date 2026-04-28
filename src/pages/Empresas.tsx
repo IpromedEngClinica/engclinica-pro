@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import PageHeader from "@/components/PageHeader";
 import EmpresaFormDialog, { DialogMode } from "@/components/EmpresaFormDialog";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useData, Empresa } from "@/contexts/DataContext";
 
 const Empresas = () => {
@@ -12,6 +13,21 @@ const Empresas = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [mode, setMode] = useState<DialogMode>("create");
   const [selected, setSelected] = useState<Empresa | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  useEffect(() => {
+    const viewId = searchParams.get("view");
+    if (viewId) {
+      const emp = empresasList.find((e) => String(e.id) === viewId);
+      if (emp) {
+        setSelected(emp);
+        setMode("view");
+        setDialogOpen(true);
+      }
+      searchParams.delete("view");
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, empresasList, setSearchParams]);
 
   const filtered = empresasList.filter((e) =>
     e.nome.toLowerCase().includes(search.toLowerCase())

@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import PageHeader from "@/components/PageHeader";
 import EquipamentoFormDialog, { DialogMode } from "@/components/EquipamentoFormDialog";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useData, Equipamento } from "@/contexts/DataContext";
 
 const statusColor: Record<string, string> = {
@@ -18,6 +19,21 @@ const Equipamentos = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [mode, setMode] = useState<DialogMode>("create");
   const [selected, setSelected] = useState<Equipamento | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  useEffect(() => {
+    const viewId = searchParams.get("view");
+    if (viewId) {
+      const eq = equipamentos.find((e) => String(e.id) === viewId);
+      if (eq) {
+        setSelected(eq);
+        setMode("view");
+        setDialogOpen(true);
+      }
+      searchParams.delete("view");
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, equipamentos, setSearchParams]);
 
   const filtered = equipamentos.filter((e) =>
     e.tipo.toLowerCase().includes(search.toLowerCase()) ||
