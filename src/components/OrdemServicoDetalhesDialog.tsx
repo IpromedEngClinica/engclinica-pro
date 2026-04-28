@@ -55,6 +55,8 @@ const OrdemServicoDetalhesDialog = ({ open, onOpenChange, os }: Props) => {
   } = useData();
 
   const [editing, setEditing] = useState(false);
+  const [empresaOpen, setEmpresaOpen] = useState(false);
+  const [equipOpen, setEquipOpen] = useState(false);
   const [form, setForm] = useState(() => ({
     dataCriacao: "",
     estado: "",
