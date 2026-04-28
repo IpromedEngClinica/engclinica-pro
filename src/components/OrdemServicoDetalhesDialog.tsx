@@ -150,7 +150,7 @@ const OrdemServicoDetalhesDialog = ({ open, onOpenChange, os }: Props) => {
     setEditing(false);
   };
 
-  const closeAndNavigate = () => onOpenChange(false);
+  
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
