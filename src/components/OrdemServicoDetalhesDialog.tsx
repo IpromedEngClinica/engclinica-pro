@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { Pencil, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +11,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import SearchableSelect from "@/components/SearchableSelect";
+import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
+import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import { useData, OrdemServico } from "@/contexts/DataContext";
 import { toast } from "@/hooks/use-toast";
 
