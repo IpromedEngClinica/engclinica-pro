@@ -1,11 +1,11 @@
 import { ClipboardList, FileSignature, Plus, Search, Eye, Pencil } from "lucide-react";
-import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import PageHeader from "@/components/PageHeader";
 import { useMemo, useState } from "react";
 import { useData, OrdemServico } from "@/contexts/DataContext";
 import OrdemServicoFormDialog, { DialogMode } from "@/components/OrdemServicoFormDialog";
+import OrdemServicoDetalhesDialog from "@/components/OrdemServicoDetalhesDialog";
 import OrcamentoFormDialog from "@/components/OrcamentoFormDialog";
 
 const OrdensServico = () => {
@@ -14,6 +14,8 @@ const OrdensServico = () => {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<DialogMode>("create");
   const [selected, setSelected] = useState<OrdemServico | null>(null);
+  const [detalhesOpen, setDetalhesOpen] = useState(false);
+  const [osDetalhes, setOsDetalhes] = useState<OrdemServico | null>(null);
   const [orcOpen, setOrcOpen] = useState(false);
   const [osParaOrcamento, setOsParaOrcamento] = useState<OrdemServico | null>(null);
 
@@ -40,7 +42,7 @@ const OrdensServico = () => {
   }, [ordensServico, search, equipamentos]);
 
   const openCreate = () => { setSelected(null); setMode("create"); setOpen(true); };
-  const openView = (os: OrdemServico) => { setSelected(os); setMode("view"); setOpen(true); };
+  const openView = (os: OrdemServico) => { setOsDetalhes(os); setDetalhesOpen(true); };
   const openEdit = (os: OrdemServico) => { setSelected(os); setMode("edit"); setOpen(true); };
 
   const handleGerarOrcamento = (os: OrdemServico) => {
@@ -86,12 +88,13 @@ const OrdensServico = () => {
               {filtered.map((os) => (
                 <tr key={os.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                   <td className="px-5 py-3 font-medium">
-                    <Link
-                      to={`/ordens-servico/${os.id}`}
+                    <button
+                      type="button"
+                      onClick={() => openView(os)}
                       className="text-primary hover:underline flex items-center gap-2"
                     >
                       <ClipboardList className="w-4 h-4" /> {os.numero}
-                    </Link>
+                    </button>
                   </td>
                   <td className="px-5 py-3">
                     <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
@@ -105,10 +108,8 @@ const OrdensServico = () => {
                   <td className="px-5 py-3 text-muted-foreground">{formatDate(os.dataCriacao)}</td>
                   <td className="px-5 py-3">
                     <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="icon" asChild title="Visualizar">
-                        <Link to={`/ordens-servico/${os.id}`}>
-                          <Eye className="w-4 h-4" />
-                        </Link>
+                      <Button variant="ghost" size="icon" onClick={() => openView(os)} title="Visualizar">
+                        <Eye className="w-4 h-4" />
                       </Button>
                       <Button variant="ghost" size="icon" onClick={() => openEdit(os)} title="Editar">
                         <Pencil className="w-4 h-4" />
@@ -139,6 +140,14 @@ const OrdensServico = () => {
       </div>
 
       <OrdemServicoFormDialog open={open} onOpenChange={setOpen} mode={mode} os={selected} />
+      <OrdemServicoDetalhesDialog
+        open={detalhesOpen}
+        onOpenChange={(v) => {
+          setDetalhesOpen(v);
+          if (!v) setOsDetalhes(null);
+        }}
+        os={osDetalhes}
+      />
       <OrcamentoFormDialog
         open={orcOpen}
         onOpenChange={(v) => {
