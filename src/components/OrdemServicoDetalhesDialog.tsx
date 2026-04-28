@@ -365,6 +365,16 @@ const OrdemServicoDetalhesDialog = ({ open, onOpenChange, os }: Props) => {
           </div>
         </div>
       </DialogContent>
+      <EmpresaDetalhesDialog
+        open={empresaOpen}
+        onOpenChange={setEmpresaOpen}
+        empresa={empresa ?? null}
+      />
+      <EquipamentoDetalhesDialog
+        open={equipOpen}
+        onOpenChange={setEquipOpen}
+        equipamento={equipamento ?? null}
+      />
     </Dialog>
   );
 };
