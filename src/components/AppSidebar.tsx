@@ -6,6 +6,7 @@ import {
   FileText,
   ClipboardList,
   FileSignature,
+  FileBox,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -21,6 +22,7 @@ const menuItems = [
   { icon: FileText, label: "Contratos", path: "/contratos" },
   { icon: ClipboardList, label: "Ordens de Serviço", path: "/ordens-servico" },
   { icon: FileSignature, label: "Orçamentos", path: "/orcamentos" },
+  { icon: FileBox, label: "Protocolos", path: "/protocolos" },
 ];
 
 const camposGerenciais = [
@@ -28,7 +30,6 @@ const camposGerenciais = [
   { icon: List, label: "Tipos de OS", path: "/campos-gerenciais/tipos-os" },
   { icon: List, label: "Estados da OS", path: "/campos-gerenciais/estados-os" },
   { icon: List, label: "Peças", path: "/campos-gerenciais/pecas" },
-  { icon: List, label: "Protocolos", path: "/campos-gerenciais/protocolos" },
 ];
 
 const AppSidebar = () => {
