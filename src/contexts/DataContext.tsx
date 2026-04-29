@@ -336,6 +336,8 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     setProtocoloCounter((c) => c + 1);
     return protocolo;
   };
+
+  const buildOrcamentoNumero = (osNumero?: string | null) => {
     if (osNumero) return osNumero.replace(/^OS-/, "ORC-");
     const year = new Date().getFullYear();
     return `ORC-${year}-${String(orcCounter).padStart(4, "0")}`;
@@ -374,6 +376,11 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         pecas,
         addPeca,
         removePeca,
+        protocolos,
+        addProtocolo,
+        removeProtocolo,
+        protocolosRecolhimento,
+        addProtocoloRecolhimento,
         ordensServico,
         addOrdemServico,
         updateOrdemServico,
