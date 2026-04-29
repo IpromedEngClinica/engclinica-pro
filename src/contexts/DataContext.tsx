@@ -290,7 +290,52 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     );
   };
 
-  const buildOrcamentoNumero = (osNumero?: string | null) => {
+  const addProtocoloRecolhimento = (data: {
+    equipamentoId: number;
+    empresa: string;
+    recolhidoPor: string;
+    defeitoRelatado: string;
+    acessorios: string[];
+  }) => {
+    const year = new Date().getFullYear();
+    const numero = `PR-${year}-${String(protocoloCounter).padStart(4, "0")}`;
+    const osNumero = nextOSNumber();
+    const osId = Date.now();
+    const dataCriacao = new Date().toISOString();
+
+    const novaOS: OrdemServico = {
+      id: osId,
+      numero: osNumero,
+      dataCriacao,
+      estado: "Entrada De Equipamentos Para Orçamento",
+      responsavelTecnico: "",
+      solicitante: data.empresa,
+      equipamentoId: data.equipamentoId,
+      tipoServico: "Entrada De Equipamentos",
+      origemProblema: data.defeitoRelatado,
+      descricaoServico: `Protocolo de Recolhimento ${numero}\nRecolhido por: ${data.recolhidoPor}\nDefeito relatado: ${data.defeitoRelatado}`,
+      acessorios: data.acessorios,
+      observacoes: "",
+    };
+    setOrdensServico((prev) => [...prev, novaOS]);
+    setOsCounter((c) => c + 1);
+
+    const protocolo: ProtocoloRecolhimento = {
+      id: Date.now() + 1,
+      numero,
+      dataCriacao,
+      equipamentoId: data.equipamentoId,
+      empresa: data.empresa,
+      recolhidoPor: data.recolhidoPor,
+      defeitoRelatado: data.defeitoRelatado,
+      acessorios: data.acessorios,
+      osId,
+      osNumero,
+    };
+    setProtocolosRecolhimento((prev) => [...prev, protocolo]);
+    setProtocoloCounter((c) => c + 1);
+    return protocolo;
+  };
     if (osNumero) return osNumero.replace(/^OS-/, "ORC-");
     const year = new Date().getFullYear();
     return `ORC-${year}-${String(orcCounter).padStart(4, "0")}`;
