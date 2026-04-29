@@ -54,6 +54,8 @@ const initialPecas = [
   "Válvula Reguladora",
 ];
 
+const initialProtocolos: string[] = [];
+
 export interface Empresa {
   id: number;
   nome: string;
@@ -123,6 +125,19 @@ export type OrcamentoStatus = "Pendente" | "Aprovado" | "Reprovado" | "Faturado"
 
 export const ORCAMENTO_STATUS: OrcamentoStatus[] = ["Pendente", "Aprovado", "Reprovado", "Faturado", "Cancelado"];
 
+export interface ProtocoloRecolhimento {
+  id: number;
+  numero: string;
+  dataCriacao: string;
+  equipamentoId: number;
+  empresa: string;
+  recolhidoPor: string;
+  defeitoRelatado: string;
+  acessorios: string[];
+  osId: number | null;
+  osNumero: string;
+}
+
 export interface Orcamento {
   id: number;
   numero: string;
@@ -181,6 +196,17 @@ interface DataContextType {
   pecas: string[];
   addPeca: (peca: string) => void;
   removePeca: (index: number) => void;
+  protocolos: string[];
+  addProtocolo: (item: string) => void;
+  removeProtocolo: (index: number) => void;
+  protocolosRecolhimento: ProtocoloRecolhimento[];
+  addProtocoloRecolhimento: (data: {
+    equipamentoId: number;
+    empresa: string;
+    recolhidoPor: string;
+    defeitoRelatado: string;
+    acessorios: string[];
+  }) => ProtocoloRecolhimento;
   ordensServico: OrdemServico[];
   addOrdemServico: (os: Omit<OrdemServico, "id" | "numero">) => void;
   updateOrdemServico: (id: number, os: Omit<OrdemServico, "id" | "numero">) => void;
@@ -209,10 +235,13 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     [...initialEstadosOS].sort((a, b) => a.localeCompare(b, "pt-BR"))
   );
   const [pecas, setPecas] = useState<string[]>(initialPecas);
+  const [protocolos, setProtocolos] = useState<string[]>(initialProtocolos);
   const [ordensServico, setOrdensServico] = useState<OrdemServico[]>([]);
   const [osCounter, setOsCounter] = useState(1);
   const [orcamentos, setOrcamentos] = useState<Orcamento[]>([]);
   const [orcCounter, setOrcCounter] = useState(1);
+  const [protocolosRecolhimento, setProtocolosRecolhimento] = useState<ProtocoloRecolhimento[]>([]);
+  const [protocoloCounter, setProtocoloCounter] = useState(1);
 
   const addTipo = (tipo: string) => setTipos((prev) => [...prev, tipo]);
   const removeTipo = (index: number) => setTipos((prev) => prev.filter((_, i) => i !== index));
@@ -241,6 +270,10 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const addPeca = (peca: string) => setPecas((prev) => [...prev, peca]);
   const removePeca = (index: number) => setPecas((prev) => prev.filter((_, i) => i !== index));
 
+  const addProtocolo = (item: string) => setProtocolos((prev) => [...prev, item]);
+  const removeProtocolo = (index: number) =>
+    setProtocolos((prev) => prev.filter((_, i) => i !== index));
+
   const nextOSNumber = () => {
     const year = new Date().getFullYear();
     return `OS-${year}-${String(osCounter).padStart(4, "0")}`;
@@ -255,6 +288,53 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     setOrdensServico((prev) =>
       prev.map((it) => (it.id === id ? { ...it, ...os } : it))
     );
+  };
+
+  const addProtocoloRecolhimento = (data: {
+    equipamentoId: number;
+    empresa: string;
+    recolhidoPor: string;
+    defeitoRelatado: string;
+    acessorios: string[];
+  }) => {
+    const year = new Date().getFullYear();
+    const numero = `PR-${year}-${String(protocoloCounter).padStart(4, "0")}`;
+    const osNumero = nextOSNumber();
+    const osId = Date.now();
+    const dataCriacao = new Date().toISOString();
+
+    const novaOS: OrdemServico = {
+      id: osId,
+      numero: osNumero,
+      dataCriacao,
+      estado: "Entrada De Equipamentos Para Orçamento",
+      responsavelTecnico: "",
+      solicitante: data.empresa,
+      equipamentoId: data.equipamentoId,
+      tipoServico: "Entrada De Equipamentos",
+      origemProblema: data.defeitoRelatado,
+      descricaoServico: `Protocolo de Recolhimento ${numero}\nRecolhido por: ${data.recolhidoPor}\nDefeito relatado: ${data.defeitoRelatado}`,
+      acessorios: data.acessorios,
+      observacoes: "",
+    };
+    setOrdensServico((prev) => [...prev, novaOS]);
+    setOsCounter((c) => c + 1);
+
+    const protocolo: ProtocoloRecolhimento = {
+      id: Date.now() + 1,
+      numero,
+      dataCriacao,
+      equipamentoId: data.equipamentoId,
+      empresa: data.empresa,
+      recolhidoPor: data.recolhidoPor,
+      defeitoRelatado: data.defeitoRelatado,
+      acessorios: data.acessorios,
+      osId,
+      osNumero,
+    };
+    setProtocolosRecolhimento((prev) => [...prev, protocolo]);
+    setProtocoloCounter((c) => c + 1);
+    return protocolo;
   };
 
   const buildOrcamentoNumero = (osNumero?: string | null) => {
@@ -296,6 +376,11 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         pecas,
         addPeca,
         removePeca,
+        protocolos,
+        addProtocolo,
+        removeProtocolo,
+        protocolosRecolhimento,
+        addProtocoloRecolhimento,
         ordensServico,
         addOrdemServico,
         updateOrdemServico,
