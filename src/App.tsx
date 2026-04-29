@@ -14,6 +14,7 @@ import TiposEquipamento from "./pages/TiposEquipamento";
 import TiposOS from "./pages/TiposOS";
 import EstadosOS from "./pages/EstadosOS";
 import Pecas from "./pages/Pecas";
+import Protocolos from "./pages/Protocolos";
 import NotFound from "./pages/NotFound";
 import { DataProvider } from "./contexts/DataContext";
 
@@ -38,6 +39,7 @@ const App = () => (
               <Route path="/campos-gerenciais/tipos-os" element={<TiposOS />} />
               <Route path="/campos-gerenciais/estados-os" element={<EstadosOS />} />
               <Route path="/campos-gerenciais/pecas" element={<Pecas />} />
+              <Route path="/campos-gerenciais/protocolos" element={<Protocolos />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

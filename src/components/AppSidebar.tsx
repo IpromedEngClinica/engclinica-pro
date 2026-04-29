@@ -28,6 +28,7 @@ const camposGerenciais = [
   { icon: List, label: "Tipos de OS", path: "/campos-gerenciais/tipos-os" },
   { icon: List, label: "Estados da OS", path: "/campos-gerenciais/estados-os" },
   { icon: List, label: "Peças", path: "/campos-gerenciais/pecas" },
+  { icon: List, label: "Protocolos", path: "/campos-gerenciais/protocolos" },
 ];
 
 const AppSidebar = () => {
