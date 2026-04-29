@@ -16,6 +16,8 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   mode?: DialogMode;
   os?: OrdemServico | null;
+  fromEquipamento?: { id: number; empresa: string } | null;
+  initialTipoServico?: string;
 }
 
 const nowLocalDatetime = () => {
@@ -36,7 +38,7 @@ const emptyForm = {
   observacoes: "",
 };
 
-const OrdemServicoFormDialog = ({ open, onOpenChange, mode = "create", os = null }: Props) => {
+const OrdemServicoFormDialog = ({ open, onOpenChange, mode = "create", os = null, fromEquipamento = null, initialTipoServico = "" }: Props) => {
   const { empresas, equipamentos, tiposOS, estadosOS, addOrdemServico, updateOrdemServico, nextOSNumber } = useData();
 
   const [form, setForm] = useState(emptyForm);
@@ -63,12 +65,18 @@ const OrdemServicoFormDialog = ({ open, onOpenChange, mode = "create", os = null
       setAcessorios(os.acessorios || []);
       setNumeroPreview(os.numero);
     } else {
-      setForm({ ...emptyForm, dataCriacao: nowLocalDatetime() });
+      setForm({
+        ...emptyForm,
+        dataCriacao: nowLocalDatetime(),
+        solicitante: fromEquipamento?.empresa || "",
+        equipamentoId: fromEquipamento?.id ? String(fromEquipamento.id) : "",
+        tipoServico: initialTipoServico || "",
+      });
       setAcessorios([]);
       setNumeroPreview(nextOSNumber());
     }
     setNovoAcessorio("");
-  }, [open, os, mode, nextOSNumber]);
+  }, [open, os, mode, nextOSNumber, fromEquipamento, initialTipoServico]);
 
   const update = (field: string, value: string) => {
     if (readOnly) return;
