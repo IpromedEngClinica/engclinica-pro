@@ -362,9 +362,6 @@ const Equipamentos = () => {
                           <DropdownMenuItem onClick={() => futuro("Criar Preventiva")}>
                             <CalendarCheck className="w-4 h-4 mr-2" /> Criar Preventiva
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => futuro("Criar Recolhimento")}>
-                            <PackageX className="w-4 h-4 mr-2" /> Criar Recolhimento
-                          </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => openCriarOS(e, "Laudo De Obsolescência")}
                           >
