@@ -3,8 +3,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
-import { useData, Empresa } from "@/contexts/DataContext";
+import { useData, Empresa, TipoCliente } from "@/contexts/DataContext";
 
 export type DialogMode = "create" | "edit" | "view";
 
@@ -15,8 +22,10 @@ interface EmpresaFormDialogProps {
   empresa?: Empresa | null;
 }
 
-const emptyForm = {
-  nome: "", nomeFantasia: "", cpfCnpj: "",
+const TIPOS_CLIENTE: TipoCliente[] = ["Prefeitura", "Pessoa Jurídica", "Particular"];
+
+const emptyForm: Omit<Empresa, "id"> = {
+  nome: "", nomeFantasia: "", tipoCliente: "", cpfCnpj: "",
   cep: "", rua: "", numero: "", complemento: "", bairro: "", cidade: "", estado: "",
   contato: "", email: "", celular: "", telefone: "",
 };
@@ -115,9 +124,28 @@ const EmpresaFormDialog = ({ open, onOpenChange, mode = "create", empresa = null
               <Input value={form.nomeFantasia} onChange={(e) => handleChange("nomeFantasia", e.target.value)} placeholder="Nome Fantasia" disabled={readOnly} />
             </div>
           </div>
-          <div className="space-y-1.5 max-w-xs">
-            <Label>CPF/CNPJ *</Label>
-            <Input value={form.cpfCnpj} onChange={(e) => handleChange("cpfCnpj", e.target.value)} placeholder="000.000.000-00 / 00.000.000/0000-00" disabled={readOnly} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Tipo de Cliente</Label>
+              <Select
+                value={form.tipoCliente || ""}
+                onValueChange={(v) => handleChange("tipoCliente", v)}
+                disabled={readOnly}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIPOS_CLIENTE.map((t) => (
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>CPF/CNPJ *</Label>
+              <Input value={form.cpfCnpj} onChange={(e) => handleChange("cpfCnpj", e.target.value)} placeholder="000.000.000-00 / 00.000.000/0000-00" disabled={readOnly} />
+            </div>
           </div>
         </div>
 

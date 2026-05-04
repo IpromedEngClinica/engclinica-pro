@@ -56,10 +56,13 @@ const initialPecas = [
 
 const initialProtocolos: string[] = [];
 
+export type TipoCliente = "Prefeitura" | "Pessoa Jurídica" | "Particular" | "";
+
 export interface Empresa {
   id: number;
   nome: string;
   nomeFantasia: string;
+  tipoCliente: TipoCliente;
   cpfCnpj: string;
   cep: string;
   rua: string;
@@ -161,11 +164,11 @@ export interface Orcamento {
 }
 
 const initialEmpresas: Empresa[] = [
-  { id: 1, nome: "Hospital São Lucas", nomeFantasia: "São Lucas", cpfCnpj: "12.345.678/0001-01", cep: "01310-100", rua: "Av. Paulista", numero: "1000", complemento: "", bairro: "Bela Vista", cidade: "São Paulo", estado: "SP", contato: "João Silva", email: "contato@saolucas.com", celular: "(11) 99999-1111", telefone: "(11) 3333-1111" },
-  { id: 2, nome: "Clínica Santa Maria", nomeFantasia: "Santa Maria", cpfCnpj: "98.765.432/0001-02", cep: "20040-020", rua: "Rua da Assembleia", numero: "200", complemento: "Sala 5", bairro: "Centro", cidade: "Rio de Janeiro", estado: "RJ", contato: "Maria Souza", email: "admin@santamaria.com", celular: "(21) 98888-2222", telefone: "(21) 2222-2222" },
-  { id: 3, nome: "Hospital Regional", nomeFantasia: "HR", cpfCnpj: "11.222.333/0001-03", cep: "30130-010", rua: "Av. Afonso Pena", numero: "500", complemento: "", bairro: "Centro", cidade: "Belo Horizonte", estado: "MG", contato: "Carlos Lima", email: "contato@hregional.com", celular: "(31) 97777-3333", telefone: "(31) 3333-3333" },
-  { id: 4, nome: "UPA Centro", nomeFantasia: "UPA", cpfCnpj: "44.555.666/0001-04", cep: "80010-000", rua: "Rua XV de Novembro", numero: "100", complemento: "", bairro: "Centro", cidade: "Curitiba", estado: "PR", contato: "Ana Costa", email: "upa@centro.com", celular: "(41) 96666-4444", telefone: "(41) 4444-4444" },
-  { id: 5, nome: "Clínica Vida", nomeFantasia: "Vida", cpfCnpj: "77.888.999/0001-05", cep: "90010-150", rua: "Rua dos Andradas", numero: "300", complemento: "", bairro: "Centro Histórico", cidade: "Porto Alegre", estado: "RS", contato: "Pedro Santos", email: "vida@clinica.com", celular: "(51) 95555-5555", telefone: "(51) 5555-5555" },
+  { id: 1, nome: "Hospital São Lucas", nomeFantasia: "São Lucas", tipoCliente: "Pessoa Jurídica", cpfCnpj: "12.345.678/0001-01", cep: "01310-100", rua: "Av. Paulista", numero: "1000", complemento: "", bairro: "Bela Vista", cidade: "São Paulo", estado: "SP", contato: "João Silva", email: "contato@saolucas.com", celular: "(11) 99999-1111", telefone: "(11) 3333-1111" },
+  { id: 2, nome: "Clínica Santa Maria", nomeFantasia: "Santa Maria", tipoCliente: "Pessoa Jurídica", cpfCnpj: "98.765.432/0001-02", cep: "20040-020", rua: "Rua da Assembleia", numero: "200", complemento: "Sala 5", bairro: "Centro", cidade: "Rio de Janeiro", estado: "RJ", contato: "Maria Souza", email: "admin@santamaria.com", celular: "(21) 98888-2222", telefone: "(21) 2222-2222" },
+  { id: 3, nome: "Hospital Regional", nomeFantasia: "HR", tipoCliente: "Prefeitura", cpfCnpj: "11.222.333/0001-03", cep: "30130-010", rua: "Av. Afonso Pena", numero: "500", complemento: "", bairro: "Centro", cidade: "Belo Horizonte", estado: "MG", contato: "Carlos Lima", email: "contato@hregional.com", celular: "(31) 97777-3333", telefone: "(31) 3333-3333" },
+  { id: 4, nome: "UPA Centro", nomeFantasia: "UPA", tipoCliente: "Prefeitura", cpfCnpj: "44.555.666/0001-04", cep: "80010-000", rua: "Rua XV de Novembro", numero: "100", complemento: "", bairro: "Centro", cidade: "Curitiba", estado: "PR", contato: "Ana Costa", email: "upa@centro.com", celular: "(41) 96666-4444", telefone: "(41) 4444-4444" },
+  { id: 5, nome: "Clínica Vida", nomeFantasia: "Vida", tipoCliente: "Pessoa Jurídica", cpfCnpj: "77.888.999/0001-05", cep: "90010-150", rua: "Rua dos Andradas", numero: "300", complemento: "", bairro: "Centro Histórico", cidade: "Porto Alegre", estado: "RS", contato: "Pedro Santos", email: "vida@clinica.com", celular: "(51) 95555-5555", telefone: "(51) 5555-5555" },
 ];
 
 const initialEquipamentos: Equipamento[] = [
@@ -180,6 +183,7 @@ interface DataContextType {
   tipos: string[];
   addTipo: (tipo: string) => void;
   removeTipo: (index: number) => void;
+  renameTipo: (index: number, novoNome: string) => void;
   empresasList: Empresa[];
   empresas: string[];
   addEmpresa: (e: Omit<Empresa, "id">) => void;
@@ -190,15 +194,19 @@ interface DataContextType {
   tiposOS: string[];
   addTipoOS: (tipo: string) => void;
   removeTipoOS: (index: number) => void;
+  renameTipoOS: (index: number, novoNome: string) => void;
   estadosOS: string[];
   addEstadoOS: (estado: string) => void;
   removeEstadoOS: (index: number) => void;
+  renameEstadoOS: (index: number, novoNome: string) => void;
   pecas: string[];
   addPeca: (peca: string) => void;
   removePeca: (index: number) => void;
+  renamePeca: (index: number, novoNome: string) => void;
   protocolos: string[];
   addProtocolo: (item: string) => void;
   removeProtocolo: (index: number) => void;
+  renameProtocolo: (index: number, novoNome: string) => void;
   protocolosRecolhimento: ProtocoloRecolhimento[];
   addProtocoloRecolhimento: (data: {
     equipamentoId: number;
@@ -245,12 +253,32 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   const addTipo = (tipo: string) => setTipos((prev) => [...prev, tipo]);
   const removeTipo = (index: number) => setTipos((prev) => prev.filter((_, i) => i !== index));
+  const renameTipo = (index: number, novoNome: string) => {
+    setTipos((prev) => {
+      const antigo = prev[index];
+      if (!antigo || antigo === novoNome) return prev;
+      // Cascata: Equipamento.tipo
+      setEquipamentos((eqs) => eqs.map((e) => (e.tipo === antigo ? { ...e, tipo: novoNome } : e)));
+      return prev.map((t, i) => (i === index ? novoNome : t));
+    });
+  };
 
   const addEmpresa = (e: Omit<Empresa, "id">) => {
     setEmpresasList((prev) => [...prev, { ...e, id: Date.now() }]);
   };
   const updateEmpresa = (id: number, e: Omit<Empresa, "id">) => {
-    setEmpresasList((prev) => prev.map((it) => (it.id === id ? { ...e, id } : it)));
+    setEmpresasList((prev) => {
+      const antigo = prev.find((it) => it.id === id);
+      const updated = prev.map((it) => (it.id === id ? { ...e, id } : it));
+      // Cascata: nome de empresa muda → atualizar referências por nome
+      if (antigo && antigo.nome !== e.nome) {
+        setEquipamentos((eqs) => eqs.map((eq) => (eq.empresa === antigo.nome ? { ...eq, empresa: e.nome } : eq)));
+        setOrdensServico((oss) => oss.map((o) => (o.solicitante === antigo.nome ? { ...o, solicitante: e.nome } : o)));
+        setOrcamentos((ors) => ors.map((o) => (o.solicitante === antigo.nome ? { ...o, solicitante: e.nome } : o)));
+        setProtocolosRecolhimento((ps) => ps.map((p) => (p.empresa === antigo.nome ? { ...p, empresa: e.nome } : p)));
+      }
+      return updated;
+    });
   };
 
   const addEquipamento = (eq: Omit<Equipamento, "id">) => {
@@ -262,17 +290,61 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   const addTipoOS = (tipo: string) => setTiposOS((prev) => [...prev, tipo]);
   const removeTipoOS = (index: number) => setTiposOS((prev) => prev.filter((_, i) => i !== index));
+  const renameTipoOS = (index: number, novoNome: string) => {
+    setTiposOS((prev) => {
+      const antigo = prev[index];
+      if (!antigo || antigo === novoNome) return prev;
+      setOrdensServico((oss) =>
+        oss.map((o) => (o.tipoServico === antigo ? { ...o, tipoServico: novoNome } : o))
+      );
+      setOrcamentos((ors) =>
+        ors.map((o) => ({
+          ...o,
+          servicos: o.servicos.map((s) =>
+            s.tipoServico === antigo ? { ...s, tipoServico: novoNome } : s
+          ),
+        }))
+      );
+      return prev.map((t, i) => (i === index ? novoNome : t));
+    });
+  };
 
   const addEstadoOS = (estado: string) =>
     setEstadosOS((prev) => [...prev, estado].sort((a, b) => a.localeCompare(b, "pt-BR")));
   const removeEstadoOS = (index: number) => setEstadosOS((prev) => prev.filter((_, i) => i !== index));
+  const renameEstadoOS = (index: number, novoNome: string) => {
+    setEstadosOS((prev) => {
+      const antigo = prev[index];
+      if (!antigo || antigo === novoNome) return prev;
+      setOrdensServico((oss) =>
+        oss.map((o) => (o.estado === antigo ? { ...o, estado: novoNome } : o))
+      );
+      return prev.map((t, i) => (i === index ? novoNome : t)).sort((a, b) => a.localeCompare(b, "pt-BR"));
+    });
+  };
 
   const addPeca = (peca: string) => setPecas((prev) => [...prev, peca]);
   const removePeca = (index: number) => setPecas((prev) => prev.filter((_, i) => i !== index));
+  const renamePeca = (index: number, novoNome: string) => {
+    setPecas((prev) => {
+      const antigo = prev[index];
+      if (!antigo || antigo === novoNome) return prev;
+      setOrcamentos((ors) =>
+        ors.map((o) => ({
+          ...o,
+          pecas: o.pecas.map((p) => (p.peca === antigo ? { ...p, peca: novoNome } : p)),
+        }))
+      );
+      return prev.map((t, i) => (i === index ? novoNome : t));
+    });
+  };
 
   const addProtocolo = (item: string) => setProtocolos((prev) => [...prev, item]);
   const removeProtocolo = (index: number) =>
     setProtocolos((prev) => prev.filter((_, i) => i !== index));
+  const renameProtocolo = (index: number, novoNome: string) => {
+    setProtocolos((prev) => prev.map((t, i) => (i === index ? novoNome : t)));
+  };
 
   const nextOSNumber = () => {
     const year = new Date().getFullYear();
@@ -360,6 +432,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         tipos,
         addTipo,
         removeTipo,
+        renameTipo,
         empresasList,
         empresas: empresasList.map((e) => e.nome),
         addEmpresa,
@@ -370,15 +443,19 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         tiposOS,
         addTipoOS,
         removeTipoOS,
+        renameTipoOS,
         estadosOS,
         addEstadoOS,
         removeEstadoOS,
+        renameEstadoOS,
         pecas,
         addPeca,
         removePeca,
+        renamePeca,
         protocolos,
         addProtocolo,
         removeProtocolo,
+        renameProtocolo,
         protocolosRecolhimento,
         addProtocoloRecolhimento,
         ordensServico,

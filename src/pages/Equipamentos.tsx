@@ -1,4 +1,4 @@
-import { Cpu, Plus, Search, MoreHorizontal, Eye, Pencil, ClipboardList, CalendarCheck, PackageX, FileWarning, FileBox, SlidersHorizontal, ChevronDown } from "lucide-react";
+import { Cpu, Plus, Search, MoreHorizontal, Eye, Pencil, ClipboardList, CalendarCheck, FileWarning, FileBox, SlidersHorizontal, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -361,9 +361,6 @@ const Equipamentos = () => {
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => futuro("Criar Preventiva")}>
                             <CalendarCheck className="w-4 h-4 mr-2" /> Criar Preventiva
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => futuro("Criar Recolhimento")}>
-                            <PackageX className="w-4 h-4 mr-2" /> Criar Recolhimento
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => openCriarOS(e, "Laudo De Obsolescência")}

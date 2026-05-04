@@ -2,7 +2,7 @@ import CamposGerenciaisList from "@/components/CamposGerenciaisList";
 import { useData } from "@/contexts/DataContext";
 
 const Pecas = () => {
-  const { pecas, addPeca, removePeca } = useData();
+  const { pecas, addPeca, removePeca, renamePeca } = useData();
   return (
     <CamposGerenciaisList
       title="Peças"
@@ -10,6 +10,7 @@ const Pecas = () => {
       items={pecas}
       onAdd={addPeca}
       onRemove={removePeca}
+      onRename={renamePeca}
       placeholder="Nova peça..."
       itemLabel="Peça"
     />

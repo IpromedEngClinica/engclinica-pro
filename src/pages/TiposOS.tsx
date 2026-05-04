@@ -2,7 +2,7 @@ import CamposGerenciaisList from "@/components/CamposGerenciaisList";
 import { useData } from "@/contexts/DataContext";
 
 const TiposOS = () => {
-  const { tiposOS, addTipoOS, removeTipoOS } = useData();
+  const { tiposOS, addTipoOS, removeTipoOS, renameTipoOS } = useData();
   return (
     <CamposGerenciaisList
       title="Tipos de OS"
@@ -10,6 +10,7 @@ const TiposOS = () => {
       items={tiposOS}
       onAdd={addTipoOS}
       onRemove={removeTipoOS}
+      onRename={renameTipoOS}
       placeholder="Novo tipo de OS..."
       itemLabel="Tipo de OS"
     />
