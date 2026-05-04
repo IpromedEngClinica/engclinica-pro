@@ -124,9 +124,28 @@ const EmpresaFormDialog = ({ open, onOpenChange, mode = "create", empresa = null
               <Input value={form.nomeFantasia} onChange={(e) => handleChange("nomeFantasia", e.target.value)} placeholder="Nome Fantasia" disabled={readOnly} />
             </div>
           </div>
-          <div className="space-y-1.5 max-w-xs">
-            <Label>CPF/CNPJ *</Label>
-            <Input value={form.cpfCnpj} onChange={(e) => handleChange("cpfCnpj", e.target.value)} placeholder="000.000.000-00 / 00.000.000/0000-00" disabled={readOnly} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Tipo de Cliente</Label>
+              <Select
+                value={form.tipoCliente || ""}
+                onValueChange={(v) => handleChange("tipoCliente", v)}
+                disabled={readOnly}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIPOS_CLIENTE.map((t) => (
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>CPF/CNPJ *</Label>
+              <Input value={form.cpfCnpj} onChange={(e) => handleChange("cpfCnpj", e.target.value)} placeholder="000.000.000-00 / 00.000.000/0000-00" disabled={readOnly} />
+            </div>
           </div>
         </div>
 
