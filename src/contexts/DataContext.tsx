@@ -253,12 +253,32 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   const addTipo = (tipo: string) => setTipos((prev) => [...prev, tipo]);
   const removeTipo = (index: number) => setTipos((prev) => prev.filter((_, i) => i !== index));
+  const renameTipo = (index: number, novoNome: string) => {
+    setTipos((prev) => {
+      const antigo = prev[index];
+      if (!antigo || antigo === novoNome) return prev;
+      // Cascata: Equipamento.tipo
+      setEquipamentos((eqs) => eqs.map((e) => (e.tipo === antigo ? { ...e, tipo: novoNome } : e)));
+      return prev.map((t, i) => (i === index ? novoNome : t));
+    });
+  };
 
   const addEmpresa = (e: Omit<Empresa, "id">) => {
     setEmpresasList((prev) => [...prev, { ...e, id: Date.now() }]);
   };
   const updateEmpresa = (id: number, e: Omit<Empresa, "id">) => {
-    setEmpresasList((prev) => prev.map((it) => (it.id === id ? { ...e, id } : it)));
+    setEmpresasList((prev) => {
+      const antigo = prev.find((it) => it.id === id);
+      const updated = prev.map((it) => (it.id === id ? { ...e, id } : it));
+      // Cascata: nome de empresa muda → atualizar referências por nome
+      if (antigo && antigo.nome !== e.nome) {
+        setEquipamentos((eqs) => eqs.map((eq) => (eq.empresa === antigo.nome ? { ...eq, empresa: e.nome } : eq)));
+        setOrdensServico((oss) => oss.map((o) => (o.solicitante === antigo.nome ? { ...o, solicitante: e.nome } : o)));
+        setOrcamentos((ors) => ors.map((o) => (o.solicitante === antigo.nome ? { ...o, solicitante: e.nome } : o)));
+        setProtocolosRecolhimento((ps) => ps.map((p) => (p.empresa === antigo.nome ? { ...p, empresa: e.nome } : p)));
+      }
+      return updated;
+    });
   };
 
   const addEquipamento = (eq: Omit<Equipamento, "id">) => {
@@ -270,17 +290,61 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
 
   const addTipoOS = (tipo: string) => setTiposOS((prev) => [...prev, tipo]);
   const removeTipoOS = (index: number) => setTiposOS((prev) => prev.filter((_, i) => i !== index));
+  const renameTipoOS = (index: number, novoNome: string) => {
+    setTiposOS((prev) => {
+      const antigo = prev[index];
+      if (!antigo || antigo === novoNome) return prev;
+      setOrdensServico((oss) =>
+        oss.map((o) => (o.tipoServico === antigo ? { ...o, tipoServico: novoNome } : o))
+      );
+      setOrcamentos((ors) =>
+        ors.map((o) => ({
+          ...o,
+          servicos: o.servicos.map((s) =>
+            s.tipoServico === antigo ? { ...s, tipoServico: novoNome } : s
+          ),
+        }))
+      );
+      return prev.map((t, i) => (i === index ? novoNome : t));
+    });
+  };
 
   const addEstadoOS = (estado: string) =>
     setEstadosOS((prev) => [...prev, estado].sort((a, b) => a.localeCompare(b, "pt-BR")));
   const removeEstadoOS = (index: number) => setEstadosOS((prev) => prev.filter((_, i) => i !== index));
+  const renameEstadoOS = (index: number, novoNome: string) => {
+    setEstadosOS((prev) => {
+      const antigo = prev[index];
+      if (!antigo || antigo === novoNome) return prev;
+      setOrdensServico((oss) =>
+        oss.map((o) => (o.estado === antigo ? { ...o, estado: novoNome } : o))
+      );
+      return prev.map((t, i) => (i === index ? novoNome : t)).sort((a, b) => a.localeCompare(b, "pt-BR"));
+    });
+  };
 
   const addPeca = (peca: string) => setPecas((prev) => [...prev, peca]);
   const removePeca = (index: number) => setPecas((prev) => prev.filter((_, i) => i !== index));
+  const renamePeca = (index: number, novoNome: string) => {
+    setPecas((prev) => {
+      const antigo = prev[index];
+      if (!antigo || antigo === novoNome) return prev;
+      setOrcamentos((ors) =>
+        ors.map((o) => ({
+          ...o,
+          pecas: o.pecas.map((p) => (p.peca === antigo ? { ...p, peca: novoNome } : p)),
+        }))
+      );
+      return prev.map((t, i) => (i === index ? novoNome : t));
+    });
+  };
 
   const addProtocolo = (item: string) => setProtocolos((prev) => [...prev, item]);
   const removeProtocolo = (index: number) =>
     setProtocolos((prev) => prev.filter((_, i) => i !== index));
+  const renameProtocolo = (index: number, novoNome: string) => {
+    setProtocolos((prev) => prev.map((t, i) => (i === index ? novoNome : t)));
+  };
 
   const nextOSNumber = () => {
     const year = new Date().getFullYear();
