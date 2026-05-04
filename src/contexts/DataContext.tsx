@@ -183,6 +183,7 @@ interface DataContextType {
   tipos: string[];
   addTipo: (tipo: string) => void;
   removeTipo: (index: number) => void;
+  renameTipo: (index: number, novoNome: string) => void;
   empresasList: Empresa[];
   empresas: string[];
   addEmpresa: (e: Omit<Empresa, "id">) => void;
@@ -193,15 +194,19 @@ interface DataContextType {
   tiposOS: string[];
   addTipoOS: (tipo: string) => void;
   removeTipoOS: (index: number) => void;
+  renameTipoOS: (index: number, novoNome: string) => void;
   estadosOS: string[];
   addEstadoOS: (estado: string) => void;
   removeEstadoOS: (index: number) => void;
+  renameEstadoOS: (index: number, novoNome: string) => void;
   pecas: string[];
   addPeca: (peca: string) => void;
   removePeca: (index: number) => void;
+  renamePeca: (index: number, novoNome: string) => void;
   protocolos: string[];
   addProtocolo: (item: string) => void;
   removeProtocolo: (index: number) => void;
+  renameProtocolo: (index: number, novoNome: string) => void;
   protocolosRecolhimento: ProtocoloRecolhimento[];
   addProtocoloRecolhimento: (data: {
     equipamentoId: number;
