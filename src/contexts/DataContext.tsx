@@ -56,10 +56,13 @@ const initialPecas = [
 
 const initialProtocolos: string[] = [];
 
+export type TipoCliente = "Prefeitura" | "Pessoa Jurídica" | "Particular" | "";
+
 export interface Empresa {
   id: number;
   nome: string;
   nomeFantasia: string;
+  tipoCliente: TipoCliente;
   cpfCnpj: string;
   cep: string;
   rua: string;
