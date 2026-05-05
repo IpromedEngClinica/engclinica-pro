@@ -114,7 +114,7 @@ const OrdensServico = () => {
       </PageHeader>
 
       <div className="bg-card rounded-xl border">
-        <div className="px-5 py-4 border-b flex gap-3">
+        <div className="px-5 py-4 border-b flex gap-3 items-center">
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
@@ -124,6 +124,15 @@ const OrdensServico = () => {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
+          <Button
+            variant={hideClosed ? "default" : "outline"}
+            size="sm"
+            onClick={() => setHideClosed((v) => !v)}
+            title="Ocultar OS fechadas, preventivas e calibrações"
+          >
+            <EyeOff className="w-4 h-4 mr-2" />
+            {hideClosed ? "Mostrar todas" : "Ocultar fechadas/preventivas"}
+          </Button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
