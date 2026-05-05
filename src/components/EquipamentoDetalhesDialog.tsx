@@ -1,12 +1,25 @@
 import { useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { MoreHorizontal, Pencil, ClipboardList, FileBox, CalendarCheck, FileWarning } from "lucide-react";
 import { Equipamento, useData } from "@/contexts/DataContext";
+import { toast } from "@/hooks/use-toast";
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   equipamento: Equipamento | null;
   onSelectOS?: (osId: number) => void;
+  onEdit?: (eq: Equipamento) => void;
+  onCriarOS?: (eq: Equipamento, tipoServico?: string) => void;
+  onCriarProtocolo?: (eq: Equipamento) => void;
 }
 
 const Card = ({ title, children }: { title: string; children: React.ReactNode }) => (
