@@ -44,8 +44,11 @@ const formatDate = (iso: string) => {
   return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 };
 
-const EquipamentoDetalhesDialog = ({ open, onOpenChange, equipamento, onSelectOS }: Props) => {
+const EquipamentoDetalhesDialog = ({ open, onOpenChange, equipamento, onSelectOS, onEdit, onCriarOS, onCriarProtocolo }: Props) => {
   const { ordensServico } = useData();
+
+  const futuro = (label: string) =>
+    toast({ title: label, description: "Funcionalidade em desenvolvimento." });
 
   const historico = useMemo(() => {
     if (!equipamento) return [];
