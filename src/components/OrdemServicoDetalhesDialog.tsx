@@ -172,9 +172,24 @@ const OrdemServicoDetalhesDialog = ({ open, onOpenChange, os, onGerarOrcamento }
                 </Button>
               </>
             ) : (
-              <Button size="sm" onClick={() => setEditing(true)}>
-                <Pencil className="w-4 h-4 mr-2" /> Editar
-              </Button>
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => generateOrdemServicoPdf(os, empresa, equipamento)}
+                  title="Gerar PDF da OS"
+                >
+                  <FileText className="w-4 h-4 mr-2" /> Gerar PDF
+                </Button>
+                {onGerarOrcamento && (
+                  <Button size="sm" variant="outline" onClick={() => onGerarOrcamento(os)}>
+                    <FileSignature className="w-4 h-4 mr-2" /> Gerar Orçamento
+                  </Button>
+                )}
+                <Button size="sm" onClick={() => setEditing(true)}>
+                  <Pencil className="w-4 h-4 mr-2" /> Editar
+                </Button>
+              </>
             )}
           </div>
         </DialogHeader>
