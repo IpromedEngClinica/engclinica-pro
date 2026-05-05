@@ -18,7 +18,7 @@ import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import OrcamentoFormDialog from "@/components/OrcamentoFormDialog";
 
 const OrdensServico = () => {
-  const { ordensServico, equipamentos, empresasList } = useData();
+  const { ordensServico, equipamentos, empresasList, estadosOS, updateOrdemServico } = useData();
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<DialogMode>("create");
@@ -31,6 +31,8 @@ const OrdensServico = () => {
   const [equipSel, setEquipSel] = useState<Equipamento | null>(null);
   const [orcOpen, setOrcOpen] = useState(false);
   const [osParaOrcamento, setOsParaOrcamento] = useState<OrdemServico | null>(null);
+  const [hideClosed, setHideClosed] = useState(false);
+  const [editingEstadoId, setEditingEstadoId] = useState<number | null>(null);
 
   const equipamentoLabel = (id: number | null) => {
     const eq = equipamentos.find((e) => e.id === id);
@@ -43,16 +45,39 @@ const OrdensServico = () => {
     return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
   };
 
+  const HIDDEN_ESTADOS = new Set(["Fechada"]);
+  const HIDDEN_TIPOS = new Set(["Manutenção Preventiva", "Calibração"]);
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return ordensServico.filter(
-      (os) =>
+    return ordensServico.filter((os) => {
+      const matchSearch =
+        !q ||
         os.numero.toLowerCase().includes(q) ||
         os.solicitante.toLowerCase().includes(q) ||
         os.tipoServico.toLowerCase().includes(q) ||
-        equipamentoLabel(os.equipamentoId).toLowerCase().includes(q)
-    );
-  }, [ordensServico, search, equipamentos]);
+        equipamentoLabel(os.equipamentoId).toLowerCase().includes(q);
+      const matchHide =
+        !hideClosed || (!HIDDEN_ESTADOS.has(os.estado) && !HIDDEN_TIPOS.has(os.tipoServico));
+      return matchSearch && matchHide;
+    });
+  }, [ordensServico, search, equipamentos, hideClosed]);
+
+  const handleEstadoChange = (os: OrdemServico, novoEstado: string) => {
+    updateOrdemServico(os.id, {
+      dataCriacao: os.dataCriacao,
+      estado: novoEstado,
+      responsavelTecnico: os.responsavelTecnico,
+      solicitante: os.solicitante,
+      equipamentoId: os.equipamentoId,
+      tipoServico: os.tipoServico,
+      origemProblema: os.origemProblema,
+      descricaoServico: os.descricaoServico,
+      acessorios: os.acessorios,
+      observacoes: os.observacoes,
+    });
+    setEditingEstadoId(null);
+  };
 
   const openCreate = () => { setSelected(null); setMode("create"); setOpen(true); };
   const openView = (os: OrdemServico) => { setOsDetalhes(os); setDetalhesOpen(true); };
