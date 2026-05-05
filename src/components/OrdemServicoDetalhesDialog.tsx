@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Pencil, Save, X } from "lucide-react";
+import { Pencil, Save, X, FileText, FileSignature } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,11 +15,13 @@ import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
 import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import { useData, OrdemServico } from "@/contexts/DataContext";
 import { toast } from "@/hooks/use-toast";
+import { generateOrdemServicoPdf } from "@/lib/ordemServicoPdf";
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   os: OrdemServico | null;
+  onGerarOrcamento?: (os: OrdemServico) => void;
 }
 
 const InfoCard = ({ title, children }: { title: string; children: React.ReactNode }) => (
