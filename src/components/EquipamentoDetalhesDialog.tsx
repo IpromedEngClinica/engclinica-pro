@@ -74,10 +74,45 @@ const EquipamentoDetalhesDialog = ({ open, onOpenChange, equipamento, onSelectOS
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl h-[90vh] flex flex-col p-0 gap-0">
-        <DialogHeader className="px-6 py-4 border-b shrink-0">
+        <DialogHeader className="px-6 py-4 border-b shrink-0 flex flex-row items-center justify-between">
           <DialogTitle className="text-xl text-foreground">
             {equipamento.tipo} <span className="text-muted-foreground font-normal">| {equipamento.modelo}</span>
           </DialogTitle>
+          <div className="mr-8 flex gap-2">
+            {onEdit && (
+              <Button size="sm" variant="outline" onClick={() => onEdit(equipamento)}>
+                <Pencil className="w-4 h-4 mr-2" /> Editar
+              </Button>
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="default">
+                  <MoreHorizontal className="w-4 h-4 mr-2" /> Ações
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 bg-popover">
+                {onCriarOS && (
+                  <DropdownMenuItem onClick={() => onCriarOS(equipamento)}>
+                    <ClipboardList className="w-4 h-4 mr-2" /> Criar Ordem de Serviço
+                  </DropdownMenuItem>
+                )}
+                {onCriarProtocolo && (
+                  <DropdownMenuItem onClick={() => onCriarProtocolo(equipamento)}>
+                    <FileBox className="w-4 h-4 mr-2" /> Criar Protocolo de Recolhimento
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => futuro("Criar Preventiva")}>
+                  <CalendarCheck className="w-4 h-4 mr-2" /> Criar Preventiva
+                </DropdownMenuItem>
+                {onCriarOS && (
+                  <DropdownMenuItem onClick={() => onCriarOS(equipamento, "Laudo De Obsolescência")}>
+                    <FileWarning className="w-4 h-4 mr-2" /> Criar Laudo de Obsolescência
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </DialogHeader>
         <div className="flex-1 overflow-y-auto min-h-0 p-6 space-y-6">
           <Card title="Dados Básicos">
