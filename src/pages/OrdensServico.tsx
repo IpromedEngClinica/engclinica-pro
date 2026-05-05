@@ -1,6 +1,13 @@
-import { ClipboardList, FileSignature, Plus, Search, Eye, Pencil } from "lucide-react";
+import { ClipboardList, FileSignature, Plus, Search, Eye, Pencil, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import PageHeader from "@/components/PageHeader";
 import { useMemo, useState } from "react";
 import { useData, OrdemServico, Empresa, Equipamento } from "@/contexts/DataContext";
