@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Pencil, Save, X } from "lucide-react";
+import { Pencil, Save, X, FileText, FileSignature } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,11 +15,13 @@ import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
 import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import { useData, OrdemServico } from "@/contexts/DataContext";
 import { toast } from "@/hooks/use-toast";
+import { generateOrdemServicoPdf } from "@/lib/ordemServicoPdf";
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   os: OrdemServico | null;
+  onGerarOrcamento?: (os: OrdemServico) => void;
 }
 
 const InfoCard = ({ title, children }: { title: string; children: React.ReactNode }) => (
@@ -44,7 +46,7 @@ const formatDate = (iso: string) => {
   return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 };
 
-const OrdemServicoDetalhesDialog = ({ open, onOpenChange, os }: Props) => {
+const OrdemServicoDetalhesDialog = ({ open, onOpenChange, os, onGerarOrcamento }: Props) => {
   const {
     equipamentos,
     empresasList,
@@ -170,9 +172,24 @@ const OrdemServicoDetalhesDialog = ({ open, onOpenChange, os }: Props) => {
                 </Button>
               </>
             ) : (
-              <Button size="sm" onClick={() => setEditing(true)}>
-                <Pencil className="w-4 h-4 mr-2" /> Editar
-              </Button>
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => generateOrdemServicoPdf(os, empresa, equipamento)}
+                  title="Gerar PDF da OS"
+                >
+                  <FileText className="w-4 h-4 mr-2" /> Gerar PDF
+                </Button>
+                {onGerarOrcamento && (
+                  <Button size="sm" variant="outline" onClick={() => onGerarOrcamento(os)}>
+                    <FileSignature className="w-4 h-4 mr-2" /> Gerar Orçamento
+                  </Button>
+                )}
+                <Button size="sm" onClick={() => setEditing(true)}>
+                  <Pencil className="w-4 h-4 mr-2" /> Editar
+                </Button>
+              </>
             )}
           </div>
         </DialogHeader>

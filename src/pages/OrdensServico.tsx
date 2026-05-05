@@ -1,6 +1,13 @@
-import { ClipboardList, FileSignature, Plus, Search, Eye, Pencil } from "lucide-react";
+import { ClipboardList, FileSignature, Plus, Search, Eye, Pencil, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import PageHeader from "@/components/PageHeader";
 import { useMemo, useState } from "react";
 import { useData, OrdemServico, Empresa, Equipamento } from "@/contexts/DataContext";
@@ -11,7 +18,7 @@ import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import OrcamentoFormDialog from "@/components/OrcamentoFormDialog";
 
 const OrdensServico = () => {
-  const { ordensServico, equipamentos, empresasList } = useData();
+  const { ordensServico, equipamentos, empresasList, estadosOS, updateOrdemServico } = useData();
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<DialogMode>("create");
@@ -24,6 +31,8 @@ const OrdensServico = () => {
   const [equipSel, setEquipSel] = useState<Equipamento | null>(null);
   const [orcOpen, setOrcOpen] = useState(false);
   const [osParaOrcamento, setOsParaOrcamento] = useState<OrdemServico | null>(null);
+  const [hideClosed, setHideClosed] = useState(false);
+  const [editingEstadoId, setEditingEstadoId] = useState<number | null>(null);
 
   const equipamentoLabel = (id: number | null) => {
     const eq = equipamentos.find((e) => e.id === id);
@@ -36,16 +45,39 @@ const OrdensServico = () => {
     return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
   };
 
+  const HIDDEN_ESTADOS = new Set(["Fechada"]);
+  const HIDDEN_TIPOS = new Set(["Manutenção Preventiva", "Calibração"]);
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return ordensServico.filter(
-      (os) =>
+    return ordensServico.filter((os) => {
+      const matchSearch =
+        !q ||
         os.numero.toLowerCase().includes(q) ||
         os.solicitante.toLowerCase().includes(q) ||
         os.tipoServico.toLowerCase().includes(q) ||
-        equipamentoLabel(os.equipamentoId).toLowerCase().includes(q)
-    );
-  }, [ordensServico, search, equipamentos]);
+        equipamentoLabel(os.equipamentoId).toLowerCase().includes(q);
+      const matchHide =
+        !hideClosed || (!HIDDEN_ESTADOS.has(os.estado) && !HIDDEN_TIPOS.has(os.tipoServico));
+      return matchSearch && matchHide;
+    });
+  }, [ordensServico, search, equipamentos, hideClosed]);
+
+  const handleEstadoChange = (os: OrdemServico, novoEstado: string) => {
+    updateOrdemServico(os.id, {
+      dataCriacao: os.dataCriacao,
+      estado: novoEstado,
+      responsavelTecnico: os.responsavelTecnico,
+      solicitante: os.solicitante,
+      equipamentoId: os.equipamentoId,
+      tipoServico: os.tipoServico,
+      origemProblema: os.origemProblema,
+      descricaoServico: os.descricaoServico,
+      acessorios: os.acessorios,
+      observacoes: os.observacoes,
+    });
+    setEditingEstadoId(null);
+  };
 
   const openCreate = () => { setSelected(null); setMode("create"); setOpen(true); };
   const openView = (os: OrdemServico) => { setOsDetalhes(os); setDetalhesOpen(true); };
@@ -82,7 +114,7 @@ const OrdensServico = () => {
       </PageHeader>
 
       <div className="bg-card rounded-xl border">
-        <div className="px-5 py-4 border-b flex gap-3">
+        <div className="px-5 py-4 border-b flex gap-3 items-center">
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
@@ -92,6 +124,15 @@ const OrdensServico = () => {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
+          <Button
+            variant={hideClosed ? "default" : "outline"}
+            size="sm"
+            onClick={() => setHideClosed((v) => !v)}
+            title="Ocultar OS fechadas, preventivas e calibrações"
+          >
+            <EyeOff className="w-4 h-4 mr-2" />
+            {hideClosed ? "Mostrar todas" : "Ocultar fechadas/preventivas"}
+          </Button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -120,9 +161,32 @@ const OrdensServico = () => {
                     </button>
                   </td>
                   <td className="px-5 py-3">
-                    <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
-                      {os.estado}
-                    </span>
+                    {editingEstadoId === os.id ? (
+                      <Select
+                        defaultValue={os.estado}
+                        onValueChange={(v) => handleEstadoChange(os, v)}
+                        open
+                        onOpenChange={(o) => { if (!o) setEditingEstadoId(null); }}
+                      >
+                        <SelectTrigger className="h-7 w-[220px] text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {estadosOS.map((e) => (
+                            <SelectItem key={e} value={e}>{e}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setEditingEstadoId(os.id)}
+                        className="px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                        title="Clique para editar o estado"
+                      >
+                        {os.estado}
+                      </button>
+                    )}
                   </td>
                   <td className="px-5 py-3">
                     <button
@@ -190,6 +254,7 @@ const OrdensServico = () => {
           if (!v) setOsDetalhes(null);
         }}
         os={osDetalhes}
+        onGerarOrcamento={(o) => { setDetalhesOpen(false); handleGerarOrcamento(o); }}
       />
       <EmpresaDetalhesDialog
         open={empresaOpen}

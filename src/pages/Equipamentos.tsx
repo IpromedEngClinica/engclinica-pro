@@ -176,6 +176,9 @@ const Equipamentos = () => {
         onOpenChange={(v) => { setDetalhesOpen(v); if (!v) setDetalhesEq(null); }}
         equipamento={detalhesEq}
         onSelectOS={openOSById}
+        onEdit={(e) => { setDetalhesOpen(false); openEdit(e); }}
+        onCriarOS={(e, tipo) => { setDetalhesOpen(false); openCriarOS(e, tipo); }}
+        onCriarProtocolo={(e) => { setDetalhesOpen(false); openProtocolo(e); }}
       />
       <OrdemServicoFormDialog
         open={osOpen}
