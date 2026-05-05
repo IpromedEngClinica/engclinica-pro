@@ -254,6 +254,7 @@ const OrdensServico = () => {
           if (!v) setOsDetalhes(null);
         }}
         os={osDetalhes}
+        onGerarOrcamento={(o) => { setDetalhesOpen(false); handleGerarOrcamento(o); }}
       />
       <EmpresaDetalhesDialog
         open={empresaOpen}
