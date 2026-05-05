@@ -161,9 +161,32 @@ const OrdensServico = () => {
                     </button>
                   </td>
                   <td className="px-5 py-3">
-                    <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
-                      {os.estado}
-                    </span>
+                    {editingEstadoId === os.id ? (
+                      <Select
+                        defaultValue={os.estado}
+                        onValueChange={(v) => handleEstadoChange(os, v)}
+                        open
+                        onOpenChange={(o) => { if (!o) setEditingEstadoId(null); }}
+                      >
+                        <SelectTrigger className="h-7 w-[220px] text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {estadosOS.map((e) => (
+                            <SelectItem key={e} value={e}>{e}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setEditingEstadoId(os.id)}
+                        className="px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                        title="Clique para editar o estado"
+                      >
+                        {os.estado}
+                      </button>
+                    )}
                   </td>
                   <td className="px-5 py-3">
                     <button
