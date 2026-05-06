@@ -1,4 +1,4 @@
-import { ClipboardList, FileSignature, Plus, Search, Eye, Pencil, EyeOff } from "lucide-react";
+import { ClipboardList, FileSignature, Plus, Search, Eye, Pencil, EyeOff, MoreHorizontal, SlidersHorizontal, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -8,6 +8,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import SearchableSelect from "@/components/SearchableSelect";
 import PageHeader from "@/components/PageHeader";
 import { useMemo, useState } from "react";
 import { useData, OrdemServico, Empresa, Equipamento } from "@/contexts/DataContext";
