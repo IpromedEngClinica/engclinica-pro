@@ -1,4 +1,10 @@
-import { Building2, Plus, Search, Eye, Pencil } from "lucide-react";
+import { Building2, Plus, Search, Eye, Pencil, MoreHorizontal } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import PageHeader from "@/components/PageHeader";
@@ -162,13 +168,22 @@ const Empresas = () => {
                   <td className="px-5 py-3 text-muted-foreground">{e.contato}</td>
                   <td className="px-5 py-3 text-muted-foreground">{e.cpfCnpj}</td>
                   <td className="px-5 py-3">
-                    <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => openView(e)} title="Visualizar">
-                        <Eye className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(e)} title="Editar">
-                        <Pencil className="w-4 h-4" />
-                      </Button>
+                    <div className="flex justify-end">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" title="Ações">
+                            <MoreHorizontal className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48 bg-popover">
+                          <DropdownMenuItem onClick={() => openView(e)}>
+                            <Eye className="w-4 h-4 mr-2" /> Visualizar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openEdit(e)}>
+                            <Pencil className="w-4 h-4 mr-2" /> Editar
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </td>
                 </tr>
