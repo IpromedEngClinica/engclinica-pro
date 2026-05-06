@@ -194,49 +194,32 @@ const Orcamentos = () => {
                     <td className="px-5 py-3 font-medium text-foreground">{formatBRL(total)}</td>
                     <td className="px-5 py-3 text-muted-foreground">{formatDate(o.dataCriacao)}</td>
                     <td className="px-5 py-3">
-                      <div className="flex justify-end gap-1">
-                        {o.status !== "Aprovado" && o.status !== "Faturado" && o.status !== "Cancelado" && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleStatusChange(o, "Aprovado")}
-                            title="Aprovar"
-                            className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
-                          >
-                            <CheckCircle2 className="w-4 h-4" />
-                          </Button>
-                        )}
-                        {o.status !== "Reprovado" && o.status !== "Cancelado" && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleStatusChange(o, "Reprovado")}
-                            title="Reprovar"
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          >
-                            <XCircle className="w-4 h-4" />
-                          </Button>
-                        )}
-                        {o.status !== "Cancelado" && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleStatusChange(o, "Cancelado")}
-                            title="Cancelar"
-                            className="text-gray-600 hover:text-gray-700 hover:bg-gray-100"
-                          >
-                            <Ban className="w-4 h-4" />
-                          </Button>
-                        )}
-                        <Button variant="ghost" size="icon" onClick={() => handlePdf(o)} title="Gerar PDF">
-                          <FileDown className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => openView(o)} title="Visualizar">
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => openEdit(o)} title="Editar">
-                          <Pencil className="w-4 h-4" />
-                        </Button>
+                      <div className="flex justify-end">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" title="Ações">
+                              <MoreHorizontal className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-56 bg-popover">
+                            <DropdownMenuItem onClick={() => openView(o)}>
+                              <Eye className="w-4 h-4 mr-2" /> Visualizar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openEdit(o)}>
+                              <Pencil className="w-4 h-4 mr-2" /> Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handlePdf(o)}>
+                              <FileDown className="w-4 h-4 mr-2" /> Gerar PDF
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuLabel>Alterar Status</DropdownMenuLabel>
+                            {ORCAMENTO_STATUS.filter((s) => s !== o.status).map((s) => (
+                              <DropdownMenuItem key={s} onClick={() => handleStatusChange(o, s)} className="gap-2">
+                                {statusIcon[s]} {s}
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </td>
                   </tr>
