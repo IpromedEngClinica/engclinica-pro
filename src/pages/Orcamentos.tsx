@@ -1,4 +1,5 @@
-import { FileText, Plus, Search, Eye, Pencil, FileDown, CheckCircle2, XCircle, DollarSign, Ban, Clock } from "lucide-react";
+import { FileText, Plus, Search, Eye, Pencil, FileDown, CheckCircle2, XCircle, DollarSign, Ban, Clock, MoreHorizontal, SlidersHorizontal, ChevronDown } from "lucide-react";
+import SearchableSelect from "@/components/SearchableSelect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
