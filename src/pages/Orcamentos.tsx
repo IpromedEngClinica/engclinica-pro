@@ -42,6 +42,8 @@ const statusIcon: Record<OrcamentoStatus, JSX.Element> = {
   Cancelado: <Ban className="w-4 h-4" />,
 };
 
+const ALL = "__all__";
+
 const Orcamentos = () => {
   const { orcamentos, empresasList, updateOrcamentoStatus } = useData();
   const [search, setSearch] = useState("");
@@ -49,6 +51,10 @@ const Orcamentos = () => {
   const [mode, setMode] = useState<DialogMode>("create");
   const [selected, setSelected] = useState<Orcamento | null>(null);
   const [tab, setTab] = useState<OrcamentoStatus>("Pendente");
+
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const emptyFilters = { tipo: ALL, solicitante: ALL, numero: "", identificador: "", responsavel: "" };
+  const [filters, setFilters] = useState(emptyFilters);
 
   const counts = useMemo(() => {
     const map: Record<OrcamentoStatus, number> = {
