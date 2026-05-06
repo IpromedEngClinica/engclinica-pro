@@ -66,6 +66,7 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orca
   const [responsavel, setResponsavel] = useState("Ícaro Rezende");
   const [identificador, setIdentificador] = useState("");
   const [numeroPreview, setNumeroPreview] = useState("");
+  const [preventiva, setPreventiva] = useState(false);
 
   useEffect(() => {
     if (!open) return;
