@@ -289,6 +289,15 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orca
                 );
               })}
             </div>
+            <label className="flex items-center gap-2 mt-3 cursor-pointer w-fit">
+              <Checkbox
+                checked={preventiva}
+                onCheckedChange={(v) => !readOnly && setPreventiva(!!v)}
+              />
+              <span className="text-sm">
+                Preventiva <span className="text-muted-foreground">(serviço para vários equipamentos — descrição livre)</span>
+              </span>
+            </label>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
