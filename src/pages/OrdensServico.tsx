@@ -201,12 +201,12 @@ const OrdensServico = () => {
                   <td className="px-5 py-3">
                     {editingEstadoId === os.id ? (
                       <Select
-                        defaultValue={os.estado}
+                        defaultOpen
+                        value={os.estado}
                         onValueChange={(v) => handleEstadoChange(os, v)}
-                        open
-                        onOpenChange={(o) => { if (!o) setEditingEstadoId(null); }}
+                        onOpenChange={(o) => { if (!o) setTimeout(() => setEditingEstadoId(null), 50); }}
                       >
-                        <SelectTrigger className="h-7 w-[220px] text-xs">
+                        <SelectTrigger className="h-7 w-[240px] text-xs">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
