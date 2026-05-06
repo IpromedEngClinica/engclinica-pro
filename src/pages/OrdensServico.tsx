@@ -64,6 +64,8 @@ const OrdensServico = () => {
   const HIDDEN_ESTADOS = new Set(["Fechada"]);
   const HIDDEN_TIPOS = new Set(["Manutenção Preventiva", "Calibração"]);
 
+  const matchesText = (val: string, q: string) => !q.trim() || val.toLowerCase().includes(q.trim().toLowerCase());
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return ordensServico.filter((os) => {
@@ -75,11 +77,31 @@ const OrdensServico = () => {
         equipamentoLabel(os.equipamentoId).toLowerCase().includes(q);
       const matchHide =
         !hideClosed || (!HIDDEN_ESTADOS.has(os.estado) && !HIDDEN_TIPOS.has(os.tipoServico));
-      return matchSearch && matchHide;
+      const matchAdv =
+        (filters.estado === ALL || os.estado === filters.estado) &&
+        (filters.solicitante === ALL || os.solicitante === filters.solicitante) &&
+        (filters.tipoServico === ALL || os.tipoServico === filters.tipoServico) &&
+        matchesText(os.responsavelTecnico, filters.responsavelTecnico) &&
+        matchesText(os.numero, filters.numero);
+      return matchSearch && matchHide && matchAdv;
     });
-  }, [ordensServico, search, equipamentos, hideClosed]);
+  }, [ordensServico, search, equipamentos, hideClosed, filters]);
+
+  const activeFiltersCount = useMemo(() => {
+    let n = 0;
+    if (filters.estado !== ALL) n++;
+    if (filters.solicitante !== ALL) n++;
+    if (filters.tipoServico !== ALL) n++;
+    if (filters.responsavelTecnico.trim()) n++;
+    if (filters.numero.trim()) n++;
+    return n;
+  }, [filters]);
 
   const handleEstadoChange = (os: OrdemServico, novoEstado: string) => {
+    if (!novoEstado || novoEstado === os.estado) {
+      setEditingEstadoId(null);
+      return;
+    }
     updateOrdemServico(os.id, {
       dataCriacao: os.dataCriacao,
       estado: novoEstado,
