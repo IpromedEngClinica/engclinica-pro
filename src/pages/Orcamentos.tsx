@@ -64,6 +64,8 @@ const Orcamentos = () => {
     return map;
   }, [orcamentos]);
 
+  const matchesText = (val: string, q: string) => !q.trim() || val.toLowerCase().includes(q.trim().toLowerCase());
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return orcamentos.filter(
@@ -71,9 +73,22 @@ const Orcamentos = () => {
         o.status === tab &&
         (o.numero.toLowerCase().includes(q) ||
           o.solicitante.toLowerCase().includes(q) ||
-          o.tipo.toLowerCase().includes(q))
+          o.tipo.toLowerCase().includes(q)) &&
+        (filters.tipo === ALL || o.tipo === filters.tipo) &&
+        (filters.solicitante === ALL || o.solicitante === filters.solicitante) &&
+        matchesText(o.numero, filters.numero) &&
+        matchesText(o.identificador || "", filters.identificador) &&
+        matchesText(o.responsavelOrcamentista || "", filters.responsavel)
     );
-  }, [orcamentos, search, tab]);
+  }, [orcamentos, search, tab, filters]);
+
+  const activeFiltersCount = useMemo(() => {
+    let n = 0;
+    if (filters.tipo !== ALL) n++;
+    if (filters.solicitante !== ALL) n++;
+    (["numero", "identificador", "responsavel"] as const).forEach((k) => { if (filters[k].trim()) n++; });
+    return n;
+  }, [filters]);
 
   const openCreate = () => { setSelected(null); setMode("create"); setOpen(true); };
   const openView = (o: Orcamento) => { setSelected(o); setMode("view"); setOpen(true); };
