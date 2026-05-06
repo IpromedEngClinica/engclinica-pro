@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import SearchableSelect from "@/components/SearchableSelect";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Trash2, Wrench, Package, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
@@ -65,6 +66,7 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orca
   const [responsavel, setResponsavel] = useState("Ícaro Rezende");
   const [identificador, setIdentificador] = useState("");
   const [numeroPreview, setNumeroPreview] = useState("");
+  const [preventiva, setPreventiva] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -287,6 +289,15 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orca
                 );
               })}
             </div>
+            <label className="flex items-center gap-2 mt-3 cursor-pointer w-fit">
+              <Checkbox
+                checked={preventiva}
+                onCheckedChange={(v) => !readOnly && setPreventiva(!!v)}
+              />
+              <span className="text-sm">
+                Preventiva <span className="text-muted-foreground">(serviço para vários equipamentos — descrição livre)</span>
+              </span>
+            </label>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
@@ -429,26 +440,39 @@ const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orca
             <div className="space-y-3">
               {servicosItems.map((item, i) => (
                 <div key={i} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end border rounded-md p-3">
-                  <div className="md:col-span-4 space-y-2">
-                    <Label className="text-xs">Tipo de Serviço</Label>
-                    <SearchableSelect
-                      value={item.tipoServico}
-                      onValueChange={(v) => updateServicoItem(i, { tipoServico: v })}
-                      options={tiposOS}
-                      placeholder="Selecione o tipo"
-                      emptyText="Nenhum tipo encontrado."
-                    />
-                  </div>
-                  <div className="md:col-span-3 space-y-2">
-                    <Label className="text-xs">Tipo de Equipamento</Label>
-                    <SearchableSelect
-                      value={item.tipoEquipamento}
-                      onValueChange={(v) => updateServicoItem(i, { tipoEquipamento: v })}
-                      options={tipos}
-                      placeholder="Selecione"
-                      emptyText="Nenhum encontrado."
-                    />
-                  </div>
+                  {preventiva ? (
+                    <div className="md:col-span-7 space-y-2">
+                      <Label className="text-xs">Tipo de Serviço (livre)</Label>
+                      <Input
+                        placeholder="Descreva o serviço (ex: Preventiva em todos os monitores)"
+                        value={item.tipoEquipamento}
+                        onChange={(e) => updateServicoItem(i, { tipoServico: "Manutenção Preventiva", tipoEquipamento: e.target.value })}
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      <div className="md:col-span-4 space-y-2">
+                        <Label className="text-xs">Tipo de Serviço</Label>
+                        <SearchableSelect
+                          value={item.tipoServico}
+                          onValueChange={(v) => updateServicoItem(i, { tipoServico: v })}
+                          options={tiposOS}
+                          placeholder="Selecione o tipo"
+                          emptyText="Nenhum tipo encontrado."
+                        />
+                      </div>
+                      <div className="md:col-span-3 space-y-2">
+                        <Label className="text-xs">Tipo de Equipamento</Label>
+                        <SearchableSelect
+                          value={item.tipoEquipamento}
+                          onValueChange={(v) => updateServicoItem(i, { tipoEquipamento: v })}
+                          options={tipos}
+                          placeholder="Selecione"
+                          emptyText="Nenhum encontrado."
+                        />
+                      </div>
+                    </>
+                  )}
                   <div className="md:col-span-1 space-y-2">
                     <Label className="text-xs">Qtd</Label>
                     <Input

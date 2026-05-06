@@ -1,4 +1,5 @@
-import { FileText, Plus, Search, Eye, Pencil, FileDown, CheckCircle2, XCircle, DollarSign, Ban, Clock } from "lucide-react";
+import { FileText, Plus, Search, Eye, Pencil, FileDown, CheckCircle2, XCircle, DollarSign, Ban, Clock, MoreHorizontal, SlidersHorizontal, ChevronDown } from "lucide-react";
+import SearchableSelect from "@/components/SearchableSelect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -41,6 +42,8 @@ const statusIcon: Record<OrcamentoStatus, JSX.Element> = {
   Cancelado: <Ban className="w-4 h-4" />,
 };
 
+const ALL = "__all__";
+
 const Orcamentos = () => {
   const { orcamentos, empresasList, updateOrcamentoStatus } = useData();
   const [search, setSearch] = useState("");
@@ -48,6 +51,10 @@ const Orcamentos = () => {
   const [mode, setMode] = useState<DialogMode>("create");
   const [selected, setSelected] = useState<Orcamento | null>(null);
   const [tab, setTab] = useState<OrcamentoStatus>("Pendente");
+
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const emptyFilters = { tipo: ALL, solicitante: ALL, numero: "", identificador: "", responsavel: "" };
+  const [filters, setFilters] = useState(emptyFilters);
 
   const counts = useMemo(() => {
     const map: Record<OrcamentoStatus, number> = {
@@ -57,6 +64,8 @@ const Orcamentos = () => {
     return map;
   }, [orcamentos]);
 
+  const matchesText = (val: string, q: string) => !q.trim() || val.toLowerCase().includes(q.trim().toLowerCase());
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return orcamentos.filter(
@@ -64,9 +73,22 @@ const Orcamentos = () => {
         o.status === tab &&
         (o.numero.toLowerCase().includes(q) ||
           o.solicitante.toLowerCase().includes(q) ||
-          o.tipo.toLowerCase().includes(q))
+          o.tipo.toLowerCase().includes(q)) &&
+        (filters.tipo === ALL || o.tipo === filters.tipo) &&
+        (filters.solicitante === ALL || o.solicitante === filters.solicitante) &&
+        matchesText(o.numero, filters.numero) &&
+        matchesText(o.identificador || "", filters.identificador) &&
+        matchesText(o.responsavelOrcamentista || "", filters.responsavel)
     );
-  }, [orcamentos, search, tab]);
+  }, [orcamentos, search, tab, filters]);
+
+  const activeFiltersCount = useMemo(() => {
+    let n = 0;
+    if (filters.tipo !== ALL) n++;
+    if (filters.solicitante !== ALL) n++;
+    (["numero", "identificador", "responsavel"] as const).forEach((k) => { if (filters[k].trim()) n++; });
+    return n;
+  }, [filters]);
 
   const openCreate = () => { setSelected(null); setMode("create"); setOpen(true); };
   const openView = (o: Orcamento) => { setSelected(o); setMode("view"); setOpen(true); };
@@ -102,6 +124,54 @@ const Orcamentos = () => {
           ))}
         </TabsList>
       </Tabs>
+
+      {/* Filtros avançados */}
+      <div className="bg-card rounded-xl border mb-4">
+        <button
+          type="button"
+          onClick={() => setFiltersOpen((v) => !v)}
+          className="w-full flex items-center justify-between px-5 py-3 hover:bg-muted/30 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <SlidersHorizontal className="w-4 h-4 text-primary" />
+            <span className="text-sm font-medium">Filtros Avançados</span>
+            {activeFiltersCount > 0 && (
+              <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                {activeFiltersCount}
+              </span>
+            )}
+          </div>
+          <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${filtersOpen ? "rotate-180" : ""}`} />
+        </button>
+        {filtersOpen && (
+          <div className="border-t px-5 py-4 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <SearchableSelect
+                value={filters.tipo === ALL ? "" : filters.tipo}
+                onValueChange={(v) => setFilters((f) => ({ ...f, tipo: v || ALL }))}
+                options={["Serviço", "Peças", "Peças + Serviços"]}
+                placeholder="Tipo (todos)"
+                emptyText="Nenhum tipo encontrado."
+              />
+              <SearchableSelect
+                value={filters.solicitante === ALL ? "" : filters.solicitante}
+                onValueChange={(v) => setFilters((f) => ({ ...f, solicitante: v || ALL }))}
+                options={empresasList.map((e) => e.nome)}
+                placeholder="Solicitante (todos)"
+                emptyText="Nenhum solicitante encontrado."
+              />
+              <Input placeholder="Número" value={filters.numero} onChange={(e) => setFilters((f) => ({ ...f, numero: e.target.value }))} />
+              <Input placeholder="Identificador" value={filters.identificador} onChange={(e) => setFilters((f) => ({ ...f, identificador: e.target.value }))} />
+              <Input placeholder="Responsável" value={filters.responsavel} onChange={(e) => setFilters((f) => ({ ...f, responsavel: e.target.value }))} />
+            </div>
+            <div className="flex justify-end">
+              <Button variant="outline" size="sm" onClick={() => setFilters(emptyFilters)}>
+                Limpar filtros
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
 
       <div className="bg-card rounded-xl border">
         <div className="px-5 py-4 border-b flex gap-3">
@@ -172,49 +242,32 @@ const Orcamentos = () => {
                     <td className="px-5 py-3 font-medium text-foreground">{formatBRL(total)}</td>
                     <td className="px-5 py-3 text-muted-foreground">{formatDate(o.dataCriacao)}</td>
                     <td className="px-5 py-3">
-                      <div className="flex justify-end gap-1">
-                        {o.status !== "Aprovado" && o.status !== "Faturado" && o.status !== "Cancelado" && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleStatusChange(o, "Aprovado")}
-                            title="Aprovar"
-                            className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
-                          >
-                            <CheckCircle2 className="w-4 h-4" />
-                          </Button>
-                        )}
-                        {o.status !== "Reprovado" && o.status !== "Cancelado" && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleStatusChange(o, "Reprovado")}
-                            title="Reprovar"
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          >
-                            <XCircle className="w-4 h-4" />
-                          </Button>
-                        )}
-                        {o.status !== "Cancelado" && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleStatusChange(o, "Cancelado")}
-                            title="Cancelar"
-                            className="text-gray-600 hover:text-gray-700 hover:bg-gray-100"
-                          >
-                            <Ban className="w-4 h-4" />
-                          </Button>
-                        )}
-                        <Button variant="ghost" size="icon" onClick={() => handlePdf(o)} title="Gerar PDF">
-                          <FileDown className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => openView(o)} title="Visualizar">
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => openEdit(o)} title="Editar">
-                          <Pencil className="w-4 h-4" />
-                        </Button>
+                      <div className="flex justify-end">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" title="Ações">
+                              <MoreHorizontal className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-56 bg-popover">
+                            <DropdownMenuItem onClick={() => openView(o)}>
+                              <Eye className="w-4 h-4 mr-2" /> Visualizar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openEdit(o)}>
+                              <Pencil className="w-4 h-4 mr-2" /> Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handlePdf(o)}>
+                              <FileDown className="w-4 h-4 mr-2" /> Gerar PDF
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuLabel>Alterar Status</DropdownMenuLabel>
+                            {ORCAMENTO_STATUS.filter((s) => s !== o.status).map((s) => (
+                              <DropdownMenuItem key={s} onClick={() => handleStatusChange(o, s)} className="gap-2">
+                                {statusIcon[s]} {s}
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </td>
                   </tr>

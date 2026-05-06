@@ -1,4 +1,4 @@
-import { ClipboardList, FileSignature, Plus, Search, Eye, Pencil, EyeOff } from "lucide-react";
+import { ClipboardList, FileSignature, Plus, Search, Eye, Pencil, EyeOff, MoreHorizontal, SlidersHorizontal, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -8,6 +8,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import SearchableSelect from "@/components/SearchableSelect";
 import PageHeader from "@/components/PageHeader";
 import { useMemo, useState } from "react";
 import { useData, OrdemServico, Empresa, Equipamento } from "@/contexts/DataContext";
@@ -17,8 +25,10 @@ import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
 import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import OrcamentoFormDialog from "@/components/OrcamentoFormDialog";
 
+const ALL = "__all__";
+
 const OrdensServico = () => {
-  const { ordensServico, equipamentos, empresasList, estadosOS, updateOrdemServico } = useData();
+  const { ordensServico, equipamentos, empresasList, estadosOS, tiposOS, updateOrdemServico } = useData();
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<DialogMode>("create");
@@ -34,6 +44,12 @@ const OrdensServico = () => {
   const [hideClosed, setHideClosed] = useState(false);
   const [editingEstadoId, setEditingEstadoId] = useState<number | null>(null);
 
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const emptyFilters = {
+    estado: ALL, solicitante: ALL, tipoServico: ALL, responsavelTecnico: "", numero: "",
+  };
+  const [filters, setFilters] = useState(emptyFilters);
+
   const equipamentoLabel = (id: number | null) => {
     const eq = equipamentos.find((e) => e.id === id);
     return eq ? `${eq.tipo} - ${eq.modelo}` : "—";
@@ -48,6 +64,8 @@ const OrdensServico = () => {
   const HIDDEN_ESTADOS = new Set(["Fechada"]);
   const HIDDEN_TIPOS = new Set(["Manutenção Preventiva", "Calibração"]);
 
+  const matchesText = (val: string, q: string) => !q.trim() || val.toLowerCase().includes(q.trim().toLowerCase());
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return ordensServico.filter((os) => {
@@ -59,11 +77,31 @@ const OrdensServico = () => {
         equipamentoLabel(os.equipamentoId).toLowerCase().includes(q);
       const matchHide =
         !hideClosed || (!HIDDEN_ESTADOS.has(os.estado) && !HIDDEN_TIPOS.has(os.tipoServico));
-      return matchSearch && matchHide;
+      const matchAdv =
+        (filters.estado === ALL || os.estado === filters.estado) &&
+        (filters.solicitante === ALL || os.solicitante === filters.solicitante) &&
+        (filters.tipoServico === ALL || os.tipoServico === filters.tipoServico) &&
+        matchesText(os.responsavelTecnico, filters.responsavelTecnico) &&
+        matchesText(os.numero, filters.numero);
+      return matchSearch && matchHide && matchAdv;
     });
-  }, [ordensServico, search, equipamentos, hideClosed]);
+  }, [ordensServico, search, equipamentos, hideClosed, filters]);
+
+  const activeFiltersCount = useMemo(() => {
+    let n = 0;
+    if (filters.estado !== ALL) n++;
+    if (filters.solicitante !== ALL) n++;
+    if (filters.tipoServico !== ALL) n++;
+    if (filters.responsavelTecnico.trim()) n++;
+    if (filters.numero.trim()) n++;
+    return n;
+  }, [filters]);
 
   const handleEstadoChange = (os: OrdemServico, novoEstado: string) => {
+    if (!novoEstado || novoEstado === os.estado) {
+      setEditingEstadoId(null);
+      return;
+    }
     updateOrdemServico(os.id, {
       dataCriacao: os.dataCriacao,
       estado: novoEstado,
@@ -112,6 +150,68 @@ const OrdensServico = () => {
           <Plus className="w-4 h-4 mr-2" /> Nova OS
         </Button>
       </PageHeader>
+
+      {/* Filtros avançados */}
+      <div className="bg-card rounded-xl border mb-4">
+        <button
+          type="button"
+          onClick={() => setFiltersOpen((v) => !v)}
+          className="w-full flex items-center justify-between px-5 py-3 hover:bg-muted/30 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <SlidersHorizontal className="w-4 h-4 text-primary" />
+            <span className="text-sm font-medium">Filtros Avançados</span>
+            {activeFiltersCount > 0 && (
+              <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                {activeFiltersCount}
+              </span>
+            )}
+          </div>
+          <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${filtersOpen ? "rotate-180" : ""}`} />
+        </button>
+        {filtersOpen && (
+          <div className="border-t px-5 py-4 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <SearchableSelect
+                value={filters.estado === ALL ? "" : filters.estado}
+                onValueChange={(v) => setFilters((f) => ({ ...f, estado: v || ALL }))}
+                options={estadosOS}
+                placeholder="Estado (todos)"
+                emptyText="Nenhum estado encontrado."
+              />
+              <SearchableSelect
+                value={filters.solicitante === ALL ? "" : filters.solicitante}
+                onValueChange={(v) => setFilters((f) => ({ ...f, solicitante: v || ALL }))}
+                options={empresasList.map((e) => e.nome)}
+                placeholder="Solicitante (todos)"
+                emptyText="Nenhum solicitante encontrado."
+              />
+              <SearchableSelect
+                value={filters.tipoServico === ALL ? "" : filters.tipoServico}
+                onValueChange={(v) => setFilters((f) => ({ ...f, tipoServico: v || ALL }))}
+                options={tiposOS}
+                placeholder="Tipo de Serviço (todos)"
+                emptyText="Nenhum tipo encontrado."
+              />
+              <Input
+                placeholder="Número da OS"
+                value={filters.numero}
+                onChange={(e) => setFilters((f) => ({ ...f, numero: e.target.value }))}
+              />
+              <Input
+                placeholder="Técnico Executor"
+                value={filters.responsavelTecnico}
+                onChange={(e) => setFilters((f) => ({ ...f, responsavelTecnico: e.target.value }))}
+              />
+            </div>
+            <div className="flex justify-end">
+              <Button variant="outline" size="sm" onClick={() => setFilters(emptyFilters)}>
+                Limpar filtros
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
 
       <div className="bg-card rounded-xl border">
         <div className="px-5 py-4 border-b flex gap-3 items-center">
@@ -163,12 +263,12 @@ const OrdensServico = () => {
                   <td className="px-5 py-3">
                     {editingEstadoId === os.id ? (
                       <Select
-                        defaultValue={os.estado}
+                        defaultOpen
+                        value={os.estado}
                         onValueChange={(v) => handleEstadoChange(os, v)}
-                        open
-                        onOpenChange={(o) => { if (!o) setEditingEstadoId(null); }}
+                        onOpenChange={(o) => { if (!o) setTimeout(() => setEditingEstadoId(null), 50); }}
                       >
-                        <SelectTrigger className="h-7 w-[220px] text-xs">
+                        <SelectTrigger className="h-7 w-[240px] text-xs">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -214,22 +314,26 @@ const OrdensServico = () => {
                   <td className="px-5 py-3 text-muted-foreground">{os.tipoServico}</td>
                   <td className="px-5 py-3 text-muted-foreground">{formatDate(os.dataCriacao)}</td>
                   <td className="px-5 py-3">
-                    <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => openView(os)} title="Visualizar">
-                        <Eye className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(os)} title="Editar">
-                        <Pencil className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleGerarOrcamento(os)}
-                        title="Gerar orçamento a partir desta OS"
-                        className="text-primary"
-                      >
-                        <FileSignature className="w-4 h-4" />
-                      </Button>
+                    <div className="flex justify-end">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" title="Ações">
+                            <MoreHorizontal className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-52 bg-popover">
+                          <DropdownMenuItem onClick={() => openView(os)}>
+                            <Eye className="w-4 h-4 mr-2" /> Visualizar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openEdit(os)}>
+                            <Pencil className="w-4 h-4 mr-2" /> Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => handleGerarOrcamento(os)}>
+                            <FileSignature className="w-4 h-4 mr-2" /> Gerar Orçamento
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </td>
                 </tr>
