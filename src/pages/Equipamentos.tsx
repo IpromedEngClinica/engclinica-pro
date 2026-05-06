@@ -8,13 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import SearchableSelect from "@/components/SearchableSelect";
 import PageHeader from "@/components/PageHeader";
 import EquipamentoFormDialog, { DialogMode } from "@/components/EquipamentoFormDialog";
 import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
