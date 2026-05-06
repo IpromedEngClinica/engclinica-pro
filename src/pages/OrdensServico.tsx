@@ -151,6 +151,68 @@ const OrdensServico = () => {
         </Button>
       </PageHeader>
 
+      {/* Filtros avançados */}
+      <div className="bg-card rounded-xl border mb-4">
+        <button
+          type="button"
+          onClick={() => setFiltersOpen((v) => !v)}
+          className="w-full flex items-center justify-between px-5 py-3 hover:bg-muted/30 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <SlidersHorizontal className="w-4 h-4 text-primary" />
+            <span className="text-sm font-medium">Filtros Avançados</span>
+            {activeFiltersCount > 0 && (
+              <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                {activeFiltersCount}
+              </span>
+            )}
+          </div>
+          <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${filtersOpen ? "rotate-180" : ""}`} />
+        </button>
+        {filtersOpen && (
+          <div className="border-t px-5 py-4 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <SearchableSelect
+                value={filters.estado === ALL ? "" : filters.estado}
+                onValueChange={(v) => setFilters((f) => ({ ...f, estado: v || ALL }))}
+                options={estadosOS}
+                placeholder="Estado (todos)"
+                emptyText="Nenhum estado encontrado."
+              />
+              <SearchableSelect
+                value={filters.solicitante === ALL ? "" : filters.solicitante}
+                onValueChange={(v) => setFilters((f) => ({ ...f, solicitante: v || ALL }))}
+                options={empresasList.map((e) => e.nome)}
+                placeholder="Solicitante (todos)"
+                emptyText="Nenhum solicitante encontrado."
+              />
+              <SearchableSelect
+                value={filters.tipoServico === ALL ? "" : filters.tipoServico}
+                onValueChange={(v) => setFilters((f) => ({ ...f, tipoServico: v || ALL }))}
+                options={tiposOS}
+                placeholder="Tipo de Serviço (todos)"
+                emptyText="Nenhum tipo encontrado."
+              />
+              <Input
+                placeholder="Número da OS"
+                value={filters.numero}
+                onChange={(e) => setFilters((f) => ({ ...f, numero: e.target.value }))}
+              />
+              <Input
+                placeholder="Técnico Executor"
+                value={filters.responsavelTecnico}
+                onChange={(e) => setFilters((f) => ({ ...f, responsavelTecnico: e.target.value }))}
+              />
+            </div>
+            <div className="flex justify-end">
+              <Button variant="outline" size="sm" onClick={() => setFilters(emptyFilters)}>
+                Limpar filtros
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="bg-card rounded-xl border">
         <div className="px-5 py-4 border-b flex gap-3 items-center">
           <div className="relative flex-1 max-w-sm">
