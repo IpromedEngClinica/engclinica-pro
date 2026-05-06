@@ -25,8 +25,10 @@ import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
 import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import OrcamentoFormDialog from "@/components/OrcamentoFormDialog";
 
+const ALL = "__all__";
+
 const OrdensServico = () => {
-  const { ordensServico, equipamentos, empresasList, estadosOS, updateOrdemServico } = useData();
+  const { ordensServico, equipamentos, empresasList, estadosOS, tiposOS, updateOrdemServico } = useData();
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<DialogMode>("create");
@@ -41,6 +43,12 @@ const OrdensServico = () => {
   const [osParaOrcamento, setOsParaOrcamento] = useState<OrdemServico | null>(null);
   const [hideClosed, setHideClosed] = useState(false);
   const [editingEstadoId, setEditingEstadoId] = useState<number | null>(null);
+
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const emptyFilters = {
+    estado: ALL, solicitante: ALL, tipoServico: ALL, responsavelTecnico: "", numero: "",
+  };
+  const [filters, setFilters] = useState(emptyFilters);
 
   const equipamentoLabel = (id: number | null) => {
     const eq = equipamentos.find((e) => e.id === id);
