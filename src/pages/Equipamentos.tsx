@@ -214,51 +214,41 @@ const Equipamentos = () => {
         {filtersOpen && (
           <div className="border-t px-5 py-4 space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              <div>
-                <Select value={filters.estado} onValueChange={(v) => setFilters((f) => ({ ...f, estado: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Estado" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ALL}>Estado (todos)</SelectItem>
-                    {opts.estado.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Select value={filters.proprietario} onValueChange={(v) => setFilters((f) => ({ ...f, proprietario: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Proprietário" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ALL}>Proprietário (todos)</SelectItem>
-                    {opts.proprietario.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Select value={filters.tipo} onValueChange={(v) => setFilters((f) => ({ ...f, tipo: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Tipo" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ALL}>Tipo (todos)</SelectItem>
-                    {opts.tipo.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Select value={filters.fabricante} onValueChange={(v) => setFilters((f) => ({ ...f, fabricante: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Fabricante" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ALL}>Fabricante (todos)</SelectItem>
-                    {opts.fabricante.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Select value={filters.setor} onValueChange={(v) => setFilters((f) => ({ ...f, setor: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Setor" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ALL}>Setor (todos)</SelectItem>
-                    {opts.setor.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+              <SearchableSelect
+                value={filters.estado === ALL ? "" : filters.estado}
+                onValueChange={(v) => setFilters((f) => ({ ...f, estado: v || ALL }))}
+                options={opts.estado}
+                placeholder="Estado (todos)"
+                emptyText="Nenhum estado encontrado."
+              />
+              <SearchableSelect
+                value={filters.proprietario === ALL ? "" : filters.proprietario}
+                onValueChange={(v) => setFilters((f) => ({ ...f, proprietario: v || ALL }))}
+                options={opts.proprietario}
+                placeholder="Proprietário (todos)"
+                emptyText="Nenhum proprietário encontrado."
+              />
+              <SearchableSelect
+                value={filters.tipo === ALL ? "" : filters.tipo}
+                onValueChange={(v) => setFilters((f) => ({ ...f, tipo: v || ALL }))}
+                options={opts.tipo}
+                placeholder="Tipo (todos)"
+                emptyText="Nenhum tipo encontrado."
+              />
+              <SearchableSelect
+                value={filters.fabricante === ALL ? "" : filters.fabricante}
+                onValueChange={(v) => setFilters((f) => ({ ...f, fabricante: v || ALL }))}
+                options={opts.fabricante}
+                placeholder="Fabricante (todos)"
+                emptyText="Nenhum fabricante encontrado."
+              />
+              <SearchableSelect
+                value={filters.setor === ALL ? "" : filters.setor}
+                onValueChange={(v) => setFilters((f) => ({ ...f, setor: v || ALL }))}
+                options={opts.setor}
+                placeholder="Setor (todos)"
+                emptyText="Nenhum setor encontrado."
+              />
               <Input
                 placeholder="Identificação (TAG)"
                 value={filters.tag}
