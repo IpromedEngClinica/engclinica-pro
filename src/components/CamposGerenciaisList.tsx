@@ -58,6 +58,13 @@ const CamposGerenciaisList = ({
   };
 
   const handleRemove = (index: number) => {
+    if (canRemove) {
+      const check = canRemove(index);
+      if (!check.ok) {
+        toast({ title: `Não é possível remover`, description: check.reason, variant: "destructive" });
+        return;
+      }
+    }
     onRemove(index);
     toast({ title: `${itemLabel} removido` });
   };
