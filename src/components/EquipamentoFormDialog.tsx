@@ -58,9 +58,9 @@ const EquipamentoFormDialog = ({ open, onOpenChange, mode = "create", equipament
         tag: equipamento.tag,
       });
     } else {
-      setForm(emptyForm);
+      setForm({ ...emptyForm, proprietario: prefilledEmpresa || "" });
     }
-  }, [open, equipamento, mode]);
+  }, [open, equipamento, mode, prefilledEmpresa]);
 
   const update = (field: string, value: string) => {
     if (readOnly) return;
