@@ -18,6 +18,7 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   mode?: DialogMode;
   equipamento?: Equipamento | null;
+  prefilledEmpresa?: string;
 }
 
 const emptyForm = {
