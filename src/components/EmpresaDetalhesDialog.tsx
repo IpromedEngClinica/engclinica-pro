@@ -1,7 +1,14 @@
 import { useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import { Search, MoreHorizontal, Pencil, Wrench } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -17,6 +24,8 @@ interface Props {
   empresa: Empresa | null;
   onSelectOS?: (osId: number) => void;
   onSelectEquipamento?: (equipamentoId: number) => void;
+  onCreateEquipamento?: (empresa: Empresa) => void;
+  onEdit?: (empresa: Empresa) => void;
 }
 
 const Card = ({ title, children }: { title: string; children: React.ReactNode }) => (
@@ -94,6 +103,8 @@ const EmpresaDetalhesDialog = ({
   empresa,
   onSelectOS,
   onSelectEquipamento,
+  onCreateEquipamento,
+  onEdit,
 }: Props) => {
   const { ordensServico, equipamentos } = useData();
 
@@ -151,8 +162,29 @@ const EmpresaDetalhesDialog = ({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl h-[90vh] flex flex-col p-0 gap-0">
-        <DialogHeader className="px-6 py-4 border-b shrink-0">
+        <DialogHeader className="px-6 py-4 border-b shrink-0 flex-row items-center justify-between space-y-0">
           <DialogTitle className="text-xl text-foreground">{empresa.nome}</DialogTitle>
+          {(onCreateEquipamento || onEdit) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="mr-6">
+                  Ações <MoreHorizontal className="w-4 h-4 ml-2" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 bg-popover">
+                {onEdit && (
+                  <DropdownMenuItem onClick={() => onEdit(empresa)}>
+                    <Pencil className="w-4 h-4 mr-2" /> Editar Cliente
+                  </DropdownMenuItem>
+                )}
+                {onCreateEquipamento && (
+                  <DropdownMenuItem onClick={() => onCreateEquipamento(empresa)}>
+                    <Wrench className="w-4 h-4 mr-2" /> Cadastrar Equipamento
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </DialogHeader>
         <div className="flex-1 overflow-y-auto min-h-0 p-6 space-y-6">
           <Card title="Dados Gerais">

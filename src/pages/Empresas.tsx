@@ -1,4 +1,4 @@
-import { Building2, Plus, Search, Eye, Pencil, MoreHorizontal } from "lucide-react";
+import { Building2, Plus, Search, Eye, Pencil, MoreHorizontal, Wrench } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import PageHeader from "@/components/PageHeader";
 import EmpresaFormDialog, { DialogMode } from "@/components/EmpresaFormDialog";
+import EquipamentoFormDialog from "@/components/EquipamentoFormDialog";
 import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
 import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import OrdemServicoDetalhesDialog from "@/components/OrdemServicoDetalhesDialog";
@@ -32,6 +33,15 @@ const Empresas = () => {
 
   const [osDetalhesOpen, setOsDetalhesOpen] = useState(false);
   const [osDetalhesSel, setOsDetalhesSel] = useState<OrdemServico | null>(null);
+
+  const [eqFormOpen, setEqFormOpen] = useState(false);
+  const [eqFormEmpresa, setEqFormEmpresa] = useState<string>("");
+
+  const openCreateEquipamento = (e: Empresa) => {
+    setDetalhesOpen(false);
+    setEqFormEmpresa(e.nome);
+    setEqFormOpen(true);
+  };
 
   useEffect(() => {
     const viewId = searchParams.get("view");
@@ -106,6 +116,15 @@ const Empresas = () => {
         empresa={detalhesEmp}
         onSelectOS={openOSById}
         onSelectEquipamento={openEquipamentoById}
+        onCreateEquipamento={openCreateEquipamento}
+        onEdit={(e) => { setDetalhesOpen(false); openEdit(e); }}
+      />
+
+      <EquipamentoFormDialog
+        open={eqFormOpen}
+        onOpenChange={setEqFormOpen}
+        mode="create"
+        prefilledEmpresa={eqFormEmpresa}
       />
 
       <EquipamentoDetalhesDialog
@@ -175,12 +194,15 @@ const Empresas = () => {
                             <MoreHorizontal className="w-4 h-4" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48 bg-popover">
+                        <DropdownMenuContent align="end" className="w-56 bg-popover">
                           <DropdownMenuItem onClick={() => openView(e)}>
                             <Eye className="w-4 h-4 mr-2" /> Visualizar
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => openEdit(e)}>
                             <Pencil className="w-4 h-4 mr-2" /> Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openCreateEquipamento(e)}>
+                            <Wrench className="w-4 h-4 mr-2" /> Cadastrar Equipamento
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>

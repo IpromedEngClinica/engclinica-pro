@@ -9,7 +9,7 @@ import { toast } from "@/hooks/use-toast";
 import { useData, Equipamento } from "@/contexts/DataContext";
 
 const capitalizeWords = (str: string) =>
-  str.replace(/\b\w/g, (c) => c.toUpperCase());
+  str.replace(/(^|\s)(\p{L})/gu, (_, sep: string, c: string) => sep + c.toLocaleUpperCase("pt-BR"));
 
 export type DialogMode = "create" | "edit" | "view";
 
@@ -18,6 +18,7 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   mode?: DialogMode;
   equipamento?: Equipamento | null;
+  prefilledEmpresa?: string;
 }
 
 const emptyForm = {
@@ -32,7 +33,7 @@ const emptyForm = {
   tag: "",
 };
 
-const EquipamentoFormDialog = ({ open, onOpenChange, mode = "create", equipamento = null }: Props) => {
+const EquipamentoFormDialog = ({ open, onOpenChange, mode = "create", equipamento = null, prefilledEmpresa }: Props) => {
   const { tipos, addTipo, empresas, addEquipamento, updateEquipamento } = useData();
   const [addingTipo, setAddingTipo] = useState(false);
   const [novoTipo, setNovoTipo] = useState("");
@@ -57,9 +58,9 @@ const EquipamentoFormDialog = ({ open, onOpenChange, mode = "create", equipament
         tag: equipamento.tag,
       });
     } else {
-      setForm(emptyForm);
+      setForm({ ...emptyForm, proprietario: prefilledEmpresa || "" });
     }
-  }, [open, equipamento, mode]);
+  }, [open, equipamento, mode, prefilledEmpresa]);
 
   const update = (field: string, value: string) => {
     if (readOnly) return;
