@@ -9,7 +9,7 @@ import { toast } from "@/hooks/use-toast";
 import { useData, Equipamento } from "@/contexts/DataContext";
 
 const capitalizeWords = (str: string) =>
-  str.replace(/\b\w/g, (c) => c.toUpperCase());
+  str.replace(/(^|\s)(\p{L})/gu, (_, sep: string, c: string) => sep + c.toLocaleUpperCase("pt-BR"));
 
 export type DialogMode = "create" | "edit" | "view";
 
