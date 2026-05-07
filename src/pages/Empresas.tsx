@@ -34,6 +34,15 @@ const Empresas = () => {
   const [osDetalhesOpen, setOsDetalhesOpen] = useState(false);
   const [osDetalhesSel, setOsDetalhesSel] = useState<OrdemServico | null>(null);
 
+  const [eqFormOpen, setEqFormOpen] = useState(false);
+  const [eqFormEmpresa, setEqFormEmpresa] = useState<string>("");
+
+  const openCreateEquipamento = (e: Empresa) => {
+    setDetalhesOpen(false);
+    setEqFormEmpresa(e.nome);
+    setEqFormOpen(true);
+  };
+
   useEffect(() => {
     const viewId = searchParams.get("view");
     if (viewId) {
