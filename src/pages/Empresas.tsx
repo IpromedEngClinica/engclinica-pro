@@ -193,12 +193,15 @@ const Empresas = () => {
                             <MoreHorizontal className="w-4 h-4" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48 bg-popover">
+                        <DropdownMenuContent align="end" className="w-56 bg-popover">
                           <DropdownMenuItem onClick={() => openView(e)}>
                             <Eye className="w-4 h-4 mr-2" /> Visualizar
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => openEdit(e)}>
                             <Pencil className="w-4 h-4 mr-2" /> Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openCreateEquipamento(e)}>
+                            <Wrench className="w-4 h-4 mr-2" /> Cadastrar Equipamento
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
