@@ -103,6 +103,8 @@ const EmpresaDetalhesDialog = ({
   empresa,
   onSelectOS,
   onSelectEquipamento,
+  onCreateEquipamento,
+  onEdit,
 }: Props) => {
   const { ordensServico, equipamentos } = useData();
 
