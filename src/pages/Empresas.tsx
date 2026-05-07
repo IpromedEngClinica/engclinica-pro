@@ -116,6 +116,14 @@ const Empresas = () => {
         empresa={detalhesEmp}
         onSelectOS={openOSById}
         onSelectEquipamento={openEquipamentoById}
+        onCreateEquipamento={openCreateEquipamento}
+      />
+
+      <EquipamentoFormDialog
+        open={eqFormOpen}
+        onOpenChange={setEqFormOpen}
+        mode="create"
+        prefilledEmpresa={eqFormEmpresa}
       />
 
       <EquipamentoDetalhesDialog
