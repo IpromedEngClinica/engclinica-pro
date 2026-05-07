@@ -33,7 +33,7 @@ const emptyForm = {
   tag: "",
 };
 
-const EquipamentoFormDialog = ({ open, onOpenChange, mode = "create", equipamento = null }: Props) => {
+const EquipamentoFormDialog = ({ open, onOpenChange, mode = "create", equipamento = null, prefilledEmpresa }: Props) => {
   const { tipos, addTipo, empresas, addEquipamento, updateEquipamento } = useData();
   const [addingTipo, setAddingTipo] = useState(false);
   const [novoTipo, setNovoTipo] = useState("");
