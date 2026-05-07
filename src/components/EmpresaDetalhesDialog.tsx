@@ -1,7 +1,14 @@
 import { useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import { Search, MoreHorizontal, Pencil, Wrench } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -17,6 +24,8 @@ interface Props {
   empresa: Empresa | null;
   onSelectOS?: (osId: number) => void;
   onSelectEquipamento?: (equipamentoId: number) => void;
+  onCreateEquipamento?: (empresa: Empresa) => void;
+  onEdit?: (empresa: Empresa) => void;
 }
 
 const Card = ({ title, children }: { title: string; children: React.ReactNode }) => (
