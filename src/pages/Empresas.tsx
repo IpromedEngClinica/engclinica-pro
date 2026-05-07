@@ -117,6 +117,7 @@ const Empresas = () => {
         onSelectOS={openOSById}
         onSelectEquipamento={openEquipamentoById}
         onCreateEquipamento={openCreateEquipamento}
+        onEdit={(e) => { setDetalhesOpen(false); openEdit(e); }}
       />
 
       <EquipamentoFormDialog
