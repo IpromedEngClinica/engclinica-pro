@@ -5,8 +5,11 @@ import PageHeader from "@/components/PageHeader";
 import { toast } from "@/hooks/use-toast";
 import { useState, useMemo } from "react";
 
+// Capitaliza a primeira letra de cada palavra preservando acentos.
+// Regex anterior (\b\w) tratava letras acentuadas como fronteira de palavra,
+// resultando em "ElétRico". Usamos Unicode-aware boundaries.
 const capitalizeWords = (str: string) =>
-  str.replace(/\b\w/g, (c) => c.toUpperCase());
+  str.replace(/(^|\s)(\p{L})/gu, (_, sep: string, c: string) => sep + c.toLocaleUpperCase("pt-BR"));
 
 interface CamposGerenciaisListProps {
   title: string;
@@ -17,6 +20,7 @@ interface CamposGerenciaisListProps {
   onRename?: (index: number, novoNome: string) => void;
   placeholder?: string;
   itemLabel?: string;
+  canRemove?: (index: number) => { ok: boolean; reason?: string };
 }
 
 const CamposGerenciaisList = ({
