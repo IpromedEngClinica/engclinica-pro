@@ -32,6 +32,7 @@ const CamposGerenciaisList = ({
   onRename,
   placeholder = "Novo item...",
   itemLabel = "item",
+  canRemove,
 }: CamposGerenciaisListProps) => {
   const [novo, setNovo] = useState("");
   const [search, setSearch] = useState("");
