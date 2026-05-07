@@ -162,8 +162,29 @@ const EmpresaDetalhesDialog = ({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl h-[90vh] flex flex-col p-0 gap-0">
-        <DialogHeader className="px-6 py-4 border-b shrink-0">
+        <DialogHeader className="px-6 py-4 border-b shrink-0 flex-row items-center justify-between space-y-0">
           <DialogTitle className="text-xl text-foreground">{empresa.nome}</DialogTitle>
+          {(onCreateEquipamento || onEdit) && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="mr-6">
+                  Ações <MoreHorizontal className="w-4 h-4 ml-2" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 bg-popover">
+                {onEdit && (
+                  <DropdownMenuItem onClick={() => onEdit(empresa)}>
+                    <Pencil className="w-4 h-4 mr-2" /> Editar Cliente
+                  </DropdownMenuItem>
+                )}
+                {onCreateEquipamento && (
+                  <DropdownMenuItem onClick={() => onCreateEquipamento(empresa)}>
+                    <Wrench className="w-4 h-4 mr-2" /> Cadastrar Equipamento
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </DialogHeader>
         <div className="flex-1 overflow-y-auto min-h-0 p-6 space-y-6">
           <Card title="Dados Gerais">
