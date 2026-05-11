@@ -231,6 +231,16 @@ interface DataContextType {
     defeitoRelatado: string;
     acessorios: string[];
   }) => ProtocoloRecolhimento;
+  protocolosEntrega: ProtocoloEntrega[];
+  addProtocoloEntrega: (data: {
+    osId: number;
+    dataEntrega: string;
+    entreguePor: string;
+    recebidoPor: string;
+    testado: boolean;
+    funciona: boolean;
+    observacoes: string;
+  }) => ProtocoloEntrega;
   ordensServico: OrdemServico[];
   addOrdemServico: (os: Omit<OrdemServico, "id" | "numero">) => void;
   updateOrdemServico: (id: number, os: Omit<OrdemServico, "id" | "numero">) => void;
