@@ -426,6 +426,41 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     return protocolo;
   };
 
+  const addProtocoloEntrega = (data: {
+    osId: number;
+    dataEntrega: string;
+    entreguePor: string;
+    recebidoPor: string;
+    testado: boolean;
+    funciona: boolean;
+    observacoes: string;
+  }) => {
+    const os = ordensServico.find((o) => o.id === data.osId);
+    const year = new Date().getFullYear();
+    const numero = `PE-${year}-${String(entregaCounter).padStart(4, "0")}`;
+    const protocolo: ProtocoloEntrega = {
+      id: Date.now(),
+      numero,
+      dataEntrega: data.dataEntrega,
+      osId: data.osId,
+      osNumero: os?.numero ?? "",
+      empresa: os?.solicitante ?? "",
+      equipamentoId: os?.equipamentoId ?? null,
+      entreguePor: data.entreguePor,
+      recebidoPor: data.recebidoPor,
+      testado: data.testado,
+      funciona: data.funciona,
+      observacoes: data.observacoes,
+      acessorios: os?.acessorios ?? [],
+    };
+    setProtocolosEntrega((prev) => [...prev, protocolo]);
+    setEntregaCounter((c) => c + 1);
+    setOrdensServico((prev) =>
+      prev.map((o) => (o.id === data.osId ? { ...o, estado: "Fechada" } : o))
+    );
+    return protocolo;
+  };
+
   const buildOrcamentoNumero = (osNumero?: string | null) => {
     if (osNumero) return osNumero.replace(/^OS-/, "ORC-");
     const year = new Date().getFullYear();
