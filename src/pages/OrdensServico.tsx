@@ -44,6 +44,8 @@ const OrdensServico = () => {
   const [osParaOrcamento, setOsParaOrcamento] = useState<OrdemServico | null>(null);
   const [hideClosed, setHideClosed] = useState(false);
   const [editingEstadoId, setEditingEstadoId] = useState<number | null>(null);
+  const [entregaOpen, setEntregaOpen] = useState(false);
+  const [osEntrega, setOsEntrega] = useState<OrdemServico | null>(null);
 
   const [filtersOpen, setFiltersOpen] = useState(false);
   const emptyFilters = {
