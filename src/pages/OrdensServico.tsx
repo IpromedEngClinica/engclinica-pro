@@ -335,6 +335,9 @@ const OrdensServico = () => {
                           <DropdownMenuItem onClick={() => handleGerarOrcamento(os)}>
                             <FileSignature className="w-4 h-4 mr-2" /> Gerar Orçamento
                           </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => { setOsEntrega(os); setEntregaOpen(true); }}>
+                            <PackageCheck className="w-4 h-4 mr-2" /> Protocolo de Entrega
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
