@@ -1,4 +1,4 @@
-import { ClipboardList, FileSignature, Plus, Search, Eye, Pencil, EyeOff, MoreHorizontal, SlidersHorizontal, ChevronDown } from "lucide-react";
+import { ClipboardList, FileSignature, Plus, Search, Eye, Pencil, EyeOff, MoreHorizontal, SlidersHorizontal, ChevronDown, PackageCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -24,6 +24,7 @@ import OrdemServicoDetalhesDialog from "@/components/OrdemServicoDetalhesDialog"
 import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
 import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import OrcamentoFormDialog from "@/components/OrcamentoFormDialog";
+import ProtocoloEntregaDialog from "@/components/ProtocoloEntregaDialog";
 
 const ALL = "__all__";
 
@@ -43,6 +44,8 @@ const OrdensServico = () => {
   const [osParaOrcamento, setOsParaOrcamento] = useState<OrdemServico | null>(null);
   const [hideClosed, setHideClosed] = useState(false);
   const [editingEstadoId, setEditingEstadoId] = useState<number | null>(null);
+  const [entregaOpen, setEntregaOpen] = useState(false);
+  const [osEntrega, setOsEntrega] = useState<OrdemServico | null>(null);
 
   const [filtersOpen, setFiltersOpen] = useState(false);
   const emptyFilters = {
@@ -332,6 +335,9 @@ const OrdensServico = () => {
                           <DropdownMenuItem onClick={() => handleGerarOrcamento(os)}>
                             <FileSignature className="w-4 h-4 mr-2" /> Gerar Orçamento
                           </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => { setOsEntrega(os); setEntregaOpen(true); }}>
+                            <PackageCheck className="w-4 h-4 mr-2" /> Protocolo de Entrega
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
@@ -359,6 +365,7 @@ const OrdensServico = () => {
         }}
         os={osDetalhes}
         onGerarOrcamento={(o) => { setDetalhesOpen(false); handleGerarOrcamento(o); }}
+        onCriarProtocoloEntrega={(o) => { setDetalhesOpen(false); setOsEntrega(o); setEntregaOpen(true); }}
       />
       <EmpresaDetalhesDialog
         open={empresaOpen}
@@ -378,6 +385,11 @@ const OrdensServico = () => {
           if (!v) setOsParaOrcamento(null);
         }}
         fromOS={osParaOrcamento}
+      />
+      <ProtocoloEntregaDialog
+        open={entregaOpen}
+        onOpenChange={(v) => { setEntregaOpen(v); if (!v) setOsEntrega(null); }}
+        os={osEntrega}
       />
     </div>
   );

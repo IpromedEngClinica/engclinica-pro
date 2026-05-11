@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Pencil, Save, X, FileText, FileSignature } from "lucide-react";
+import { Pencil, Save, X, FileText, FileSignature, PackageCheck, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,12 +16,14 @@ import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import { useData, OrdemServico } from "@/contexts/DataContext";
 import { toast } from "@/hooks/use-toast";
 import { generateOrdemServicoPdf } from "@/lib/ordemServicoPdf";
+import { generateProtocoloEntregaPdf } from "@/lib/protocoloEntregaPdf";
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   os: OrdemServico | null;
   onGerarOrcamento?: (os: OrdemServico) => void;
+  onCriarProtocoloEntrega?: (os: OrdemServico) => void;
 }
 
 const InfoCard = ({ title, children }: { title: string; children: React.ReactNode }) => (
@@ -46,7 +48,7 @@ const formatDate = (iso: string) => {
   return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 };
 
-const OrdemServicoDetalhesDialog = ({ open, onOpenChange, os, onGerarOrcamento }: Props) => {
+const OrdemServicoDetalhesDialog = ({ open, onOpenChange, os, onGerarOrcamento, onCriarProtocoloEntrega }: Props) => {
   const {
     equipamentos,
     empresasList,
@@ -54,6 +56,7 @@ const OrdemServicoDetalhesDialog = ({ open, onOpenChange, os, onGerarOrcamento }
     tiposOS,
     estadosOS,
     updateOrdemServico,
+    protocolosEntrega,
   } = useData();
 
   const [editing, setEditing] = useState(false);
@@ -184,6 +187,11 @@ const OrdemServicoDetalhesDialog = ({ open, onOpenChange, os, onGerarOrcamento }
                 {onGerarOrcamento && (
                   <Button size="sm" variant="outline" onClick={() => onGerarOrcamento(os)}>
                     <FileSignature className="w-4 h-4 mr-2" /> Gerar Orçamento
+                  </Button>
+                )}
+                {onCriarProtocoloEntrega && (
+                  <Button size="sm" variant="outline" onClick={() => onCriarProtocoloEntrega(os)}>
+                    <PackageCheck className="w-4 h-4 mr-2" /> Protocolo de Entrega
                   </Button>
                 )}
                 <Button size="sm" onClick={() => setEditing(true)}>
@@ -378,6 +386,34 @@ const OrdemServicoDetalhesDialog = ({ open, onOpenChange, os, onGerarOrcamento }
                   <p className="text-sm">Nenhum acessório registrado.</p>
                 )}
               </InfoCard>
+
+              {(() => {
+                const entregas = protocolosEntrega.filter((p) => p.osId === os.id);
+                if (entregas.length === 0) return null;
+                return (
+                  <InfoCard title="Protocolos de Entrega">
+                    <ul className="space-y-2 text-sm">
+                      {entregas.map((pe) => (
+                        <li key={pe.id} className="flex items-center justify-between border rounded-md px-3 py-2">
+                          <div>
+                            <div className="font-medium">{pe.numero}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {formatDate(pe.dataEntrega)} · Entregue por {pe.entreguePor} · Recebido por {pe.recebidoPor}
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => generateProtocoloEntregaPdf(pe, empresa, equipamento)}
+                          >
+                            <Printer className="w-4 h-4 mr-2" /> PDF
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  </InfoCard>
+                );
+              })()}
             </div>
           </div>
         </div>

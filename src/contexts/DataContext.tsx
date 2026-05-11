@@ -141,6 +141,22 @@ export interface ProtocoloRecolhimento {
   osNumero: string;
 }
 
+export interface ProtocoloEntrega {
+  id: number;
+  numero: string;
+  dataEntrega: string;
+  osId: number;
+  osNumero: string;
+  empresa: string;
+  equipamentoId: number | null;
+  entreguePor: string;
+  recebidoPor: string;
+  testado: boolean;
+  funciona: boolean;
+  observacoes: string;
+  acessorios: string[];
+}
+
 export interface Orcamento {
   id: number;
   numero: string;
@@ -215,6 +231,16 @@ interface DataContextType {
     defeitoRelatado: string;
     acessorios: string[];
   }) => ProtocoloRecolhimento;
+  protocolosEntrega: ProtocoloEntrega[];
+  addProtocoloEntrega: (data: {
+    osId: number;
+    dataEntrega: string;
+    entreguePor: string;
+    recebidoPor: string;
+    testado: boolean;
+    funciona: boolean;
+    observacoes: string;
+  }) => ProtocoloEntrega;
   ordensServico: OrdemServico[];
   addOrdemServico: (os: Omit<OrdemServico, "id" | "numero">) => void;
   updateOrdemServico: (id: number, os: Omit<OrdemServico, "id" | "numero">) => void;
@@ -250,6 +276,8 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [orcCounter, setOrcCounter] = useState(1);
   const [protocolosRecolhimento, setProtocolosRecolhimento] = useState<ProtocoloRecolhimento[]>([]);
   const [protocoloCounter, setProtocoloCounter] = useState(1);
+  const [protocolosEntrega, setProtocolosEntrega] = useState<ProtocoloEntrega[]>([]);
+  const [entregaCounter, setEntregaCounter] = useState(1);
 
   const addTipo = (tipo: string) => setTipos((prev) => [...prev, tipo]);
   const removeTipo = (index: number) => setTipos((prev) => prev.filter((_, i) => i !== index));
@@ -398,6 +426,41 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     return protocolo;
   };
 
+  const addProtocoloEntrega = (data: {
+    osId: number;
+    dataEntrega: string;
+    entreguePor: string;
+    recebidoPor: string;
+    testado: boolean;
+    funciona: boolean;
+    observacoes: string;
+  }) => {
+    const os = ordensServico.find((o) => o.id === data.osId);
+    const year = new Date().getFullYear();
+    const numero = `PE-${year}-${String(entregaCounter).padStart(4, "0")}`;
+    const protocolo: ProtocoloEntrega = {
+      id: Date.now(),
+      numero,
+      dataEntrega: data.dataEntrega,
+      osId: data.osId,
+      osNumero: os?.numero ?? "",
+      empresa: os?.solicitante ?? "",
+      equipamentoId: os?.equipamentoId ?? null,
+      entreguePor: data.entreguePor,
+      recebidoPor: data.recebidoPor,
+      testado: data.testado,
+      funciona: data.funciona,
+      observacoes: data.observacoes,
+      acessorios: os?.acessorios ?? [],
+    };
+    setProtocolosEntrega((prev) => [...prev, protocolo]);
+    setEntregaCounter((c) => c + 1);
+    setOrdensServico((prev) =>
+      prev.map((o) => (o.id === data.osId ? { ...o, estado: "Fechada" } : o))
+    );
+    return protocolo;
+  };
+
   const buildOrcamentoNumero = (osNumero?: string | null) => {
     if (osNumero) return osNumero.replace(/^OS-/, "ORC-");
     const year = new Date().getFullYear();
@@ -447,6 +510,8 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         renameProtocolo,
         protocolosRecolhimento,
         addProtocoloRecolhimento,
+        protocolosEntrega,
+        addProtocoloEntrega,
         ordensServico,
         addOrdemServico,
         updateOrdemServico,
