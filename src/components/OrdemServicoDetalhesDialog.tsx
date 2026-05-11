@@ -189,6 +189,11 @@ const OrdemServicoDetalhesDialog = ({ open, onOpenChange, os, onGerarOrcamento, 
                     <FileSignature className="w-4 h-4 mr-2" /> Gerar Orçamento
                   </Button>
                 )}
+                {onCriarProtocoloEntrega && (
+                  <Button size="sm" variant="outline" onClick={() => onCriarProtocoloEntrega(os)}>
+                    <PackageCheck className="w-4 h-4 mr-2" /> Protocolo de Entrega
+                  </Button>
+                )}
                 <Button size="sm" onClick={() => setEditing(true)}>
                   <Pencil className="w-4 h-4 mr-2" /> Editar
                 </Button>
