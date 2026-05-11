@@ -141,6 +141,22 @@ export interface ProtocoloRecolhimento {
   osNumero: string;
 }
 
+export interface ProtocoloEntrega {
+  id: number;
+  numero: string;
+  dataEntrega: string;
+  osId: number;
+  osNumero: string;
+  empresa: string;
+  equipamentoId: number | null;
+  entreguePor: string;
+  recebidoPor: string;
+  testado: boolean;
+  funciona: boolean;
+  observacoes: string;
+  acessorios: string[];
+}
+
 export interface Orcamento {
   id: number;
   numero: string;
