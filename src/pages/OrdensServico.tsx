@@ -386,6 +386,11 @@ const OrdensServico = () => {
         }}
         fromOS={osParaOrcamento}
       />
+      <ProtocoloEntregaDialog
+        open={entregaOpen}
+        onOpenChange={(v) => { setEntregaOpen(v); if (!v) setOsEntrega(null); }}
+        os={osEntrega}
+      />
     </div>
   );
 };
