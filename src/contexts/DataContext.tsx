@@ -510,6 +510,8 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         renameProtocolo,
         protocolosRecolhimento,
         addProtocoloRecolhimento,
+        protocolosEntrega,
+        addProtocoloEntrega,
         ordensServico,
         addOrdemServico,
         updateOrdemServico,
