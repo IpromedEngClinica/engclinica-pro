@@ -24,6 +24,7 @@ import OrdemServicoDetalhesDialog from "@/components/OrdemServicoDetalhesDialog"
 import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
 import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import OrcamentoFormDialog from "@/components/OrcamentoFormDialog";
+import ProtocoloEntregaDialog from "@/components/ProtocoloEntregaDialog";
 
 const ALL = "__all__";
 
