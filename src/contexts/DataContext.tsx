@@ -276,6 +276,8 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [orcCounter, setOrcCounter] = useState(1);
   const [protocolosRecolhimento, setProtocolosRecolhimento] = useState<ProtocoloRecolhimento[]>([]);
   const [protocoloCounter, setProtocoloCounter] = useState(1);
+  const [protocolosEntrega, setProtocolosEntrega] = useState<ProtocoloEntrega[]>([]);
+  const [entregaCounter, setEntregaCounter] = useState(1);
 
   const addTipo = (tipo: string) => setTipos((prev) => [...prev, tipo]);
   const removeTipo = (index: number) => setTipos((prev) => prev.filter((_, i) => i !== index));
