@@ -16,12 +16,14 @@ import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import { useData, OrdemServico } from "@/contexts/DataContext";
 import { toast } from "@/hooks/use-toast";
 import { generateOrdemServicoPdf } from "@/lib/ordemServicoPdf";
+import { generateProtocoloEntregaPdf } from "@/lib/protocoloEntregaPdf";
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   os: OrdemServico | null;
   onGerarOrcamento?: (os: OrdemServico) => void;
+  onCriarProtocoloEntrega?: (os: OrdemServico) => void;
 }
 
 const InfoCard = ({ title, children }: { title: string; children: React.ReactNode }) => (
