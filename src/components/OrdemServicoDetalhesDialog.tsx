@@ -48,7 +48,7 @@ const formatDate = (iso: string) => {
   return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 };
 
-const OrdemServicoDetalhesDialog = ({ open, onOpenChange, os, onGerarOrcamento }: Props) => {
+const OrdemServicoDetalhesDialog = ({ open, onOpenChange, os, onGerarOrcamento, onCriarProtocoloEntrega }: Props) => {
   const {
     equipamentos,
     empresasList,
@@ -56,6 +56,7 @@ const OrdemServicoDetalhesDialog = ({ open, onOpenChange, os, onGerarOrcamento }
     tiposOS,
     estadosOS,
     updateOrdemServico,
+    protocolosEntrega,
   } = useData();
 
   const [editing, setEditing] = useState(false);
