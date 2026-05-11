@@ -386,6 +386,34 @@ const OrdemServicoDetalhesDialog = ({ open, onOpenChange, os, onGerarOrcamento, 
                   <p className="text-sm">Nenhum acessório registrado.</p>
                 )}
               </InfoCard>
+
+              {(() => {
+                const entregas = protocolosEntrega.filter((p) => p.osId === os.id);
+                if (entregas.length === 0) return null;
+                return (
+                  <InfoCard title="Protocolos de Entrega">
+                    <ul className="space-y-2 text-sm">
+                      {entregas.map((pe) => (
+                        <li key={pe.id} className="flex items-center justify-between border rounded-md px-3 py-2">
+                          <div>
+                            <div className="font-medium">{pe.numero}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {formatDate(pe.dataEntrega)} · Entregue por {pe.entreguePor} · Recebido por {pe.recebidoPor}
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => generateProtocoloEntregaPdf(pe, empresa, equipamento)}
+                          >
+                            <Printer className="w-4 h-4 mr-2" /> PDF
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  </InfoCard>
+                );
+              })()}
             </div>
           </div>
         </div>
