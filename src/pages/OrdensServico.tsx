@@ -365,6 +365,7 @@ const OrdensServico = () => {
         }}
         os={osDetalhes}
         onGerarOrcamento={(o) => { setDetalhesOpen(false); handleGerarOrcamento(o); }}
+        onCriarProtocoloEntrega={(o) => { setDetalhesOpen(false); setOsEntrega(o); setEntregaOpen(true); }}
       />
       <EmpresaDetalhesDialog
         open={empresaOpen}
