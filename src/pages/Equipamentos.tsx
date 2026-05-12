@@ -15,8 +15,9 @@ import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import OrdemServicoFormDialog from "@/components/OrdemServicoFormDialog";
 import OrdemServicoDetalhesDialog from "@/components/OrdemServicoDetalhesDialog";
 import ProtocoloRecolhimentoDialog from "@/components/ProtocoloRecolhimentoDialog";
+import PreventivaChecklistDialog from "@/components/PreventivaChecklistDialog";
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useData, Equipamento, OrdemServico } from "@/contexts/DataContext";
 import { toast } from "@/hooks/use-toast";
 
@@ -29,7 +30,8 @@ const statusColor: Record<string, string> = {
 const ALL = "__all__";
 
 const Equipamentos = () => {
-  const { equipamentos, ordensServico } = useData();
+  const { equipamentos, ordensServico, getProcedimentoByTipo } = useData();
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [mode, setMode] = useState<DialogMode>("create");
@@ -47,6 +49,9 @@ const Equipamentos = () => {
 
   const [protocoloOpen, setProtocoloOpen] = useState(false);
   const [protocoloEq, setProtocoloEq] = useState<Equipamento | null>(null);
+
+  const [preventivaOpen, setPreventivaOpen] = useState(false);
+  const [preventivaEq, setPreventivaEq] = useState<Equipamento | null>(null);
 
   // Filtros avançados
   const [filtersOpen, setFiltersOpen] = useState(false);
