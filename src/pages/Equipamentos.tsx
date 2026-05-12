@@ -371,7 +371,7 @@ const Equipamentos = () => {
                           <DropdownMenuItem onClick={() => openProtocolo(e)}>
                             <FileBox className="w-4 h-4 mr-2" /> Criar Protocolo de Recolhimento
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => futuro("Criar Preventiva")}>
+                          <DropdownMenuItem onClick={() => openPreventiva(e)}>
                             <CalendarCheck className="w-4 h-4 mr-2" /> Criar Preventiva
                           </DropdownMenuItem>
                           <DropdownMenuItem
