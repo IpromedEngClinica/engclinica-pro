@@ -7,6 +7,7 @@ import {
   ClipboardList,
   FileSignature,
   FileBox,
+  CalendarCheck,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -23,6 +24,7 @@ const menuItems = [
   { icon: ClipboardList, label: "Ordens de Serviço", path: "/ordens-servico" },
   { icon: FileSignature, label: "Orçamentos", path: "/orcamentos" },
   { icon: FileBox, label: "Protocolos", path: "/protocolos" },
+  { icon: CalendarCheck, label: "Procedimentos", path: "/procedimentos" },
 ];
 
 const camposGerenciais = [

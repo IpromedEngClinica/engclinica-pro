@@ -15,8 +15,9 @@ import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import OrdemServicoFormDialog from "@/components/OrdemServicoFormDialog";
 import OrdemServicoDetalhesDialog from "@/components/OrdemServicoDetalhesDialog";
 import ProtocoloRecolhimentoDialog from "@/components/ProtocoloRecolhimentoDialog";
+import PreventivaChecklistDialog from "@/components/PreventivaChecklistDialog";
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useData, Equipamento, OrdemServico } from "@/contexts/DataContext";
 import { toast } from "@/hooks/use-toast";
 
@@ -29,7 +30,8 @@ const statusColor: Record<string, string> = {
 const ALL = "__all__";
 
 const Equipamentos = () => {
-  const { equipamentos, ordensServico } = useData();
+  const { equipamentos, ordensServico, getProcedimentoByTipo } = useData();
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [mode, setMode] = useState<DialogMode>("create");
@@ -47,6 +49,9 @@ const Equipamentos = () => {
 
   const [protocoloOpen, setProtocoloOpen] = useState(false);
   const [protocoloEq, setProtocoloEq] = useState<Equipamento | null>(null);
+
+  const [preventivaOpen, setPreventivaOpen] = useState(false);
+  const [preventivaEq, setPreventivaEq] = useState<Equipamento | null>(null);
 
   // Filtros avançados
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -144,6 +149,21 @@ const Equipamentos = () => {
     setProtocoloOpen(true);
   };
 
+  const openPreventiva = (e: Equipamento) => {
+    const proc = getProcedimentoByTipo(e.tipo);
+    if (!proc) {
+      toast({
+        title: "Procedimento não cadastrado",
+        description: `Não há procedimento de preventiva para "${e.tipo}". Você será direcionado para cadastrá-lo.`,
+        variant: "destructive",
+      });
+      navigate(`/procedimentos?novo=${encodeURIComponent(e.tipo)}`);
+      return;
+    }
+    setPreventivaEq(e);
+    setPreventivaOpen(true);
+  };
+
   const openOSById = (id: number) => {
     const os = ordensServico.find((o) => o.id === id);
     if (os) {
@@ -190,6 +210,11 @@ const Equipamentos = () => {
         open={protocoloOpen}
         onOpenChange={(v) => { setProtocoloOpen(v); if (!v) setProtocoloEq(null); }}
         equipamento={protocoloEq}
+      />
+      <PreventivaChecklistDialog
+        open={preventivaOpen}
+        onOpenChange={(v) => { setPreventivaOpen(v); if (!v) setPreventivaEq(null); }}
+        equipamento={preventivaEq}
       />
 
       {/* Filtros avançados */}
@@ -346,7 +371,7 @@ const Equipamentos = () => {
                           <DropdownMenuItem onClick={() => openProtocolo(e)}>
                             <FileBox className="w-4 h-4 mr-2" /> Criar Protocolo de Recolhimento
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => futuro("Criar Preventiva")}>
+                          <DropdownMenuItem onClick={() => openPreventiva(e)}>
                             <CalendarCheck className="w-4 h-4 mr-2" /> Criar Preventiva
                           </DropdownMenuItem>
                           <DropdownMenuItem

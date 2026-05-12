@@ -157,6 +157,13 @@ export interface ProtocoloEntrega {
   acessorios: string[];
 }
 
+export interface ProcedimentoPreventiva {
+  id: number;
+  nome: string;
+  tipoEquipamento: string;
+  itens: string[];
+}
+
 export interface Orcamento {
   id: number;
   numero: string;
@@ -250,6 +257,19 @@ interface DataContextType {
   updateOrcamento: (id: number, orc: Omit<Orcamento, "id">) => void;
   updateOrcamentoStatus: (id: number, status: OrcamentoStatus) => void;
   buildOrcamentoNumero: (osNumero?: string | null) => string;
+  procedimentos: ProcedimentoPreventiva[];
+  addProcedimento: (p: Omit<ProcedimentoPreventiva, "id">) => ProcedimentoPreventiva;
+  updateProcedimento: (id: number, p: Omit<ProcedimentoPreventiva, "id">) => void;
+  removeProcedimento: (id: number) => void;
+  getProcedimentoByTipo: (tipo: string) => ProcedimentoPreventiva | undefined;
+  criarOSPreventivaFromChecklist: (data: {
+    equipamentoId: number;
+    procedimentoId: number;
+    respostas: { item: string; conforme: "Conforme" | "Não Conforme" | "N/A"; observacao?: string }[];
+    aprovadoParaUso: boolean;
+    responsavelTecnico: string;
+    observacoes: string;
+  }) => OrdemServico;
 }
 
 const DataContext = createContext<DataContextType | null>(null);
@@ -278,6 +298,8 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [protocoloCounter, setProtocoloCounter] = useState(1);
   const [protocolosEntrega, setProtocolosEntrega] = useState<ProtocoloEntrega[]>([]);
   const [entregaCounter, setEntregaCounter] = useState(1);
+  const [procedimentos, setProcedimentos] = useState<ProcedimentoPreventiva[]>([]);
+  const [preventivaCounter, setPreventivaCounter] = useState(1);
 
   const addTipo = (tipo: string) => setTipos((prev) => [...prev, tipo]);
   const removeTipo = (index: number) => setTipos((prev) => prev.filter((_, i) => i !== index));
@@ -286,6 +308,9 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     if (!antigo || antigo === novoNome) return;
     setTipos((prev) => prev.map((t, i) => (i === index ? novoNome : t)));
     setEquipamentos((eqs) => eqs.map((e) => (e.tipo === antigo ? { ...e, tipo: novoNome } : e)));
+    setProcedimentos((ps) =>
+      ps.map((p) => (p.tipoEquipamento === antigo ? { ...p, tipoEquipamento: novoNome } : p))
+    );
   };
 
   const addEmpresa = (e: Omit<Empresa, "id">) => {
@@ -478,6 +503,57 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     setOrcamentos((prev) => prev.map((it) => (it.id === id ? { ...it, status } : it)));
   };
 
+  const addProcedimento = (p: Omit<ProcedimentoPreventiva, "id">) => {
+    const novo: ProcedimentoPreventiva = { ...p, id: Date.now() };
+    setProcedimentos((prev) => [...prev, novo]);
+    return novo;
+  };
+  const updateProcedimento = (id: number, p: Omit<ProcedimentoPreventiva, "id">) => {
+    setProcedimentos((prev) => prev.map((it) => (it.id === id ? { ...p, id } : it)));
+  };
+  const removeProcedimento = (id: number) => {
+    setProcedimentos((prev) => prev.filter((it) => it.id !== id));
+  };
+  const getProcedimentoByTipo = (tipo: string) =>
+    procedimentos.find((p) => p.tipoEquipamento === tipo);
+
+  const criarOSPreventivaFromChecklist = (data: {
+    equipamentoId: number;
+    procedimentoId: number;
+    respostas: { item: string; conforme: "Conforme" | "Não Conforme" | "N/A"; observacao?: string }[];
+    aprovadoParaUso: boolean;
+    responsavelTecnico: string;
+    observacoes: string;
+  }) => {
+    const eq = equipamentos.find((e) => e.id === data.equipamentoId);
+    const proc = procedimentos.find((p) => p.id === data.procedimentoId);
+    const numero = nextOSNumber();
+    const id = Date.now();
+    const dataCriacao = new Date().toISOString();
+    const checklistTxt = data.respostas
+      .map((r) => `- ${r.item}: ${r.conforme}${r.observacao ? ` (${r.observacao})` : ""}`)
+      .join("\n");
+    const descricao = `Procedimento: ${proc?.nome ?? ""}\n\nChecklist:\n${checklistTxt}\n\nAprovação para uso: ${data.aprovadoParaUso ? "SIM" : "NÃO"}`;
+    const novaOS: OrdemServico = {
+      id,
+      numero,
+      dataCriacao,
+      estado: "Fechada",
+      responsavelTecnico: data.responsavelTecnico,
+      solicitante: eq?.empresa ?? "",
+      equipamentoId: data.equipamentoId,
+      tipoServico: "Manutenção Preventiva",
+      origemProblema: "",
+      descricaoServico: descricao,
+      acessorios: [],
+      observacoes: data.observacoes,
+    };
+    setOrdensServico((prev) => [...prev, novaOS]);
+    setOsCounter((c) => c + 1);
+    setPreventivaCounter((c) => c + 1);
+    return novaOS;
+  };
+
   return (
     <DataContext.Provider
       value={{
@@ -521,6 +597,12 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         updateOrcamento,
         updateOrcamentoStatus,
         buildOrcamentoNumero,
+        procedimentos,
+        addProcedimento,
+        updateProcedimento,
+        removeProcedimento,
+        getProcedimentoByTipo,
+        criarOSPreventivaFromChecklist,
       }}
     >
       {children}
