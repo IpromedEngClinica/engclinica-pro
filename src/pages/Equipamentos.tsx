@@ -149,6 +149,21 @@ const Equipamentos = () => {
     setProtocoloOpen(true);
   };
 
+  const openPreventiva = (e: Equipamento) => {
+    const proc = getProcedimentoByTipo(e.tipo);
+    if (!proc) {
+      toast({
+        title: "Procedimento não cadastrado",
+        description: `Não há procedimento de preventiva para "${e.tipo}". Você será direcionado para cadastrá-lo.`,
+        variant: "destructive",
+      });
+      navigate(`/procedimentos?novo=${encodeURIComponent(e.tipo)}`);
+      return;
+    }
+    setPreventivaEq(e);
+    setPreventivaOpen(true);
+  };
+
   const openOSById = (id: number) => {
     const os = ordensServico.find((o) => o.id === id);
     if (os) {
@@ -195,6 +210,11 @@ const Equipamentos = () => {
         open={protocoloOpen}
         onOpenChange={(v) => { setProtocoloOpen(v); if (!v) setProtocoloEq(null); }}
         equipamento={protocoloEq}
+      />
+      <PreventivaChecklistDialog
+        open={preventivaOpen}
+        onOpenChange={(v) => { setPreventivaOpen(v); if (!v) setPreventivaEq(null); }}
+        equipamento={preventivaEq}
       />
 
       {/* Filtros avançados */}
