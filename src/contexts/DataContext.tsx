@@ -157,6 +157,13 @@ export interface ProtocoloEntrega {
   acessorios: string[];
 }
 
+export interface ProcedimentoPreventiva {
+  id: number;
+  nome: string;
+  tipoEquipamento: string;
+  itens: string[];
+}
+
 export interface Orcamento {
   id: number;
   numero: string;
@@ -250,6 +257,19 @@ interface DataContextType {
   updateOrcamento: (id: number, orc: Omit<Orcamento, "id">) => void;
   updateOrcamentoStatus: (id: number, status: OrcamentoStatus) => void;
   buildOrcamentoNumero: (osNumero?: string | null) => string;
+  procedimentos: ProcedimentoPreventiva[];
+  addProcedimento: (p: Omit<ProcedimentoPreventiva, "id">) => ProcedimentoPreventiva;
+  updateProcedimento: (id: number, p: Omit<ProcedimentoPreventiva, "id">) => void;
+  removeProcedimento: (id: number) => void;
+  getProcedimentoByTipo: (tipo: string) => ProcedimentoPreventiva | undefined;
+  criarOSPreventivaFromChecklist: (data: {
+    equipamentoId: number;
+    procedimentoId: number;
+    respostas: { item: string; conforme: "Conforme" | "Não Conforme" | "N/A"; observacao?: string }[];
+    aprovadoParaUso: boolean;
+    responsavelTecnico: string;
+    observacoes: string;
+  }) => OrdemServico;
 }
 
 const DataContext = createContext<DataContextType | null>(null);
