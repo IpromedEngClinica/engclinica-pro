@@ -18,11 +18,17 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import PageHeader from "@/components/PageHeader";
+import EmpresaFormDialog, { DialogMode } from "@/components/EmpresaFormDialog";
 import { useMemo, useState } from "react";
 import { useEmpresas } from "@/hooks/useEmpresas";
+import { EmpresaSupabase } from "@/services/empresasService";
 
 const Empresas = () => {
   const [search, setSearch] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [mode, setMode] = useState<DialogMode>("create");
+  const [selected, setSelected] = useState<EmpresaSupabase | null>(null);
+
   const { data: empresas = [], isLoading, isError, error, refetch } = useEmpresas();
 
   const filtered = useMemo(() => {
@@ -42,9 +48,27 @@ const Empresas = () => {
     });
   }, [empresas, search]);
 
+  const openCreate = () => {
+    setSelected(null);
+    setMode("create");
+    setDialogOpen(true);
+  };
+
+  const openView = (empresa: EmpresaSupabase) => {
+    setSelected(empresa);
+    setMode("view");
+    setDialogOpen(true);
+  };
+
+  const openEdit = (empresa: EmpresaSupabase) => {
+    setSelected(empresa);
+    setMode("edit");
+    setDialogOpen(true);
+  };
+
   const featurePending = (label: string) => {
-  window.alert(`${label} será migrado para Supabase na próxima etapa.`);
-    };
+    window.alert(`${label} será migrado para Supabase na próxima etapa.`);
+  };
 
   return (
     <div className="p-6 lg:p-8">
@@ -52,10 +76,17 @@ const Empresas = () => {
         title="Empresas"
         description="Gerencie as empresas cadastradas no Supabase"
       >
-        <Button onClick={() => featurePending("Cadastro de empresa")}>
+        <Button onClick={openCreate}>
           <Plus className="w-4 h-4 mr-2" /> Nova Empresa
         </Button>
       </PageHeader>
+
+      <EmpresaFormDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        mode={mode}
+        empresa={selected}
+      />
 
       <div className="bg-card rounded-xl border">
         <div className="px-5 py-4 border-b flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -141,17 +172,19 @@ const Empresas = () => {
                     <td className="px-5 py-3 font-medium text-foreground">
                       <button
                         type="button"
-                        onClick={() => featurePending("Visualização de empresa")}
+                        onClick={() => openView(e)}
                         className="text-primary hover:underline flex items-center gap-2"
                       >
                         <Building2 className="w-4 h-4" /> {e.nome}
                       </button>
+
                       {e.nome_fantasia && (
                         <p className="text-xs text-muted-foreground mt-0.5">
                           {e.nome_fantasia}
                         </p>
                       )}
                     </td>
+
                     <td className="px-5 py-3 text-muted-foreground">
                       {e.tipo_cliente || "—"}
                     </td>
@@ -173,6 +206,7 @@ const Empresas = () => {
                     <td className="px-5 py-3 text-muted-foreground">
                       {e.cpf_cnpj || "—"}
                     </td>
+
                     <td className="px-5 py-3">
                       <div className="flex justify-end">
                         <DropdownMenu>
@@ -182,14 +216,10 @@ const Empresas = () => {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-56 bg-popover">
-                            <DropdownMenuItem
-                              onClick={() => featurePending("Visualização de empresa")}
-                            >
+                            <DropdownMenuItem onClick={() => openView(e)}>
                               <Eye className="w-4 h-4 mr-2" /> Visualizar
                             </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => featurePending("Edição de empresa")}
-                            >
+                            <DropdownMenuItem onClick={() => openEdit(e)}>
                               <Pencil className="w-4 h-4 mr-2" /> Editar
                             </DropdownMenuItem>
                             <DropdownMenuItem
