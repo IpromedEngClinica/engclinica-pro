@@ -19,37 +19,59 @@ import Procedimentos from "./pages/Procedimentos";
 import NotFound from "./pages/NotFound";
 import { DataProvider } from "./contexts/DataContext";
 import SupabaseTest from "./pages/SupabaseTest";
+import Login from "./pages/Login";
+import ProtectedRoute from "./components/ProtectedRoute";
+import { AuthProvider } from "./contexts/AuthContext";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <DataProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route element={<AppLayout />}>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/supabase-test" element={<SupabaseTest />} />
-              <Route path="/empresas" element={<Empresas />} />
-              <Route path="/equipamentos" element={<Equipamentos />} />
-              <Route path="/contratos" element={<Contratos />} />
-              <Route path="/ordens-servico" element={<OrdensServico />} />
-              <Route path="/orcamentos" element={<Orcamentos />} />
-              <Route path="/protocolos" element={<Protocolos />} />
-              <Route path="/procedimentos" element={<Procedimentos />} />
-              <Route path="/campos-gerenciais/tipos-equipamento" element={<TiposEquipamento />} />
-              <Route path="/campos-gerenciais/tipos-os" element={<TiposOS />} />
-              <Route path="/campos-gerenciais/estados-os" element={<EstadosOS />} />
-              <Route path="/campos-gerenciais/pecas" element={<Pecas />} />
-            </Route>
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-    </DataProvider>
+    <AuthProvider>
+      <DataProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+
+              <Route element={<ProtectedRoute />}>
+                <Route element={<AppLayout />}>
+                  <Route path="/" element={<Dashboard />} />
+                  <Route path="/supabase-test" element={<SupabaseTest />} />
+                  <Route path="/empresas" element={<Empresas />} />
+                  <Route path="/equipamentos" element={<Equipamentos />} />
+                  <Route path="/contratos" element={<Contratos />} />
+                  <Route path="/ordens-servico" element={<OrdensServico />} />
+                  <Route path="/orcamentos" element={<Orcamentos />} />
+                  <Route path="/protocolos" element={<Protocolos />} />
+                  <Route path="/procedimentos" element={<Procedimentos />} />
+                  <Route
+                    path="/campos-gerenciais/tipos-equipamento"
+                    element={<TiposEquipamento />}
+                  />
+                  <Route
+                    path="/campos-gerenciais/tipos-os"
+                    element={<TiposOS />}
+                  />
+                  <Route
+                    path="/campos-gerenciais/estados-os"
+                    element={<EstadosOS />}
+                  />
+                  <Route
+                    path="/campos-gerenciais/pecas"
+                    element={<Pecas />}
+                  />
+                </Route>
+              </Route>
+
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </TooltipProvider>
+      </DataProvider>
+    </AuthProvider>
   </QueryClientProvider>
 );
 

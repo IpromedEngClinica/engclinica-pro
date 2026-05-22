@@ -13,8 +13,10 @@ import {
   ChevronDown,
   Settings2,
   List,
+  LogOut,
 } from "lucide-react";
 import { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Painel", path: "/" },
@@ -36,6 +38,7 @@ const camposGerenciais = [
 
 const AppSidebar = () => {
   const location = useLocation();
+  const { signOut, user } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [camposOpen, setCamposOpen] = useState(
     location.pathname.startsWith("/campos-gerenciais")
@@ -123,6 +126,27 @@ const AppSidebar = () => {
           )}
         </div>
       </nav>
+
+      {/* Auth area */}
+      <div className="px-2 py-3 border-t border-sidebar-border">
+        {!collapsed && (
+          <div className="mb-2 px-2">
+            <p className="text-xs font-medium text-sidebar-foreground truncate">
+              {user?.email}
+            </p>
+            <p className="text-[11px] text-sidebar-muted">Usuário autenticado</p>
+          </div>
+        )}
+
+        <button
+          onClick={signOut}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          title={collapsed ? "Sair" : undefined}
+        >
+          <LogOut className="w-4 h-4 shrink-0" />
+          {!collapsed && <span>Sair</span>}
+        </button>
+      </div>
 
       {/* Collapse toggle */}
       <button
