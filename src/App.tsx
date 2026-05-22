@@ -18,6 +18,7 @@ import Protocolos from "./pages/Protocolos";
 import Procedimentos from "./pages/Procedimentos";
 import NotFound from "./pages/NotFound";
 import { DataProvider } from "./contexts/DataContext";
+import SupabaseTest from "./pages/SupabaseTest";
 
 const queryClient = new QueryClient();
 
@@ -31,6 +32,7 @@ const App = () => (
           <Routes>
             <Route element={<AppLayout />}>
               <Route path="/" element={<Dashboard />} />
+              <Route path="/supabase-test" element={<SupabaseTest />} />
               <Route path="/empresas" element={<Empresas />} />
               <Route path="/equipamentos" element={<Equipamentos />} />
               <Route path="/contratos" element={<Contratos />} />
