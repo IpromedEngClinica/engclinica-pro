@@ -10,9 +10,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { EmpresaFormInput, EmpresaSupabase } from "@/services/empresasService";
 import { useAtualizarEmpresa, useCriarEmpresa } from "@/hooks/useEmpresas";
+import { consultarCep, onlyDigits, UFS_BRASIL } from "@/utils/brasil";
 
 export type DialogMode = "create" | "edit" | "view";
 
@@ -26,6 +28,13 @@ interface EmpresaFormDialogProps {
 type TipoCliente = "Prefeitura" | "Pessoa Jurídica" | "Particular";
 
 const TIPOS_CLIENTE: TipoCliente[] = ["Prefeitura", "Pessoa Jurídica", "Particular"];
+
+const TIPOS_RELACAO = [
+  { value: "cliente", label: "Cliente" },
+  { value: "fornecedor", label: "Fornecedor" },
+  { value: "parceiro", label: "Parceiro" },
+  { value: "ambos", label: "Ambos" },
+];
 
 const emptyForm: EmpresaFormInput = {
   nome: "",
@@ -109,6 +118,8 @@ const EmpresaFormDialog = ({
   const atualizarEmpresa = useAtualizarEmpresa();
 
   const [form, setForm] = useState<EmpresaFormInput>(emptyForm);
+  const [buscandoCep, setBuscandoCep] = useState(false);
+  const [ultimoCepConsultado, setUltimoCepConsultado] = useState("");
 
   const readOnly = mode === "view";
   const saving = criarEmpresa.isPending || atualizarEmpresa.isPending;
@@ -118,10 +129,45 @@ const EmpresaFormDialog = ({
 
     if (empresa && (mode === "edit" || mode === "view")) {
       setForm(empresaToForm(empresa));
+      setUltimoCepConsultado(onlyDigits(empresa.cep ?? ""));
     } else {
       setForm(emptyForm);
+      setUltimoCepConsultado("");
     }
   }, [open, empresa, mode]);
+
+  const preencherCep = async (cep: string) => {
+    if (readOnly) return;
+
+    const cepDigits = onlyDigits(cep);
+
+    if (cepDigits.length !== 8) return;
+    if (cepDigits === ultimoCepConsultado) return;
+
+    try {
+      setBuscandoCep(true);
+      setUltimoCepConsultado(cepDigits);
+
+      const data = await consultarCep(cepDigits);
+
+      setForm((prev) => ({
+        ...prev,
+        cep: data.cep || prev.cep,
+        rua: data.logradouro || prev.rua,
+        bairro: data.bairro || prev.bairro,
+        cidade: data.localidade || prev.cidade,
+        estado: data.uf || prev.estado,
+        complemento: prev.complemento || data.complemento || "",
+      }));
+
+      toast.success("Endereço preenchido pelo CEP.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Erro ao consultar CEP.";
+      toast.error(message);
+    } finally {
+      setBuscandoCep(false);
+    }
+  };
 
   const handleChange = (field: keyof EmpresaFormInput, value: string) => {
     if (readOnly) return;
@@ -136,11 +182,23 @@ const EmpresaFormDialog = ({
     if (field === "estado") formattedValue = value.toUpperCase().slice(0, 2);
 
     setForm((prev) => ({ ...prev, [field]: formattedValue }));
+
+    if (field === "cep") {
+      const cepDigits = onlyDigits(formattedValue);
+      if (cepDigits.length === 8) {
+        preencherCep(cepDigits);
+      }
+    }
   };
 
   const handleSubmit = async () => {
     if (!form.nome?.trim()) {
       toast.error("Preencha o nome da empresa.");
+      return;
+    }
+
+    if (form.estado && form.estado.length !== 2) {
+      toast.error("UF deve conter exatamente 2 letras.");
       return;
     }
 
@@ -151,6 +209,7 @@ const EmpresaFormDialog = ({
           input: {
             ...form,
             nome: form.nome.trim(),
+            estado: form.estado?.toUpperCase() || "",
           },
         });
 
@@ -159,6 +218,7 @@ const EmpresaFormDialog = ({
         await criarEmpresa.mutateAsync({
           ...form,
           nome: form.nome.trim(),
+          estado: form.estado?.toUpperCase() || "",
         });
 
         toast.success("Empresa cadastrada com sucesso!");
@@ -189,9 +249,9 @@ const EmpresaFormDialog = ({
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
 
-        {/* Dados Principais */}
         <div className="rounded-lg border p-4 space-y-4">
           <h3 className="text-sm font-semibold text-foreground">Dados Principais</h3>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Nome *</Label>
@@ -202,6 +262,7 @@ const EmpresaFormDialog = ({
                 disabled={readOnly || saving}
               />
             </div>
+
             <div className="space-y-1.5">
               <Label>Nome Fantasia</Label>
               <Input
@@ -213,7 +274,7 @@ const EmpresaFormDialog = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-1.5">
               <Label>Tipo de Cliente</Label>
               <Select
@@ -235,33 +296,55 @@ const EmpresaFormDialog = ({
             </div>
 
             <div className="space-y-1.5">
+              <Label>Tipo de Relação</Label>
+              <Select
+                value={form.tipoRelacao || "cliente"}
+                onValueChange={(v) => handleChange("tipoRelacao", v)}
+                disabled={readOnly || saving}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione a relação" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIPOS_RELACAO.map((tipo) => (
+                    <SelectItem key={tipo.value} value={tipo.value}>
+                      {tipo.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
               <Label>CPF/CNPJ</Label>
               <Input
                 value={form.cpfCnpj}
                 onChange={(e) => handleChange("cpfCnpj", e.target.value)}
-                placeholder="000.000.000-00 / 00.000.000/0000-00"
+                placeholder="000.000.000-00"
                 disabled={readOnly || saving}
               />
             </div>
           </div>
         </div>
 
-        {/* Endereço */}
         <div className="rounded-lg border p-4 space-y-4">
           <h3 className="text-sm font-semibold text-foreground">Endereço</h3>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             <div className="space-y-1.5">
               <Label>CEP</Label>
               <Input
                 value={form.cep}
                 onChange={(e) => handleChange("cep", e.target.value)}
                 placeholder="00000-000"
-                disabled={readOnly || saving}
+                disabled={readOnly || saving || buscandoCep}
               />
+              {buscandoCep && (
+                <p className="text-xs text-muted-foreground">Consultando CEP...</p>
+              )}
             </div>
 
-            <div className="space-y-1.5 col-span-2 sm:col-span-3">
+            <div className="space-y-1.5 sm:col-span-3">
               <Label>Rua</Label>
               <Input
                 value={form.rua}
@@ -304,7 +387,7 @@ const EmpresaFormDialog = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Cidade</Label>
               <Input
@@ -316,18 +399,27 @@ const EmpresaFormDialog = ({
             </div>
 
             <div className="space-y-1.5">
-              <Label>Estado</Label>
-              <Input
-                value={form.estado}
-                onChange={(e) => handleChange("estado", e.target.value)}
-                placeholder="UF"
+              <Label>UF</Label>
+              <Select
+                value={form.estado || ""}
+                onValueChange={(value) => handleChange("estado", value)}
                 disabled={readOnly || saving}
-              />
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione a UF" />
+                </SelectTrigger>
+                <SelectContent>
+                  {UFS_BRASIL.map((uf) => (
+                    <SelectItem key={uf.sigla} value={uf.sigla}>
+                      {uf.sigla} - {uf.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </div>
 
-        {/* Contato */}
         <div className="rounded-lg border p-4 space-y-4">
           <h3 className="text-sm font-semibold text-foreground">Contato</h3>
 
@@ -372,6 +464,21 @@ const EmpresaFormDialog = ({
                 disabled={readOnly || saving}
               />
             </div>
+          </div>
+        </div>
+
+        <div className="rounded-lg border p-4 space-y-4">
+          <h3 className="text-sm font-semibold text-foreground">Observações</h3>
+
+          <div className="space-y-1.5">
+            <Label>Observações internas</Label>
+            <Textarea
+              value={form.observacoes}
+              onChange={(e) => handleChange("observacoes", e.target.value)}
+              placeholder="Informações internas sobre a empresa."
+              disabled={readOnly || saving}
+              rows={4}
+            />
           </div>
         </div>
 
