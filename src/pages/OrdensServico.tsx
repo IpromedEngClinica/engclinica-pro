@@ -28,6 +28,9 @@ import { useMemo, useState } from "react";
 import { useOrdensServico } from "@/hooks/useOrdensServico";
 import { OrdemServicoSupabase } from "@/services/ordensServicoService";
 import { toast } from "@/hooks/use-toast";
+import OrdemServicoFormDialog, {
+  DialogMode,
+} from "@/components/OrdemServicoFormDialog";
 
 const ALL = "__all__";
 
@@ -62,7 +65,7 @@ const getEstado = (os: OrdemServicoSupabase) => {
 };
 
 const getTecnico = (os: OrdemServicoSupabase) => {
-  return os.tecnico_responsavel?.nome || os.responsavel_texto || "—";
+  return os.responsavel_texto || "—";
 };
 
 const formatDate = (iso: string | null) => {
@@ -103,6 +106,10 @@ const statusColor = (status: string) => {
 
 const OrdensServico = () => {
   const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<DialogMode>("create");
+  const [selected, setSelected] = useState<OrdemServicoSupabase | null>(null);
+
   const [hideClosed, setHideClosed] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -186,6 +193,24 @@ const OrdensServico = () => {
     return n;
   }, [filters]);
 
+  const openCreate = () => {
+    setSelected(null);
+    setMode("create");
+    setOpen(true);
+  };
+
+  const openView = (os: OrdemServicoSupabase) => {
+    setSelected(os);
+    setMode("view");
+    setOpen(true);
+  };
+
+  const openEdit = (os: OrdemServicoSupabase) => {
+    setSelected(os);
+    setMode("edit");
+    setOpen(true);
+  };
+
   const featurePending = (label: string) => {
     toast({
       title: label,
@@ -199,10 +224,17 @@ const OrdensServico = () => {
         title="Ordens de Serviço"
         description="Gerencie as ordens de serviço cadastradas no Supabase"
       >
-        <Button onClick={() => featurePending("Cadastro de OS")}>
+        <Button onClick={openCreate}>
           <Plus className="w-4 h-4 mr-2" /> Nova OS
         </Button>
       </PageHeader>
+
+      <OrdemServicoFormDialog
+        open={open}
+        onOpenChange={setOpen}
+        mode={mode}
+        os={selected}
+      />
 
       <div className="bg-card rounded-xl border mb-4">
         <button
@@ -251,9 +283,7 @@ const OrdensServico = () => {
               />
 
               <SearchableSelect
-                value={
-                  filters.tipoServico === ALL ? "" : filters.tipoServico
-                }
+                value={filters.tipoServico === ALL ? "" : filters.tipoServico}
                 onValueChange={(v) =>
                   setFilters((f) => ({ ...f, tipoServico: v || ALL }))
                 }
@@ -395,7 +425,7 @@ const OrdensServico = () => {
                       <td className="px-5 py-3 font-medium">
                         <button
                           type="button"
-                          onClick={() => featurePending("Visualização de OS")}
+                          onClick={() => openView(os)}
                           className="text-primary hover:underline flex items-center gap-2"
                         >
                           <ClipboardList className="w-4 h-4" /> {os.numero}
@@ -445,17 +475,11 @@ const OrdensServico = () => {
                               align="end"
                               className="w-52 bg-popover"
                             >
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  featurePending("Visualização de OS")
-                                }
-                              >
+                              <DropdownMenuItem onClick={() => openView(os)}>
                                 <Eye className="w-4 h-4 mr-2" /> Visualizar
                               </DropdownMenuItem>
 
-                              <DropdownMenuItem
-                                onClick={() => featurePending("Edição de OS")}
-                              >
+                              <DropdownMenuItem onClick={() => openEdit(os)}>
                                 <Pencil className="w-4 h-4 mr-2" /> Editar
                               </DropdownMenuItem>
 
