@@ -44,6 +44,7 @@ const emptyForm: OrdemServicoFormInput = {
   tecnicoResponsavelId: "",
   solicitanteTexto: "",
   responsavelTexto: "Ícaro Rezende",
+  problemaRelatado: "",
   origemProblema: "",
   descricaoServico: "",
   observacoes: "",
@@ -82,6 +83,22 @@ const getEquipamentoLabel = (equipamento: {
   return [tipo, equipamento.fabricante, equipamento.modelo, identificador]
     .filter(Boolean)
     .join(" - ");
+};
+
+const normalizarChaveAcessorio = (descricao: string) =>
+  descricao.trim().toLowerCase().replace(/\s+/g, " ");
+
+const normalizarAcessoriosFormulario = (
+  acessorios: OrdemServicoSupabase["acessorios"]
+) => {
+  return Array.from(
+    new Map(
+      (acessorios || [])
+        .map((item) => item.descricao?.trim())
+        .filter((descricao): descricao is string => Boolean(descricao))
+        .map((descricao) => [normalizarChaveAcessorio(descricao), descricao])
+    ).values()
+  );
 };
 
 const OrdemServicoFormDialog = ({
@@ -161,13 +178,14 @@ const OrdemServicoFormDialog = ({
         tecnicoResponsavelId: os.tecnico_responsavel_id || "",
         solicitanteTexto: os.solicitante_texto || "",
         responsavelTexto: os.responsavel_texto || "",
+        problemaRelatado: os.problema_relatado || "",
         origemProblema: os.origem_problema || "",
         descricaoServico: os.descricao_servico || "",
         observacoes: os.observacoes || "",
         statusSistema: os.status_sistema || "aberta",
       });
 
-      setAcessorios((os.acessorios || []).map((item) => item.descricao));
+      setAcessorios(normalizarAcessoriosFormulario(os.acessorios));
       setNovoAcessorio("");
       return;
     }
@@ -247,6 +265,19 @@ const OrdemServicoFormDialog = ({
     const v = novoAcessorio.trim();
     if (!v) return;
 
+    const chaveNova = normalizarChaveAcessorio(v);
+    const jaExiste = acessorios.some(
+      (item) => normalizarChaveAcessorio(item) === chaveNova
+    );
+
+    if (jaExiste) {
+      toast({
+        title: "Acessório já adicionado.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setAcessorios((prev) => [...prev, v]);
     setNovoAcessorio("");
   };
@@ -293,6 +324,7 @@ const OrdemServicoFormDialog = ({
         ...form,
         responsavelTexto: form.responsavelTexto?.trim(),
         solicitanteTexto: selectedEmpresaLabel,
+        problemaRelatado: form.problemaRelatado?.trim(),
         origemProblema: form.origemProblema?.trim(),
         descricaoServico: form.descricaoServico?.trim(),
         observacoes: form.observacoes?.trim(),
@@ -450,6 +482,17 @@ const OrdemServicoFormDialog = ({
                     emptyText="Nenhum tipo encontrado."
                   />
                 )}
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm">Problema Relatado</Label>
+                <Textarea
+                  placeholder="Descreva o problema informado pelo cliente ou operador..."
+                  rows={3}
+                  value={form.problemaRelatado}
+                  onChange={(e) => update("problemaRelatado", e.target.value)}
+                  disabled={readOnly || saving}
+                />
               </div>
 
               <div className="space-y-2">

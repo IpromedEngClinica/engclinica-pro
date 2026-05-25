@@ -9,6 +9,17 @@ export type OrdemServicoAcessorioSupabase = {
   created_at: string;
 };
 
+export type OrdemServicoHistoricoSupabase = {
+  id: string;
+  ordem_servico_id: string;
+  usuario_id: string | null;
+  estado_anterior_id: string | null;
+  estado_novo_id: string | null;
+  acao: string;
+  observacao: string | null;
+  created_at: string;
+};
+
 export type OrdemServicoSupabase = {
   id: string;
   organizacao_id: string;
@@ -22,6 +33,7 @@ export type OrdemServicoSupabase = {
   responsavel_texto: string | null;
   data_abertura: string;
   data_fechamento: string | null;
+  problema_relatado: string | null;
   origem_problema: string | null;
   descricao_servico: string | null;
   observacoes: string | null;
@@ -62,6 +74,7 @@ export type OrdemServicoSupabase = {
     cancela_os: boolean;
   } | null;
   acessorios?: OrdemServicoAcessorioSupabase[];
+  historico?: OrdemServicoHistoricoSupabase[];
 };
 
 export type OrdemServicoFormInput = {
@@ -72,6 +85,7 @@ export type OrdemServicoFormInput = {
   tecnicoResponsavelId?: string;
   solicitanteTexto?: string;
   responsavelTexto?: string;
+  problemaRelatado?: string;
   origemProblema?: string;
   descricaoServico?: string;
   observacoes?: string;
@@ -92,6 +106,7 @@ const selectOrdensServico = `
   responsavel_texto,
   data_abertura,
   data_fechamento,
+  problema_relatado,
   origem_problema,
   descricao_servico,
   observacoes,
@@ -138,6 +153,16 @@ const selectOrdensServico = `
     quantidade,
     observacoes,
     created_at
+  ),
+  historico:ordem_servico_historico (
+    id,
+    ordem_servico_id,
+    usuario_id,
+    estado_anterior_id,
+    estado_novo_id,
+    acao,
+    observacao,
+    created_at
   )
 `;
 
@@ -149,6 +174,7 @@ const toDatabasePayload = (input: OrdemServicoFormInput) => ({
   tecnico_responsavel_id: input.tecnicoResponsavelId || null,
   solicitante_texto: input.solicitanteTexto || null,
   responsavel_texto: input.responsavelTexto || null,
+  problema_relatado: input.problemaRelatado || null,
   origem_problema: input.origemProblema || null,
   descricao_servico: input.descricaoServico || null,
   observacoes: input.observacoes || null,
@@ -156,14 +182,177 @@ const toDatabasePayload = (input: OrdemServicoFormInput) => ({
 });
 
 const normalizarAcessorios = (acessorios?: string[]) => {
-  return (acessorios || [])
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .map((descricao) => ({
-      descricao,
-      quantidade: 1,
-      observacoes: null,
-    }));
+  const map = new Map<string, string>();
+
+  (acessorios || []).forEach((item) => {
+    const descricao = item.trim();
+
+    if (!descricao) return;
+
+    const chave = descricao.toLowerCase().replace(/\s+/g, " ");
+
+    if (!map.has(chave)) {
+      map.set(chave, descricao);
+    }
+  });
+
+  return Array.from(map.values()).map((descricao) => ({
+    descricao,
+    quantidade: 1,
+    observacoes: null,
+  }));
+};
+
+const texto = (value?: string | null) => value?.trim() || "";
+
+const chaveAcessorio = (descricao: string) =>
+  descricao.trim().toLowerCase().replace(/\s+/g, " ");
+
+const buscarNomeEstado = async (estadoId?: string | null) => {
+  if (!estadoId) return "não informado";
+
+  const { data, error } = await supabase
+    .from("estados_os")
+    .select("nome")
+    .eq("id", estadoId)
+    .single();
+
+  if (error || !data?.nome) {
+    return "não informado";
+  }
+
+  return data.nome;
+};
+
+const montarDescricaoAlteracoes = async ({
+  osAnterior,
+  input,
+  acessoriosAnteriores,
+  acessoriosNovos,
+}: {
+  osAnterior: {
+    empresa_id: string | null;
+    equipamento_id: string | null;
+    tipo_os_id: string | null;
+    estado_os_id: string | null;
+    responsavel_texto: string | null;
+    problema_relatado: string | null;
+    origem_problema: string | null;
+    descricao_servico: string | null;
+    observacoes: string | null;
+  };
+  input: OrdemServicoFormInput;
+  acessoriosAnteriores: { descricao: string | null }[] | null;
+  acessoriosNovos: {
+    descricao: string;
+    quantidade: number;
+    observacoes: null;
+  }[];
+}) => {
+  const alteracoes: string[] = [];
+
+  if (texto(osAnterior.empresa_id) !== texto(input.empresaId)) {
+    alteracoes.push("Solicitante alterado.");
+  }
+
+  if (texto(osAnterior.equipamento_id) !== texto(input.equipamentoId)) {
+    alteracoes.push("Equipamento alterado.");
+  }
+
+  if (texto(osAnterior.tipo_os_id) !== texto(input.tipoOsId)) {
+    alteracoes.push("Tipo de serviço alterado.");
+  }
+
+  if (texto(osAnterior.estado_os_id) !== texto(input.estadoOsId)) {
+    const estadoAnteriorNome = await buscarNomeEstado(osAnterior.estado_os_id);
+    const estadoNovoNome = await buscarNomeEstado(input.estadoOsId);
+
+    alteracoes.push(
+      `Estado alterado: De "${estadoAnteriorNome}" para "${estadoNovoNome}".`
+    );
+  }
+
+  if (texto(osAnterior.responsavel_texto) !== texto(input.responsavelTexto)) {
+    alteracoes.push("Responsável técnico alterado.");
+  }
+
+  if (texto(osAnterior.problema_relatado) !== texto(input.problemaRelatado)) {
+    alteracoes.push("Problema relatado alterado.");
+  }
+
+  if (texto(osAnterior.origem_problema) !== texto(input.origemProblema)) {
+    alteracoes.push("Origem do problema alterada.");
+  }
+
+  if (texto(osAnterior.descricao_servico) !== texto(input.descricaoServico)) {
+    alteracoes.push("Descrição do serviço alterada.");
+  }
+
+  if (texto(osAnterior.observacoes) !== texto(input.observacoes)) {
+    alteracoes.push("Observações alteradas.");
+  }
+
+  const anteriores = new Set(
+    (acessoriosAnteriores || [])
+      .map((item) => item.descricao?.trim())
+      .filter((descricao): descricao is string => Boolean(descricao))
+      .map(chaveAcessorio)
+  );
+
+  const novos = new Set(
+    acessoriosNovos
+      .map((item) => item.descricao?.trim())
+      .filter((descricao): descricao is string => Boolean(descricao))
+      .map(chaveAcessorio)
+  );
+
+  const adicionados = acessoriosNovos
+    .filter((item) => !anteriores.has(chaveAcessorio(item.descricao)))
+    .map((item) => item.descricao);
+
+  const removidos = (acessoriosAnteriores || [])
+    .map((item) => item.descricao?.trim())
+    .filter((descricao): descricao is string => Boolean(descricao))
+    .filter((descricao) => !novos.has(chaveAcessorio(descricao)));
+
+  if (adicionados.length > 0) {
+    alteracoes.push(`Acessórios adicionados: ${adicionados.join(", ")}.`);
+  }
+
+  if (removidos.length > 0) {
+    alteracoes.push(`Acessórios removidos: ${removidos.join(", ")}.`);
+  }
+
+  return alteracoes.length > 0
+    ? alteracoes.join("\n")
+    : "Salvo sem alterações relevantes identificadas.";
+};
+
+const registrarHistorico = async ({
+  ordemServicoId,
+  acao,
+  observacao,
+  estadoAnteriorId = null,
+  estadoNovoId = null,
+}: {
+  ordemServicoId: string;
+  acao: string;
+  observacao?: string;
+  estadoAnteriorId?: string | null;
+  estadoNovoId?: string | null;
+}) => {
+  const { error } = await supabase.from("ordem_servico_historico").insert({
+    ordem_servico_id: ordemServicoId,
+    usuario_id: null,
+    estado_anterior_id: estadoAnteriorId,
+    estado_novo_id: estadoNovoId,
+    acao,
+    observacao: observacao || null,
+  });
+
+  if (error) {
+    console.warn("Erro ao registrar histórico da OS:", error.message);
+  }
 };
 
 export const ordensServicoService = {
@@ -235,6 +424,13 @@ export const ordensServicoService = {
       }
     }
 
+    await registrarHistorico({
+      ordemServicoId: osCriada.id,
+      acao: "criada",
+      observacao: "Ordem de Serviço criada.",
+      estadoNovoId: input.estadoOsId || null,
+    });
+
     const { data, error: selectError } = await supabase
       .from("ordens_servico")
       .select(selectOrdensServico)
@@ -249,6 +445,37 @@ export const ordensServicoService = {
   },
 
   async atualizar(id: string, input: OrdemServicoFormInput) {
+    const { data: osAnterior, error: osAnteriorError } = await supabase
+      .from("ordens_servico")
+      .select(
+        `
+          id,
+          empresa_id,
+          equipamento_id,
+          tipo_os_id,
+          estado_os_id,
+          responsavel_texto,
+          problema_relatado,
+          origem_problema,
+          descricao_servico,
+          observacoes,
+          status_sistema
+        `
+      )
+      .eq("id", id)
+      .single();
+
+    if (osAnteriorError) {
+      throw new Error(osAnteriorError.message);
+    }
+
+    const { data: acessoriosAnteriores } = await supabase
+      .from("ordem_servico_acessorios")
+      .select("descricao")
+      .eq("ordem_servico_id", id);
+
+    const acessorios = normalizarAcessorios(input.acessorios);
+
     const { error } = await supabase
       .from("ordens_servico")
       .update(toDatabasePayload(input))
@@ -267,8 +494,6 @@ export const ordensServicoService = {
       throw new Error(deleteError.message);
     }
 
-    const acessorios = normalizarAcessorios(input.acessorios);
-
     if (acessorios.length > 0) {
       const { error: insertError } = await supabase
         .from("ordem_servico_acessorios")
@@ -283,6 +508,21 @@ export const ordensServicoService = {
         throw new Error(insertError.message);
       }
     }
+
+    const observacaoHistorico = await montarDescricaoAlteracoes({
+      osAnterior,
+      input,
+      acessoriosAnteriores: acessoriosAnteriores || [],
+      acessoriosNovos: acessorios,
+    });
+
+    await registrarHistorico({
+      ordemServicoId: id,
+      acao: "editada",
+      observacao: observacaoHistorico,
+      estadoAnteriorId: osAnterior.estado_os_id,
+      estadoNovoId: input.estadoOsId || null,
+    });
 
     const { data, error: selectError } = await supabase
       .from("ordens_servico")
@@ -308,6 +548,19 @@ export const ordensServicoService = {
       throw new Error(estadoError.message);
     }
 
+    const { data: osAtual, error: osAtualError } = await supabase
+      .from("ordens_servico")
+      .select("id, estado_os_id")
+      .eq("id", id)
+      .single();
+
+    if (osAtualError) {
+      throw new Error(osAtualError.message);
+    }
+
+    const estadoAnteriorNome = await buscarNomeEstado(osAtual.estado_os_id);
+    const estadoNovoNome = estado.nome || (await buscarNomeEstado(estadoOsId));
+
     const statusSistema = estado.finaliza_os
       ? "fechada"
       : estado.cancela_os
@@ -330,6 +583,69 @@ export const ordensServicoService = {
 
     if (error) {
       throw new Error(error.message);
+    }
+
+    let observacaoHistorico = `Estado alterado: De "${estadoAnteriorNome}" para "${estadoNovoNome}".`;
+
+    if (estado.finaliza_os) {
+      observacaoHistorico += " Ordem de Serviço fechada.";
+    }
+
+    if (estado.cancela_os) {
+      observacaoHistorico += " Ordem de Serviço cancelada.";
+    }
+
+    await registrarHistorico({
+      ordemServicoId: id,
+      acao: "estado_alterado",
+      observacao: observacaoHistorico,
+      estadoAnteriorId: osAtual.estado_os_id,
+      estadoNovoId: estado.id,
+    });
+
+    return data as unknown as OrdemServicoSupabase;
+  },
+
+  async excluir(id: string) {
+    const { data: osAtual, error: osAtualError } = await supabase
+      .from("ordens_servico")
+      .select("id, estado_os_id, status_sistema")
+      .eq("id", id)
+      .single();
+
+    if (osAtualError) {
+      throw new Error(osAtualError.message);
+    }
+
+    const { error } = await supabase
+      .from("ordens_servico")
+      .update({
+        ativo: false,
+        status_sistema: "cancelada",
+        data_fechamento: new Date().toISOString(),
+      })
+      .eq("id", id);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    await registrarHistorico({
+      ordemServicoId: id,
+      acao: "excluida",
+      observacao: "Ordem de Serviço excluída logicamente.",
+      estadoAnteriorId: osAtual.estado_os_id,
+      estadoNovoId: osAtual.estado_os_id,
+    });
+
+    const { data, error: selectError } = await supabase
+      .from("ordens_servico")
+      .select(selectOrdensServico)
+      .eq("id", id)
+      .single();
+
+    if (selectError) {
+      throw new Error(selectError.message);
     }
 
     return data as unknown as OrdemServicoSupabase;

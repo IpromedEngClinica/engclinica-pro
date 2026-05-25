@@ -1,4 +1,4 @@
-import { ClipboardList, Pencil } from "lucide-react";
+import { ClipboardList, FileText, Pencil, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,16 +9,21 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { OrdemServicoSupabase } from "@/services/ordensServicoService";
+import { gerarPdfOrdemServico } from "@/utils/gerarPdfOrdemServico";
 
 interface OrdemServicoDetalhesDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   os: OrdemServicoSupabase | null;
   onEdit?: (os: OrdemServicoSupabase) => void;
+  onDelete?: (os: OrdemServicoSupabase) => void;
 }
 
 const getEmpresaNome = (os: OrdemServicoSupabase) =>
-  os.empresa?.nome_fantasia || os.empresa?.nome || "Não informado";
+  os.empresa?.nome_fantasia ||
+  os.empresa?.nome ||
+  os.solicitante_texto ||
+  "Não informado";
 
 const getEquipamentoTipo = (os: OrdemServicoSupabase) =>
   os.equipamento?.tipo_equipamento?.nome ||
@@ -32,6 +37,19 @@ const getEstado = (os: OrdemServicoSupabase) =>
   os.estado_os?.nome || os.status_sistema || "Não informado";
 
 const getTecnico = (os: OrdemServicoSupabase) => os.responsavel_texto || "—";
+
+const formatAcao = (acao: string) => {
+  const map: Record<string, string> = {
+    criada: "OS criada",
+    editada: "OS editada",
+    estado_alterado: "Estado alterado",
+    fechada: "OS fechada",
+    cancelada: "OS cancelada",
+    excluida: "OS excluída",
+  };
+
+  return map[acao] || acao;
+};
 
 const formatDate = (iso?: string | null) => {
   if (!iso) return "—";
@@ -104,10 +122,16 @@ const OrdemServicoDetalhesDialog = ({
   onOpenChange,
   os,
   onEdit,
+  onDelete,
 }: OrdemServicoDetalhesDialogProps) => {
   if (!os) return null;
 
   const estado = getEstado(os);
+  const historicoOrdenado = [...(os.historico || [])].sort((a, b) => {
+    return (
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -141,11 +165,10 @@ const OrdemServicoDetalhesDialog = ({
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             <InfoCard title="Solicitante">
-              <Field label="Empresa">{getEmpresaNome(os)}</Field>
-              <Field label="Razão social">{os.empresa?.nome || "—"}</Field>
-              <Field label="Solicitante informado">
-                {os.solicitante_texto || "—"}
-              </Field>
+              <div>
+                <p className="text-xs text-muted-foreground">Empresa</p>
+                <p className="text-sm font-medium">{getEmpresaNome(os)}</p>
+              </div>
             </InfoCard>
 
             <InfoCard title="Equipamento">
@@ -170,6 +193,13 @@ const OrdemServicoDetalhesDialog = ({
             </div>
 
             <div className="pt-2 space-y-4">
+              <div>
+                <h4 className="text-sm font-medium text-muted-foreground mb-1">
+                  Problema relatado
+                </h4>
+                <TextBlock value={os.problema_relatado} />
+              </div>
+
               <div>
                 <h4 className="text-sm font-medium text-muted-foreground mb-1">
                   Origem do problema
@@ -223,9 +253,41 @@ const OrdemServicoDetalhesDialog = ({
               </p>
             )}
           </InfoCard>
+
+          <InfoCard title="Histórico">
+            {historicoOrdenado.length > 0 ? (
+              <div className="space-y-2">
+                {historicoOrdenado.map((item) => (
+                  <div key={item.id} className="border rounded-md p-3">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <span className="text-sm font-medium text-foreground">
+                        {formatAcao(item.acao)}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {formatDate(item.created_at)}
+                      </span>
+                    </div>
+                    {item.observacao && (
+                      <p className="text-sm text-muted-foreground mt-1 whitespace-pre-line">
+                        {item.observacao}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Nenhum histórico registrado.
+              </p>
+            )}
+          </InfoCard>
         </div>
 
         <DialogFooter className="px-6 py-4 border-t">
+          <Button variant="outline" onClick={() => gerarPdfOrdemServico(os)}>
+            <FileText className="w-4 h-4 mr-2" />
+            Gerar PDF
+          </Button>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Fechar
           </Button>
@@ -233,6 +295,12 @@ const OrdemServicoDetalhesDialog = ({
             <Button onClick={() => onEdit(os)}>
               <Pencil className="w-4 h-4 mr-2" />
               Editar OS
+            </Button>
+          )}
+          {onDelete && (
+            <Button variant="destructive" onClick={() => onDelete(os)}>
+              <Trash2 className="w-4 h-4 mr-2" />
+              Excluir OS
             </Button>
           )}
         </DialogFooter>

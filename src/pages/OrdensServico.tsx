@@ -12,6 +12,7 @@ import {
   PackageCheck,
   AlertCircle,
   Loader2,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +28,7 @@ import PageHeader from "@/components/PageHeader";
 import { useMemo, useState } from "react";
 import {
   useAlterarEstadoOrdemServico,
+  useExcluirOrdemServico,
   useOrdensServico,
 } from "@/hooks/useOrdensServico";
 import { useEstadosOS } from "@/hooks/useCamposOS";
@@ -127,6 +129,7 @@ const OrdensServico = () => {
     useOrdensServico();
   const { data: estadosOS = [] } = useEstadosOS();
   const alterarEstadoOS = useAlterarEstadoOrdemServico();
+  const excluirOS = useExcluirOrdemServico();
 
   const emptyFilters = {
     estado: ALL,
@@ -176,7 +179,8 @@ const OrdensServico = () => {
         solicitante.toLowerCase().includes(q) ||
         equipamento.toLowerCase().includes(q) ||
         tipoServico.toLowerCase().includes(q) ||
-        tecnico.toLowerCase().includes(q);
+        tecnico.toLowerCase().includes(q) ||
+        (os.problema_relatado || "").toLowerCase().includes(q);
 
       const matchHide =
         !hideClosed ||
@@ -277,6 +281,32 @@ const OrdensServico = () => {
     }
   };
 
+  const handleExcluir = async (os: OrdemServicoSupabase) => {
+    const confirmado = window.confirm(
+      `Tem certeza que deseja excluir a OS ${os.numero}? Ela será ocultada da listagem, mas permanecerá no banco para histórico.`
+    );
+
+    if (!confirmado) return;
+
+    try {
+      await excluirOS.mutateAsync(os.id);
+
+      toast({
+        title: "OS excluída com sucesso.",
+        description: `A OS ${os.numero} foi ocultada da listagem.`,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Erro inesperado ao excluir OS.";
+
+      toast({
+        title: "Erro ao excluir OS",
+        description: message,
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="p-6 lg:p-8">
       <PageHeader
@@ -308,6 +338,11 @@ const OrdensServico = () => {
           setSelected(ordem);
           setMode("edit");
           setOpen(true);
+        }}
+        onDelete={(ordem) => {
+          setDetalhesOpen(false);
+          setDetalhesOS(null);
+          handleExcluir(ordem);
         }}
       />
 
@@ -593,6 +628,16 @@ const OrdensServico = () => {
                               >
                                 <PackageCheck className="w-4 h-4 mr-2" />{" "}
                                 Protocolo de Entrega
+                              </DropdownMenuItem>
+
+                              <DropdownMenuSeparator />
+
+                              <DropdownMenuItem
+                                onClick={() => handleExcluir(os)}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Excluir OS
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
