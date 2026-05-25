@@ -206,6 +206,15 @@ export const ordensServicoService = {
       .single();
 
     if (error) {
+      if (
+        error.message.toLowerCase().includes("numero") ||
+        error.message.toLowerCase().includes("not-null")
+      ) {
+        throw new Error(
+          "Erro ao gerar número da OS. Execute a migration 006_fix_numero_os_default.sql no Supabase e tente novamente."
+        );
+      }
+
       throw new Error(error.message);
     }
 
@@ -283,6 +292,44 @@ export const ordensServicoService = {
 
     if (selectError) {
       throw new Error(selectError.message);
+    }
+
+    return data as unknown as OrdemServicoSupabase;
+  },
+
+  async alterarEstado(id: string, estadoOsId: string) {
+    const { data: estado, error: estadoError } = await supabase
+      .from("estados_os")
+      .select("id, nome, finaliza_os, cancela_os")
+      .eq("id", estadoOsId)
+      .single();
+
+    if (estadoError) {
+      throw new Error(estadoError.message);
+    }
+
+    const statusSistema = estado.finaliza_os
+      ? "fechada"
+      : estado.cancela_os
+        ? "cancelada"
+        : "aberta";
+
+    const dataFechamento =
+      estado.finaliza_os || estado.cancela_os ? new Date().toISOString() : null;
+
+    const { data, error } = await supabase
+      .from("ordens_servico")
+      .update({
+        estado_os_id: estadoOsId,
+        status_sistema: statusSistema,
+        data_fechamento: dataFechamento,
+      })
+      .eq("id", id)
+      .select(selectOrdensServico)
+      .single();
+
+    if (error) {
+      throw new Error(error.message);
     }
 
     return data as unknown as OrdemServicoSupabase;
