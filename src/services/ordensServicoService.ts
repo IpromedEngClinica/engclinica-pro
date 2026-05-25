@@ -1,5 +1,14 @@
 import { supabase } from "@/lib/supabaseClient";
 
+export type OrdemServicoAcessorioSupabase = {
+  id: string;
+  ordem_servico_id: string;
+  descricao: string;
+  quantidade: number;
+  observacoes: string | null;
+  created_at: string;
+};
+
 export type OrdemServicoSupabase = {
   id: string;
   organizacao_id: string;
@@ -52,6 +61,7 @@ export type OrdemServicoSupabase = {
     finaliza_os: boolean;
     cancela_os: boolean;
   } | null;
+  acessorios?: OrdemServicoAcessorioSupabase[];
 };
 
 export type OrdemServicoFormInput = {
@@ -65,8 +75,8 @@ export type OrdemServicoFormInput = {
   origemProblema?: string;
   descricaoServico?: string;
   observacoes?: string;
-  prioridade?: string;
   statusSistema?: string;
+  acessorios?: string[];
 };
 
 const selectOrdensServico = `
@@ -120,6 +130,14 @@ const selectOrdensServico = `
     nome,
     finaliza_os,
     cancela_os
+  ),
+  acessorios:ordem_servico_acessorios (
+    id,
+    ordem_servico_id,
+    descricao,
+    quantidade,
+    observacoes,
+    created_at
   )
 `;
 
@@ -134,16 +152,18 @@ const toDatabasePayload = (input: OrdemServicoFormInput) => ({
   origem_problema: input.origemProblema || null,
   descricao_servico: input.descricaoServico || null,
   observacoes: input.observacoes || null,
-  prioridade: input.prioridade || "normal",
   status_sistema: input.statusSistema || "aberta",
 });
 
-const gerarNumeroTemporario = () => {
-  const now = new Date();
-  const ano = now.getFullYear();
-  const timestamp = now.getTime();
-
-  return `OS-${ano}-${timestamp}`;
+const normalizarAcessorios = (acessorios?: string[]) => {
+  return (acessorios || [])
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((descricao) => ({
+      descricao,
+      quantidade: 1,
+      observacoes: null,
+    }));
 };
 
 export const ordensServicoService = {
@@ -174,34 +194,95 @@ export const ordensServicoService = {
       throw new Error("Não foi possível identificar a organização do usuário.");
     }
 
-    const { data, error } = await supabase
+    const { data: osCriada, error } = await supabase
       .from("ordens_servico")
       .insert({
         organizacao_id: organizacaoId,
-        numero: gerarNumeroTemporario(),
         ...toDatabasePayload(input),
+        prioridade: "normal",
         ativo: true,
       })
-      .select(selectOrdensServico)
+      .select("id")
       .single();
 
     if (error) {
       throw new Error(error.message);
     }
 
+    const acessorios = normalizarAcessorios(input.acessorios);
+
+    if (acessorios.length > 0) {
+      const { error: acessoriosError } = await supabase
+        .from("ordem_servico_acessorios")
+        .insert(
+          acessorios.map((acessorio) => ({
+            ordem_servico_id: osCriada.id,
+            ...acessorio,
+          }))
+        );
+
+      if (acessoriosError) {
+        throw new Error(acessoriosError.message);
+      }
+    }
+
+    const { data, error: selectError } = await supabase
+      .from("ordens_servico")
+      .select(selectOrdensServico)
+      .eq("id", osCriada.id)
+      .single();
+
+    if (selectError) {
+      throw new Error(selectError.message);
+    }
+
     return data as unknown as OrdemServicoSupabase;
   },
 
   async atualizar(id: string, input: OrdemServicoFormInput) {
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("ordens_servico")
       .update(toDatabasePayload(input))
-      .eq("id", id)
-      .select(selectOrdensServico)
-      .single();
+      .eq("id", id);
 
     if (error) {
       throw new Error(error.message);
+    }
+
+    const { error: deleteError } = await supabase
+      .from("ordem_servico_acessorios")
+      .delete()
+      .eq("ordem_servico_id", id);
+
+    if (deleteError) {
+      throw new Error(deleteError.message);
+    }
+
+    const acessorios = normalizarAcessorios(input.acessorios);
+
+    if (acessorios.length > 0) {
+      const { error: insertError } = await supabase
+        .from("ordem_servico_acessorios")
+        .insert(
+          acessorios.map((acessorio) => ({
+            ordem_servico_id: id,
+            ...acessorio,
+          }))
+        );
+
+      if (insertError) {
+        throw new Error(insertError.message);
+      }
+    }
+
+    const { data, error: selectError } = await supabase
+      .from("ordens_servico")
+      .select(selectOrdensServico)
+      .eq("id", id)
+      .single();
+
+    if (selectError) {
+      throw new Error(selectError.message);
     }
 
     return data as unknown as OrdemServicoSupabase;

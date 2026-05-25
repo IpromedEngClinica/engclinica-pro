@@ -47,7 +47,6 @@ const emptyForm: OrdemServicoFormInput = {
   origemProblema: "",
   descricaoServico: "",
   observacoes: "",
-  prioridade: "normal",
   statusSistema: "aberta",
 };
 
@@ -165,11 +164,10 @@ const OrdemServicoFormDialog = ({
         origemProblema: os.origem_problema || "",
         descricaoServico: os.descricao_servico || "",
         observacoes: os.observacoes || "",
-        prioridade: os.prioridade || "normal",
         statusSistema: os.status_sistema || "aberta",
       });
 
-      setAcessorios([]);
+      setAcessorios((os.acessorios || []).map((item) => item.descricao));
       setNovoAcessorio("");
       return;
     }
@@ -257,19 +255,6 @@ const OrdemServicoFormDialog = ({
     setAcessorios((prev) => prev.filter((_, idx) => idx !== i));
   };
 
-  const montarObservacoes = () => {
-    const obs = form.observacoes?.trim() || "";
-
-    if (acessorios.length === 0) return obs;
-
-    const acessoriosTexto = [
-      "Acessórios informados:",
-      ...acessorios.map((item) => `- ${item}`),
-    ].join("\n");
-
-    return obs ? `${obs}\n\n${acessoriosTexto}` : acessoriosTexto;
-  };
-
   const handleSave = async () => {
     if (!form.empresaId) {
       toast({
@@ -310,8 +295,9 @@ const OrdemServicoFormDialog = ({
         solicitanteTexto: selectedEmpresaLabel,
         origemProblema: form.origemProblema?.trim(),
         descricaoServico: form.descricaoServico?.trim(),
-        observacoes: montarObservacoes(),
+        observacoes: form.observacoes?.trim(),
         statusSistema: "aberta",
+        acessorios,
       };
 
       if (mode === "edit" && os) {
@@ -362,7 +348,7 @@ const OrdemServicoFormDialog = ({
               Identificação
             </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="space-y-2">
                 <Label className="text-sm">Número</Label>
                 <Input
@@ -385,17 +371,6 @@ const OrdemServicoFormDialog = ({
                     emptyText="Nenhum estado encontrado."
                   />
                 )}
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-sm">Prioridade</Label>
-                <SearchableSelect
-                  value={form.prioridade || "normal"}
-                  onValueChange={(v) => update("prioridade", v)}
-                  options={["baixa", "normal", "alta", "urgente"]}
-                  placeholder="Selecione a prioridade"
-                  emptyText="Nenhuma prioridade encontrada."
-                />
               </div>
             </div>
           </div>
