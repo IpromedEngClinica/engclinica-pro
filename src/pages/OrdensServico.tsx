@@ -25,12 +25,17 @@ import {
 import SearchableSelect from "@/components/SearchableSelect";
 import PageHeader from "@/components/PageHeader";
 import { useMemo, useState } from "react";
-import { useOrdensServico } from "@/hooks/useOrdensServico";
+import {
+  useAlterarEstadoOrdemServico,
+  useOrdensServico,
+} from "@/hooks/useOrdensServico";
+import { useEstadosOS } from "@/hooks/useCamposOS";
 import { OrdemServicoSupabase } from "@/services/ordensServicoService";
 import { toast } from "@/hooks/use-toast";
 import OrdemServicoFormDialog, {
   DialogMode,
 } from "@/components/OrdemServicoFormDialog";
+import OrdemServicoDetalhesDialog from "@/components/OrdemServicoDetalhesDialog";
 
 const ALL = "__all__";
 
@@ -109,12 +114,19 @@ const OrdensServico = () => {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<DialogMode>("create");
   const [selected, setSelected] = useState<OrdemServicoSupabase | null>(null);
+  const [detalhesOpen, setDetalhesOpen] = useState(false);
+  const [detalhesOS, setDetalhesOS] = useState<OrdemServicoSupabase | null>(
+    null
+  );
+  const [editingEstadoId, setEditingEstadoId] = useState<string | null>(null);
 
   const [hideClosed, setHideClosed] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const { data: ordensServico = [], isLoading, isError, error, refetch } =
     useOrdensServico();
+  const { data: estadosOS = [] } = useEstadosOS();
+  const alterarEstadoOS = useAlterarEstadoOrdemServico();
 
   const emptyFilters = {
     estado: ALL,
@@ -138,6 +150,11 @@ const OrdensServico = () => {
       tipoServico: uniq(ordensServico.map((os) => getTipoServico(os))),
     }),
     [ordensServico]
+  );
+
+  const estadoOptions = useMemo(
+    () => estadosOS.map((estado) => estado.nome),
+    [estadosOS]
   );
 
   const matchesText = (val: string, q: string) =>
@@ -199,10 +216,13 @@ const OrdensServico = () => {
     setOpen(true);
   };
 
+  const openDetails = (os: OrdemServicoSupabase) => {
+    setDetalhesOS(os);
+    setDetalhesOpen(true);
+  };
+
   const openView = (os: OrdemServicoSupabase) => {
-    setSelected(os);
-    setMode("view");
-    setOpen(true);
+    openDetails(os);
   };
 
   const openEdit = (os: OrdemServicoSupabase) => {
@@ -216,6 +236,45 @@ const OrdensServico = () => {
       title: label,
       description: "Funcionalidade será migrada para Supabase na próxima etapa.",
     });
+  };
+
+  const handleEstadoChange = async (
+    os: OrdemServicoSupabase,
+    estadoNome: string
+  ) => {
+    const estado = estadosOS.find((item) => item.nome === estadoNome);
+
+    if (!estado) {
+      toast({
+        title: "Estado não encontrado",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await alterarEstadoOS.mutateAsync({
+        id: os.id,
+        estadoOsId: estado.id,
+      });
+
+      toast({
+        title: "Estado da OS atualizado com sucesso!",
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Erro inesperado ao alterar estado.";
+
+      toast({
+        title: "Erro ao alterar estado da OS",
+        description: message,
+        variant: "destructive",
+      });
+    } finally {
+      setEditingEstadoId(null);
+    }
   };
 
   return (
@@ -234,6 +293,22 @@ const OrdensServico = () => {
         onOpenChange={setOpen}
         mode={mode}
         os={selected}
+      />
+
+      <OrdemServicoDetalhesDialog
+        open={detalhesOpen}
+        onOpenChange={(value) => {
+          setDetalhesOpen(value);
+          if (!value) setDetalhesOS(null);
+        }}
+        os={detalhesOS}
+        onEdit={(ordem) => {
+          setDetalhesOpen(false);
+          setDetalhesOS(null);
+          setSelected(ordem);
+          setMode("edit");
+          setOpen(true);
+        }}
       />
 
       <div className="bg-card rounded-xl border mb-4">
@@ -433,13 +508,30 @@ const OrdensServico = () => {
                       </td>
 
                       <td className="px-5 py-3">
-                        <span
-                          className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusColor(
-                            estado
-                          )}`}
-                        >
-                          {estado}
-                        </span>
+                        {editingEstadoId === os.id ? (
+                          <div className="w-56">
+                            <SearchableSelect
+                              value={estado}
+                              onValueChange={(value) =>
+                                handleEstadoChange(os, value)
+                              }
+                              options={estadoOptions}
+                              placeholder="Selecione o estado"
+                              emptyText="Nenhum estado encontrado."
+                            />
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setEditingEstadoId(os.id)}
+                            className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusColor(
+                              estado
+                            )}`}
+                            title="Clique para alterar o estado"
+                          >
+                            {estado}
+                          </button>
+                        )}
                       </td>
 
                       <td className="px-5 py-3 text-muted-foreground">
