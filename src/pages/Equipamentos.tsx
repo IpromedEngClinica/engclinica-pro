@@ -1,4 +1,19 @@
-import { Cpu, Plus, Search, MoreHorizontal, Eye, Pencil, ClipboardList, CalendarCheck, FileWarning, FileBox, SlidersHorizontal, ChevronDown } from "lucide-react";
+import {
+  Cpu,
+  Plus,
+  Search,
+  MoreHorizontal,
+  Eye,
+  Pencil,
+  ClipboardList,
+  CalendarCheck,
+  FileWarning,
+  FileBox,
+  SlidersHorizontal,
+  ChevronDown,
+  AlertCircle,
+  Loader2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -10,16 +25,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import SearchableSelect from "@/components/SearchableSelect";
 import PageHeader from "@/components/PageHeader";
-import EquipamentoFormDialog, { DialogMode } from "@/components/EquipamentoFormDialog";
-import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
-import OrdemServicoFormDialog from "@/components/OrdemServicoFormDialog";
-import OrdemServicoDetalhesDialog from "@/components/OrdemServicoDetalhesDialog";
-import ProtocoloRecolhimentoDialog from "@/components/ProtocoloRecolhimentoDialog";
-import PreventivaChecklistDialog from "@/components/PreventivaChecklistDialog";
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { useData, Equipamento, OrdemServico } from "@/contexts/DataContext";
+import { useMemo, useState } from "react";
+import { useEquipamentos } from "@/hooks/useEquipamentos";
+import { EquipamentoSupabase } from "@/services/equipamentosService";
 import { toast } from "@/hooks/use-toast";
+import EquipamentoFormDialog, {
+  DialogMode,
+} from "@/components/EquipamentoFormDialog";
 
 const statusColor: Record<string, string> = {
   Ativo: "bg-success/10 text-success",
@@ -29,32 +41,33 @@ const statusColor: Record<string, string> = {
 
 const ALL = "__all__";
 
+const getTipoEquipamento = (equipamento: EquipamentoSupabase) => {
+  return (
+    equipamento.tipo_equipamento?.nome ||
+    equipamento.tipo_texto ||
+    "Não informado"
+  );
+};
+
+const getEmpresaNome = (equipamento: EquipamentoSupabase) => {
+  return (
+    equipamento.empresa?.nome_fantasia ||
+    equipamento.empresa?.nome ||
+    "Não informado"
+  );
+};
+
 const Equipamentos = () => {
-  const { equipamentos, ordensServico, getProcedimentoByTipo } = useData();
-  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [mode, setMode] = useState<DialogMode>("create");
-  const [selected, setSelected] = useState<Equipamento | null>(null);
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [selected, setSelected] = useState<EquipamentoSupabase | null>(null);
 
-  const [detalhesOpen, setDetalhesOpen] = useState(false);
-  const [detalhesEq, setDetalhesEq] = useState<Equipamento | null>(null);
+  const { data: equipamentos = [], isLoading, isError, error, refetch } =
+    useEquipamentos();
 
-  const [osOpen, setOsOpen] = useState(false);
-  const [osPreset, setOsPreset] = useState<{ equipamento: Equipamento; tipoServico?: string } | null>(null);
-
-  const [osDetalhesOpen, setOsDetalhesOpen] = useState(false);
-  const [osDetalhesSel, setOsDetalhesSel] = useState<OrdemServico | null>(null);
-
-  const [protocoloOpen, setProtocoloOpen] = useState(false);
-  const [protocoloEq, setProtocoloEq] = useState<Equipamento | null>(null);
-
-  const [preventivaOpen, setPreventivaOpen] = useState(false);
-  const [preventivaEq, setPreventivaEq] = useState<Equipamento | null>(null);
-
-  // Filtros avançados
   const [filtersOpen, setFiltersOpen] = useState(false);
+
   const emptyFilters = {
     estado: ALL,
     proprietario: ALL,
@@ -66,158 +79,119 @@ const Equipamentos = () => {
     patrimonio: "",
     setor: ALL,
   };
+
   const [filters, setFilters] = useState(emptyFilters);
 
-  useEffect(() => {
-    const viewId = searchParams.get("view");
-    if (viewId) {
-      const eq = equipamentos.find((e) => String(e.id) === viewId);
-      if (eq) {
-        setDetalhesEq(eq);
-        setDetalhesOpen(true);
-      }
-      searchParams.delete("view");
-      setSearchParams(searchParams, { replace: true });
-    }
-  }, [searchParams, equipamentos, setSearchParams]);
-
   const uniq = (arr: string[]) =>
-    Array.from(new Set(arr.filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt-BR"));
+    Array.from(new Set(arr.filter(Boolean))).sort((a, b) =>
+      a.localeCompare(b, "pt-BR")
+    );
 
   const opts = useMemo(
     () => ({
       estado: uniq(equipamentos.map((e) => e.status)),
-      proprietario: uniq(equipamentos.map((e) => e.empresa)),
-      tipo: uniq(equipamentos.map((e) => e.tipo)),
-      fabricante: uniq(equipamentos.map((e) => e.fabricante)),
-      setor: uniq(equipamentos.map((e) => e.setor)),
+      proprietario: uniq(equipamentos.map((e) => getEmpresaNome(e))),
+      tipo: uniq(equipamentos.map((e) => getTipoEquipamento(e))),
+      fabricante: uniq(equipamentos.map((e) => e.fabricante || "")),
+      setor: uniq(equipamentos.map((e) => e.setor || "")),
     }),
     [equipamentos]
   );
 
-  const matchesText = (val: string, q: string) =>
-    !q.trim() || val.toLowerCase().includes(q.trim().toLowerCase());
+  const matchesText = (val: string | null, q: string) =>
+    !q.trim() || (val || "").toLowerCase().includes(q.trim().toLowerCase());
 
-  const filtered = equipamentos.filter((e) => {
+  const filtered = useMemo(() => {
     const s = search.toLowerCase();
-    const matchesGeneral =
-      !s ||
-      e.tipo.toLowerCase().includes(s) ||
-      e.empresa.toLowerCase().includes(s) ||
-      e.fabricante.toLowerCase().includes(s) ||
-      e.tag.toLowerCase().includes(s) ||
-      e.serie.toLowerCase().includes(s);
 
-    return (
-      matchesGeneral &&
-      (filters.estado === ALL || e.status === filters.estado) &&
-      (filters.proprietario === ALL || e.empresa === filters.proprietario) &&
-      (filters.tipo === ALL || e.tipo === filters.tipo) &&
-      (filters.fabricante === ALL || e.fabricante === filters.fabricante) &&
-      (filters.setor === ALL || e.setor === filters.setor) &&
-      matchesText(e.modelo, filters.modelo) &&
-      matchesText(e.tag, filters.tag) &&
-      matchesText(e.serie, filters.serie) &&
-      matchesText(e.patrimonio, filters.patrimonio)
-    );
-  });
+    return equipamentos.filter((e) => {
+      const tipo = getTipoEquipamento(e);
+      const empresa = getEmpresaNome(e);
+
+      const matchesGeneral =
+        !s ||
+        tipo.toLowerCase().includes(s) ||
+        empresa.toLowerCase().includes(s) ||
+        (e.fabricante || "").toLowerCase().includes(s) ||
+        (e.tag || "").toLowerCase().includes(s) ||
+        (e.numero_serie || "").toLowerCase().includes(s) ||
+        (e.patrimonio || "").toLowerCase().includes(s) ||
+        (e.modelo || "").toLowerCase().includes(s);
+
+      return (
+        matchesGeneral &&
+        (filters.estado === ALL || e.status === filters.estado) &&
+        (filters.proprietario === ALL || empresa === filters.proprietario) &&
+        (filters.tipo === ALL || tipo === filters.tipo) &&
+        (filters.fabricante === ALL || e.fabricante === filters.fabricante) &&
+        (filters.setor === ALL || e.setor === filters.setor) &&
+        matchesText(e.modelo, filters.modelo) &&
+        matchesText(e.tag, filters.tag) &&
+        matchesText(e.numero_serie, filters.serie) &&
+        matchesText(e.patrimonio, filters.patrimonio)
+      );
+    });
+  }, [equipamentos, filters, search]);
 
   const activeFiltersCount = useMemo(() => {
     let n = 0;
+
     if (filters.estado !== ALL) n++;
     if (filters.proprietario !== ALL) n++;
     if (filters.tipo !== ALL) n++;
     if (filters.fabricante !== ALL) n++;
     if (filters.setor !== ALL) n++;
+
     (["modelo", "tag", "serie", "patrimonio"] as const).forEach((k) => {
       if (filters[k].trim()) n++;
     });
+
     return n;
   }, [filters]);
 
-  const openCreate = () => { setSelected(null); setMode("create"); setDialogOpen(true); };
-  const openView = (e: Equipamento) => { setDetalhesEq(e); setDetalhesOpen(true); };
-  const openEdit = (e: Equipamento) => { setSelected(e); setMode("edit"); setDialogOpen(true); };
-
-  const openCriarOS = (e: Equipamento, tipoServico?: string) => {
-    setOsPreset({ equipamento: e, tipoServico });
-    setOsOpen(true);
+  const openCreate = () => {
+    setSelected(null);
+    setMode("create");
+    setDialogOpen(true);
   };
 
-  const openProtocolo = (e: Equipamento) => {
-    setProtocoloEq(e);
-    setProtocoloOpen(true);
+  const openView = (equipamento: EquipamentoSupabase) => {
+    setSelected(equipamento);
+    setMode("view");
+    setDialogOpen(true);
   };
 
-  const openPreventiva = (e: Equipamento) => {
-    const proc = getProcedimentoByTipo(e.tipo);
-    if (!proc) {
-      toast({
-        title: "Procedimento não cadastrado",
-        description: `Não há procedimento de preventiva para "${e.tipo}". Você será direcionado para cadastrá-lo.`,
-        variant: "destructive",
-      });
-      navigate(`/procedimentos?novo=${encodeURIComponent(e.tipo)}`);
-      return;
-    }
-    setPreventivaEq(e);
-    setPreventivaOpen(true);
+  const openEdit = (equipamento: EquipamentoSupabase) => {
+    setSelected(equipamento);
+    setMode("edit");
+    setDialogOpen(true);
   };
 
-  const openOSById = (id: number) => {
-    const os = ordensServico.find((o) => o.id === id);
-    if (os) {
-      setDetalhesOpen(false);
-      setOsDetalhesSel(os);
-      setOsDetalhesOpen(true);
-    }
+  const featurePending = (label: string) => {
+    toast({
+      title: label,
+      description: "Funcionalidade será migrada para Supabase na próxima etapa.",
+    });
   };
-
-  const futuro = (label: string) =>
-    toast({ title: `${label}`, description: "Funcionalidade em desenvolvimento." });
 
   return (
     <div className="p-6 lg:p-8">
-      <PageHeader title="Equipamentos" description="Gerencie os equipamentos cadastrados">
+      <PageHeader
+        title="Equipamentos"
+        description="Gerencie os equipamentos cadastrados no Supabase"
+      >
         <Button onClick={openCreate}>
           <Plus className="w-4 h-4 mr-2" /> Novo Equipamento
         </Button>
       </PageHeader>
 
-      <EquipamentoFormDialog open={dialogOpen} onOpenChange={setDialogOpen} mode={mode} equipamento={selected} />
-      <EquipamentoDetalhesDialog
-        open={detalhesOpen}
-        onOpenChange={(v) => { setDetalhesOpen(v); if (!v) setDetalhesEq(null); }}
-        equipamento={detalhesEq}
-        onSelectOS={openOSById}
-        onEdit={(e) => { setDetalhesOpen(false); openEdit(e); }}
-        onCriarOS={(e, tipo) => { setDetalhesOpen(false); openCriarOS(e, tipo); }}
-        onCriarProtocolo={(e) => { setDetalhesOpen(false); openProtocolo(e); }}
-      />
-      <OrdemServicoFormDialog
-        open={osOpen}
-        onOpenChange={(v) => { setOsOpen(v); if (!v) setOsPreset(null); }}
-        mode="create"
-        fromEquipamento={osPreset ? { id: osPreset.equipamento.id, empresa: osPreset.equipamento.empresa } : null}
-        initialTipoServico={osPreset?.tipoServico || ""}
-      />
-      <OrdemServicoDetalhesDialog
-        open={osDetalhesOpen}
-        onOpenChange={(v) => { setOsDetalhesOpen(v); if (!v) setOsDetalhesSel(null); }}
-        os={osDetalhesSel}
-      />
-      <ProtocoloRecolhimentoDialog
-        open={protocoloOpen}
-        onOpenChange={(v) => { setProtocoloOpen(v); if (!v) setProtocoloEq(null); }}
-        equipamento={protocoloEq}
-      />
-      <PreventivaChecklistDialog
-        open={preventivaOpen}
-        onOpenChange={(v) => { setPreventivaOpen(v); if (!v) setPreventivaEq(null); }}
-        equipamento={preventivaEq}
+      <EquipamentoFormDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        mode={mode}
+        equipamento={selected}
       />
 
-      {/* Filtros avançados */}
       <div className="bg-card rounded-xl border mb-4">
         <button
           type="button"
@@ -233,7 +207,11 @@ const Equipamentos = () => {
               </span>
             )}
           </div>
-          <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${filtersOpen ? "rotate-180" : ""}`} />
+          <ChevronDown
+            className={`w-4 h-4 text-muted-foreground transition-transform ${
+              filtersOpen ? "rotate-180" : ""
+            }`}
+          />
         </button>
 
         {filtersOpen && (
@@ -241,62 +219,93 @@ const Equipamentos = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               <SearchableSelect
                 value={filters.estado === ALL ? "" : filters.estado}
-                onValueChange={(v) => setFilters((f) => ({ ...f, estado: v || ALL }))}
+                onValueChange={(v) =>
+                  setFilters((f) => ({ ...f, estado: v || ALL }))
+                }
                 options={opts.estado}
                 placeholder="Estado (todos)"
                 emptyText="Nenhum estado encontrado."
               />
+
               <SearchableSelect
                 value={filters.proprietario === ALL ? "" : filters.proprietario}
-                onValueChange={(v) => setFilters((f) => ({ ...f, proprietario: v || ALL }))}
+                onValueChange={(v) =>
+                  setFilters((f) => ({ ...f, proprietario: v || ALL }))
+                }
                 options={opts.proprietario}
                 placeholder="Proprietário (todos)"
                 emptyText="Nenhum proprietário encontrado."
               />
+
               <SearchableSelect
                 value={filters.tipo === ALL ? "" : filters.tipo}
-                onValueChange={(v) => setFilters((f) => ({ ...f, tipo: v || ALL }))}
+                onValueChange={(v) =>
+                  setFilters((f) => ({ ...f, tipo: v || ALL }))
+                }
                 options={opts.tipo}
                 placeholder="Tipo (todos)"
                 emptyText="Nenhum tipo encontrado."
               />
+
               <SearchableSelect
                 value={filters.fabricante === ALL ? "" : filters.fabricante}
-                onValueChange={(v) => setFilters((f) => ({ ...f, fabricante: v || ALL }))}
+                onValueChange={(v) =>
+                  setFilters((f) => ({ ...f, fabricante: v || ALL }))
+                }
                 options={opts.fabricante}
                 placeholder="Fabricante (todos)"
                 emptyText="Nenhum fabricante encontrado."
               />
+
               <SearchableSelect
                 value={filters.setor === ALL ? "" : filters.setor}
-                onValueChange={(v) => setFilters((f) => ({ ...f, setor: v || ALL }))}
+                onValueChange={(v) =>
+                  setFilters((f) => ({ ...f, setor: v || ALL }))
+                }
                 options={opts.setor}
                 placeholder="Setor (todos)"
                 emptyText="Nenhum setor encontrado."
               />
+
               <Input
                 placeholder="Identificação (TAG)"
                 value={filters.tag}
-                onChange={(e) => setFilters((f) => ({ ...f, tag: e.target.value }))}
+                onChange={(e) =>
+                  setFilters((f) => ({ ...f, tag: e.target.value }))
+                }
               />
+
               <Input
                 placeholder="Modelo"
                 value={filters.modelo}
-                onChange={(e) => setFilters((f) => ({ ...f, modelo: e.target.value }))}
+                onChange={(e) =>
+                  setFilters((f) => ({ ...f, modelo: e.target.value }))
+                }
               />
+
               <Input
                 placeholder="Número de Série"
                 value={filters.serie}
-                onChange={(e) => setFilters((f) => ({ ...f, serie: e.target.value }))}
+                onChange={(e) =>
+                  setFilters((f) => ({ ...f, serie: e.target.value }))
+                }
               />
+
               <Input
                 placeholder="Patrimônio"
                 value={filters.patrimonio}
-                onChange={(e) => setFilters((f) => ({ ...f, patrimonio: e.target.value }))}
+                onChange={(e) =>
+                  setFilters((f) => ({ ...f, patrimonio: e.target.value }))
+                }
               />
             </div>
+
             <div className="flex justify-end">
-              <Button variant="outline" size="sm" onClick={() => setFilters(emptyFilters)}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setFilters(emptyFilters)}
+              >
                 Limpar filtros
               </Button>
             </div>
@@ -305,96 +314,218 @@ const Equipamentos = () => {
       </div>
 
       <div className="bg-card rounded-xl border">
-        <div className="px-5 py-4 border-b flex gap-3">
+        <div className="px-5 py-4 border-b flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input placeholder="Buscar equipamento, empresa, TAG..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Input
+              placeholder="Buscar equipamento, empresa, TAG..."
+              className="pl-9"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
+
+          <Button variant="outline" size="sm" onClick={() => refetch()}>
+            Atualizar
+          </Button>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-muted/50">
-                <th className="text-left px-5 py-3 font-medium text-muted-foreground">Tipo</th>
-                <th className="text-left px-5 py-3 font-medium text-muted-foreground">Estado</th>
-                <th className="text-left px-5 py-3 font-medium text-muted-foreground">Proprietário</th>
-                <th className="text-left px-5 py-3 font-medium text-muted-foreground">Modelo</th>
-                <th className="text-left px-5 py-3 font-medium text-muted-foreground">Fabricante</th>
-                <th className="text-left px-5 py-3 font-medium text-muted-foreground">TAG</th>
-                <th className="text-left px-5 py-3 font-medium text-muted-foreground">Nº Série</th>
-                <th className="text-left px-5 py-3 font-medium text-muted-foreground">Patrimônio</th>
-                <th className="text-left px-5 py-3 font-medium text-muted-foreground">Setor</th>
-                <th className="text-right px-5 py-3 font-medium text-muted-foreground">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((e) => (
-                <tr key={e.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                  <td className="px-5 py-3 font-medium text-foreground">
-                    <button
-                      type="button"
-                      onClick={() => openView(e)}
-                      className="text-primary hover:underline flex items-center gap-2"
+
+        {isLoading && (
+          <div className="px-5 py-10 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Carregando equipamentos...
+          </div>
+        )}
+
+        {isError && (
+          <div className="px-5 py-8">
+            <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 flex gap-3">
+              <AlertCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium text-destructive">
+                  Erro ao carregar equipamentos
+                </p>
+                <p className="text-sm text-destructive/80 mt-1">
+                  {error instanceof Error ? error.message : "Erro desconhecido."}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!isLoading && !isError && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  <th className="text-left px-5 py-3 font-medium text-muted-foreground">
+                    Tipo
+                  </th>
+                  <th className="text-left px-5 py-3 font-medium text-muted-foreground">
+                    Estado
+                  </th>
+                  <th className="text-left px-5 py-3 font-medium text-muted-foreground">
+                    Proprietário
+                  </th>
+                  <th className="text-left px-5 py-3 font-medium text-muted-foreground">
+                    Modelo
+                  </th>
+                  <th className="text-left px-5 py-3 font-medium text-muted-foreground">
+                    Fabricante
+                  </th>
+                  <th className="text-left px-5 py-3 font-medium text-muted-foreground">
+                    TAG
+                  </th>
+                  <th className="text-left px-5 py-3 font-medium text-muted-foreground">
+                    Nº Série
+                  </th>
+                  <th className="text-left px-5 py-3 font-medium text-muted-foreground">
+                    Patrimônio
+                  </th>
+                  <th className="text-left px-5 py-3 font-medium text-muted-foreground">
+                    Setor
+                  </th>
+                  <th className="text-right px-5 py-3 font-medium text-muted-foreground">
+                    Ações
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {filtered.map((e) => {
+                  const tipo = getTipoEquipamento(e);
+                  const empresa = getEmpresaNome(e);
+
+                  return (
+                    <tr
+                      key={e.id}
+                      className="border-b last:border-0 hover:bg-muted/30 transition-colors"
                     >
-                      <Cpu className="w-4 h-4" /> {e.tipo}
-                    </button>
-                  </td>
-                  <td className="px-5 py-3">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusColor[e.status]}`}>{e.status}</span>
-                  </td>
-                  <td className="px-5 py-3 text-muted-foreground">{e.empresa}</td>
-                  <td className="px-5 py-3 text-muted-foreground">{e.modelo}</td>
-                  <td className="px-5 py-3 text-muted-foreground">{e.fabricante}</td>
-                  <td className="px-5 py-3 text-muted-foreground">{e.tag}</td>
-                  <td className="px-5 py-3 text-muted-foreground">{e.serie}</td>
-                  <td className="px-5 py-3 text-muted-foreground">{e.patrimonio}</td>
-                  <td className="px-5 py-3 text-muted-foreground">{e.setor}</td>
-                  <td className="px-5 py-3">
-                    <div className="flex justify-end">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" title="Ações">
-                            <MoreHorizontal className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-56 bg-popover">
-                          <DropdownMenuItem onClick={() => openView(e)}>
-                            <Eye className="w-4 h-4 mr-2" /> Visualizar
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => openEdit(e)}>
-                            <Pencil className="w-4 h-4 mr-2" /> Editar
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => openCriarOS(e)}>
-                            <ClipboardList className="w-4 h-4 mr-2" /> Criar Ordem de Serviço
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => openProtocolo(e)}>
-                            <FileBox className="w-4 h-4 mr-2" /> Criar Protocolo de Recolhimento
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => openPreventiva(e)}>
-                            <CalendarCheck className="w-4 h-4 mr-2" /> Criar Preventiva
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => openCriarOS(e, "Laudo De Obsolescência")}
-                          >
-                            <FileWarning className="w-4 h-4 mr-2" /> Criar Laudo de Obsolescência
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={10} className="px-5 py-8 text-center text-sm text-muted-foreground">
-                    Nenhum equipamento encontrado com os filtros aplicados.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                      <td className="px-5 py-3 font-medium text-foreground">
+                        <button
+                          type="button"
+                          onClick={() => openView(e)}
+                          className="text-primary hover:underline flex items-center gap-2"
+                        >
+                          <Cpu className="w-4 h-4" /> {tipo}
+                        </button>
+                      </td>
+
+                      <td className="px-5 py-3">
+                        <span
+                          className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                            statusColor[e.status] ||
+                            "bg-muted text-muted-foreground"
+                          }`}
+                        >
+                          {e.status}
+                        </span>
+                      </td>
+
+                      <td className="px-5 py-3 text-muted-foreground">
+                        {empresa}
+                      </td>
+                      <td className="px-5 py-3 text-muted-foreground">
+                        {e.modelo || "—"}
+                      </td>
+                      <td className="px-5 py-3 text-muted-foreground">
+                        {e.fabricante || "—"}
+                      </td>
+                      <td className="px-5 py-3 text-muted-foreground">
+                        {e.tag || "—"}
+                      </td>
+                      <td className="px-5 py-3 text-muted-foreground">
+                        {e.numero_serie || "—"}
+                      </td>
+                      <td className="px-5 py-3 text-muted-foreground">
+                        {e.patrimonio || "—"}
+                      </td>
+                      <td className="px-5 py-3 text-muted-foreground">
+                        {e.setor || "—"}
+                      </td>
+
+                      <td className="px-5 py-3">
+                        <div className="flex justify-end">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" title="Ações">
+                                <MoreHorizontal className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+
+                            <DropdownMenuContent
+                              align="end"
+                              className="w-56 bg-popover"
+                            >
+                              <DropdownMenuItem onClick={() => openView(e)}>
+                                <Eye className="w-4 h-4 mr-2" /> Visualizar
+                              </DropdownMenuItem>
+
+                              <DropdownMenuItem onClick={() => openEdit(e)}>
+                                <Pencil className="w-4 h-4 mr-2" /> Editar
+                              </DropdownMenuItem>
+
+                              <DropdownMenuSeparator />
+
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  featurePending("Criação de ordem de serviço")
+                                }
+                              >
+                                <ClipboardList className="w-4 h-4 mr-2" /> Criar
+                                Ordem de Serviço
+                              </DropdownMenuItem>
+
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  featurePending(
+                                    "Criação de protocolo de recolhimento"
+                                  )
+                                }
+                              >
+                                <FileBox className="w-4 h-4 mr-2" /> Criar
+                                Protocolo de Recolhimento
+                              </DropdownMenuItem>
+
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  featurePending("Criação de preventiva")
+                                }
+                              >
+                                <CalendarCheck className="w-4 h-4 mr-2" /> Criar
+                                Preventiva
+                              </DropdownMenuItem>
+
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  featurePending("Criação de laudo de obsolescência")
+                                }
+                              >
+                                <FileWarning className="w-4 h-4 mr-2" /> Criar
+                                Laudo de Obsolescência
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+
+                {filtered.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={10}
+                      className="px-5 py-8 text-center text-sm text-muted-foreground"
+                    >
+                      Nenhum equipamento encontrado com os filtros aplicados.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
