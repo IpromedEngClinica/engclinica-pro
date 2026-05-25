@@ -123,6 +123,8 @@ const OrdemServicoFormDialog = ({
 
   const readOnly = mode === "view";
   const saving = criarOS.isPending || atualizarOS.isPending;
+  const fromEquipamentoId = fromEquipamento?.id || "";
+  const fromEquipamentoEmpresaId = fromEquipamento?.empresaId || "";
 
   const empresaOptions = useMemo(
     () => empresas.map((empresa) => getEmpresaLabel(empresa)),
@@ -198,17 +200,17 @@ const OrdemServicoFormDialog = ({
       ? tiposOS.find((tipo) => tipo.nome === initialTipoServico)
       : null;
 
-    const equipamentoInicial = fromEquipamento?.id
-      ? equipamentos.find((equipamento) => equipamento.id === fromEquipamento.id)
+    const equipamentoInicial = fromEquipamentoId
+      ? equipamentos.find((equipamento) => equipamento.id === fromEquipamentoId)
       : null;
 
     setForm({
       ...emptyForm,
       empresaId:
         equipamentoInicial?.empresa_id ||
-        fromEquipamento?.empresaId ||
+        fromEquipamentoEmpresaId ||
         "",
-      equipamentoId: equipamentoInicial?.id || fromEquipamento?.id || "",
+      equipamentoId: equipamentoInicial?.id || fromEquipamentoId || "",
       tipoOsId: tipoInicial?.id || "",
       estadoOsId: estadoAberta?.id || "",
       solicitanteTexto: "",
@@ -224,7 +226,8 @@ const OrdemServicoFormDialog = ({
     estadosOS,
     tiposOS,
     equipamentos,
-    fromEquipamento,
+    fromEquipamentoEmpresaId,
+    fromEquipamentoId,
     initialTipoServico,
   ]);
 

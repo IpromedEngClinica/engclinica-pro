@@ -8,7 +8,7 @@ import {
   ClipboardList,
   CalendarCheck,
   FileWarning,
-  FileBox,
+  PackageCheck,
   SlidersHorizontal,
   ChevronDown,
   AlertCircle,
@@ -32,6 +32,10 @@ import { toast } from "@/hooks/use-toast";
 import EquipamentoFormDialog, {
   DialogMode,
 } from "@/components/EquipamentoFormDialog";
+import ProtocoloRecolhimentoDialog from "@/components/ProtocoloRecolhimentoDialog";
+import OrdemServicoFormDialog, {
+  DialogMode as OrdemServicoDialogMode,
+} from "@/components/OrdemServicoFormDialog";
 
 const statusColor: Record<string, string> = {
   Ativo: "bg-success/10 text-success",
@@ -62,6 +66,13 @@ const Equipamentos = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [mode, setMode] = useState<DialogMode>("create");
   const [selected, setSelected] = useState<EquipamentoSupabase | null>(null);
+  const [recolhimentoOpen, setRecolhimentoOpen] = useState(false);
+  const [equipamentoRecolhimento, setEquipamentoRecolhimento] =
+    useState<EquipamentoSupabase | null>(null);
+  const [osOpen, setOsOpen] = useState(false);
+  const [osMode, setOsMode] = useState<OrdemServicoDialogMode>("create");
+  const [equipamentoParaOS, setEquipamentoParaOS] =
+    useState<EquipamentoSupabase | null>(null);
 
   const { data: equipamentos = [], isLoading, isError, error, refetch } =
     useEquipamentos();
@@ -167,6 +178,17 @@ const Equipamentos = () => {
     setDialogOpen(true);
   };
 
+  const openRecolhimento = (equipamento: EquipamentoSupabase) => {
+    setEquipamentoRecolhimento(equipamento);
+    setRecolhimentoOpen(true);
+  };
+
+  const openCriarOS = (equipamento: EquipamentoSupabase) => {
+    setEquipamentoParaOS(equipamento);
+    setOsMode("create");
+    setOsOpen(true);
+  };
+
   const featurePending = (label: string) => {
     toast({
       title: label,
@@ -190,6 +212,32 @@ const Equipamentos = () => {
         onOpenChange={setDialogOpen}
         mode={mode}
         equipamento={selected}
+      />
+
+      <ProtocoloRecolhimentoDialog
+        open={recolhimentoOpen}
+        onOpenChange={(value) => {
+          setRecolhimentoOpen(value);
+          if (!value) setEquipamentoRecolhimento(null);
+        }}
+        equipamento={equipamentoRecolhimento}
+      />
+
+      <OrdemServicoFormDialog
+        open={osOpen}
+        onOpenChange={(value) => {
+          setOsOpen(value);
+          if (!value) setEquipamentoParaOS(null);
+        }}
+        mode={osMode}
+        fromEquipamento={
+          equipamentoParaOS
+            ? {
+                id: equipamentoParaOS.id,
+                empresaId: equipamentoParaOS.empresa_id,
+              }
+            : null
+        }
       />
 
       <div className="bg-card rounded-xl border mb-4">
@@ -467,23 +515,15 @@ const Equipamentos = () => {
 
                               <DropdownMenuSeparator />
 
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  featurePending("Criação de ordem de serviço")
-                                }
-                              >
+                              <DropdownMenuItem onClick={() => openCriarOS(e)}>
                                 <ClipboardList className="w-4 h-4 mr-2" /> Criar
                                 Ordem de Serviço
                               </DropdownMenuItem>
 
                               <DropdownMenuItem
-                                onClick={() =>
-                                  featurePending(
-                                    "Criação de protocolo de recolhimento"
-                                  )
-                                }
+                                onClick={() => openRecolhimento(e)}
                               >
-                                <FileBox className="w-4 h-4 mr-2" /> Criar
+                                <PackageCheck className="w-4 h-4 mr-2" /> Criar
                                 Protocolo de Recolhimento
                               </DropdownMenuItem>
 
