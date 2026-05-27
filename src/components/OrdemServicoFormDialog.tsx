@@ -24,6 +24,7 @@ import {
 import { useEmpresas } from "@/hooks/useEmpresas";
 import { useEquipamentos } from "@/hooks/useEquipamentos";
 import { useEstadosOS, useTiposOS } from "@/hooks/useCamposOS";
+import PreventivaChecklistEditDialog from "@/components/PreventivaChecklistEditDialog";
 
 export type DialogMode = "create" | "edit" | "view";
 
@@ -88,17 +89,37 @@ const getEquipamentoLabel = (equipamento: {
 const normalizarChaveAcessorio = (descricao: string) =>
   descricao.trim().toLowerCase().replace(/\s+/g, " ");
 
-const normalizarAcessoriosFormulario = (
-  acessorios: OrdemServicoSupabase["acessorios"]
+type AcessorioFormItem = {
+  descricao: string;
+  quantidade: number;
+  observacoes: string;
+};
+
+const dedupeAcessoriosForm = (
+  acessorios?: Array<{
+    descricao?: string | null;
+    quantidade?: number | null;
+    observacoes?: string | null;
+  }>
 ) => {
-  return Array.from(
-    new Map(
-      (acessorios || [])
-        .map((item) => item.descricao?.trim())
-        .filter((descricao): descricao is string => Boolean(descricao))
-        .map((descricao) => [normalizarChaveAcessorio(descricao), descricao])
-    ).values()
-  );
+  const map = new Map<string, AcessorioFormItem>();
+
+  (acessorios || []).forEach((item) => {
+    const descricao = item.descricao?.trim();
+    if (!descricao) return;
+
+    const chave = normalizarChaveAcessorio(descricao);
+
+    if (!map.has(chave)) {
+      map.set(chave, {
+        descricao,
+        quantidade: Number(item.quantidade || 1),
+        observacoes: item.observacoes || "",
+      });
+    }
+  });
+
+  return Array.from(map.values());
 };
 
 const OrdemServicoFormDialog = ({
@@ -118,13 +139,19 @@ const OrdemServicoFormDialog = ({
   const { data: estadosOS = [] } = useEstadosOS();
 
   const [form, setForm] = useState<OrdemServicoFormInput>(emptyForm);
-  const [acessorios, setAcessorios] = useState<string[]>([]);
+  const [acessorios, setAcessorios] = useState<AcessorioFormItem[]>([]);
   const [novoAcessorio, setNovoAcessorio] = useState("");
+  const [checklistEditOpen, setChecklistEditOpen] = useState(false);
 
   const readOnly = mode === "view";
   const saving = criarOS.isPending || atualizarOS.isPending;
   const fromEquipamentoId = fromEquipamento?.id || "";
   const fromEquipamentoEmpresaId = fromEquipamento?.empresaId || "";
+  const hasChecklistPreventiva = Boolean(
+    Array.isArray(os?.checklist_preventiva)
+      ? os?.checklist_preventiva?.length
+      : os?.checklist_preventiva
+  );
 
   const empresaOptions = useMemo(
     () => empresas.map((empresa) => getEmpresaLabel(empresa)),
@@ -169,6 +196,15 @@ const OrdemServicoFormDialog = ({
   }, [estadosOS, form.estadoOsId]);
 
   useEffect(() => {
+    if (open) return;
+
+    setForm(emptyForm);
+    setAcessorios([]);
+    setNovoAcessorio("");
+    setChecklistEditOpen(false);
+  }, [open]);
+
+  useEffect(() => {
     if (!open) return;
 
     if (os && (mode === "edit" || mode === "view")) {
@@ -187,7 +223,7 @@ const OrdemServicoFormDialog = ({
         statusSistema: os.status_sistema || "aberta",
       });
 
-      setAcessorios(normalizarAcessoriosFormulario(os.acessorios));
+      setAcessorios(dedupeAcessoriosForm(os.acessorios));
       setNovoAcessorio("");
       return;
     }
@@ -270,7 +306,7 @@ const OrdemServicoFormDialog = ({
 
     const chaveNova = normalizarChaveAcessorio(v);
     const jaExiste = acessorios.some(
-      (item) => normalizarChaveAcessorio(item) === chaveNova
+      (item) => normalizarChaveAcessorio(item.descricao) === chaveNova
     );
 
     if (jaExiste) {
@@ -281,7 +317,10 @@ const OrdemServicoFormDialog = ({
       return;
     }
 
-    setAcessorios((prev) => [...prev, v]);
+    setAcessorios((prev) => [
+      ...prev,
+      { descricao: v, quantidade: 1, observacoes: "" },
+    ]);
     setNovoAcessorio("");
   };
 
@@ -332,7 +371,7 @@ const OrdemServicoFormDialog = ({
         descricaoServico: form.descricaoServico?.trim(),
         observacoes: form.observacoes?.trim(),
         statusSistema: "aberta",
-        acessorios,
+        acessorios: dedupeAcessoriosForm(acessorios),
       };
 
       if (mode === "edit" && os) {
@@ -371,6 +410,7 @@ const OrdemServicoFormDialog = ({
         : "Nova Ordem de Serviço";
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0">
         <DialogHeader className="px-6 pt-6">
@@ -549,10 +589,15 @@ const OrdemServicoFormDialog = ({
               <ul className="divide-y rounded-md border">
                 {acessorios.map((a, i) => (
                   <li
-                    key={`${a}-${i}`}
-                    className="flex items-center justify-between px-3 py-2"
+                    key={`${a.descricao}-${i}`}
+                    className="flex items-center justify-between gap-3 px-3 py-2"
                   >
-                    <span className="text-sm">{a}</span>
+                    <span className="min-w-0 text-sm">
+                      <span className="font-medium">{a.descricao}</span>
+                      <span className="ml-2 text-muted-foreground">
+                        Qtd. {a.quantidade}
+                      </span>
+                    </span>
 
                     {!readOnly && (
                       <Button
@@ -591,6 +636,17 @@ const OrdemServicoFormDialog = ({
         </div>
 
         <DialogFooter className="px-6 pb-6 pt-2 border-t">
+          {mode === "edit" && hasChecklistPreventiva && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setChecklistEditOpen(true)}
+              disabled={saving}
+            >
+              Editar checklist
+            </Button>
+          )}
+
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
@@ -607,6 +663,12 @@ const OrdemServicoFormDialog = ({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <PreventivaChecklistEditDialog
+      open={checklistEditOpen}
+      onOpenChange={setChecklistEditOpen}
+      ordemServico={os}
+    />
+    </>
   );
 };
 

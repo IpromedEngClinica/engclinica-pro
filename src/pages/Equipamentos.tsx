@@ -26,13 +26,20 @@ import {
 import SearchableSelect from "@/components/SearchableSelect";
 import PageHeader from "@/components/PageHeader";
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useEquipamentos } from "@/hooks/useEquipamentos";
 import { EquipamentoSupabase } from "@/services/equipamentosService";
+import type { EmpresaSupabase } from "@/services/empresasService";
 import { toast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import EquipamentoFormDialog, {
   DialogMode,
 } from "@/components/EquipamentoFormDialog";
+import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
 import ProtocoloRecolhimentoDialog from "@/components/ProtocoloRecolhimentoDialog";
+import PreventivaChecklistDialog from "@/components/PreventivaChecklistDialog";
+import { procedimentosPreventivaService } from "@/services/procedimentosPreventivaService";
+import type { ProcedimentoPreventiva } from "@/services/procedimentosPreventivaService";
 import OrdemServicoFormDialog, {
   DialogMode as OrdemServicoDialogMode,
 } from "@/components/OrdemServicoFormDialog";
@@ -62,6 +69,7 @@ const getEmpresaNome = (equipamento: EquipamentoSupabase) => {
 };
 
 const Equipamentos = () => {
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [mode, setMode] = useState<DialogMode>("create");
@@ -73,6 +81,14 @@ const Equipamentos = () => {
   const [osMode, setOsMode] = useState<OrdemServicoDialogMode>("create");
   const [equipamentoParaOS, setEquipamentoParaOS] =
     useState<EquipamentoSupabase | null>(null);
+  const [empresaDetalhesOpen, setEmpresaDetalhesOpen] = useState(false);
+  const [empresaSelecionada, setEmpresaSelecionada] =
+    useState<EmpresaSupabase | null>(null);
+  const [preventivaOpen, setPreventivaOpen] = useState(false);
+  const [equipamentoPreventiva, setEquipamentoPreventiva] =
+    useState<EquipamentoSupabase | null>(null);
+  const [procedimentoPreventiva, setProcedimentoPreventiva] =
+    useState<ProcedimentoPreventiva | null>(null);
 
   const { data: equipamentos = [], isLoading, isError, error, refetch } =
     useEquipamentos();
@@ -189,6 +205,65 @@ const Equipamentos = () => {
     setOsOpen(true);
   };
 
+  const openCriarPreventiva = async (equipamento: EquipamentoSupabase) => {
+    if (!equipamento.tipo_equipamento_id) {
+      toast({
+        title: "Tipo de equipamento nao informado.",
+        description:
+          "Cadastre o tipo de equipamento antes de criar a preventiva.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const procedimento =
+        await procedimentosPreventivaService.buscarAtivoPorTipoEquipamento(
+          equipamento.tipo_equipamento_id
+        );
+
+      if (!procedimento) {
+        toast({
+          title: "Nenhum procedimento preventivo cadastrado.",
+          description:
+            "Cadastre um procedimento para este tipo de equipamento.",
+          action: (
+            <ToastAction
+              altText="Cadastrar procedimento"
+              onClick={() =>
+                navigate(
+                  `/procedimentos?tipoEquipamentoId=${equipamento.tipo_equipamento_id}`
+                )
+              }
+            >
+              Cadastrar
+            </ToastAction>
+          ),
+        });
+        return;
+      }
+
+      setEquipamentoPreventiva(equipamento);
+      setProcedimentoPreventiva(procedimento);
+      setPreventivaOpen(true);
+    } catch (error) {
+      toast({
+        title: "Erro ao buscar procedimento preventivo",
+        description: error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const openEmpresaDetalhes = (
+    empresa: EmpresaSupabase | null | undefined
+  ) => {
+    if (!empresa) return;
+
+    setEmpresaSelecionada(empresa);
+    setEmpresaDetalhesOpen(true);
+  };
+
   const featurePending = (label: string) => {
     toast({
       title: label,
@@ -212,6 +287,16 @@ const Equipamentos = () => {
         onOpenChange={setDialogOpen}
         mode={mode}
         equipamento={selected}
+        onOpenEmpresa={openEmpresaDetalhes}
+      />
+
+      <EmpresaDetalhesDialog
+        open={empresaDetalhesOpen}
+        onOpenChange={(value) => {
+          setEmpresaDetalhesOpen(value);
+          if (!value) setEmpresaSelecionada(null);
+        }}
+        empresa={empresaSelecionada}
       />
 
       <ProtocoloRecolhimentoDialog
@@ -221,6 +306,19 @@ const Equipamentos = () => {
           if (!value) setEquipamentoRecolhimento(null);
         }}
         equipamento={equipamentoRecolhimento}
+      />
+
+      <PreventivaChecklistDialog
+        open={preventivaOpen}
+        onOpenChange={(value) => {
+          setPreventivaOpen(value);
+          if (!value) {
+            setEquipamentoPreventiva(null);
+            setProcedimentoPreventiva(null);
+          }
+        }}
+        equipamento={equipamentoPreventiva}
+        procedimento={procedimentoPreventiva}
       />
 
       <OrdemServicoFormDialog
@@ -471,7 +569,17 @@ const Equipamentos = () => {
                       </td>
 
                       <td className="px-5 py-3 text-muted-foreground">
-                        {empresa}
+                        {e.empresa ? (
+                          <button
+                            type="button"
+                            className="text-primary hover:underline font-medium text-left"
+                            onClick={() => openEmpresaDetalhes(e.empresa)}
+                          >
+                            {empresa}
+                          </button>
+                        ) : (
+                          empresa
+                        )}
                       </td>
                       <td className="px-5 py-3 text-muted-foreground">
                         {e.modelo || "—"}
@@ -528,9 +636,7 @@ const Equipamentos = () => {
                               </DropdownMenuItem>
 
                               <DropdownMenuItem
-                                onClick={() =>
-                                  featurePending("Criação de preventiva")
-                                }
+                                onClick={() => openCriarPreventiva(e)}
                               >
                                 <CalendarCheck className="w-4 h-4 mr-2" /> Criar
                                 Preventiva

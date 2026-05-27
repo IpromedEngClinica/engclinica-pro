@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ProtocoloOSFormInput,
+  ProtocoloEntregaInput,
+  ProtocoloRecolhimentoInput,
   protocolosService,
   ProtocoloOSSupabase,
   TipoProtocoloOS,
@@ -58,6 +60,33 @@ export const useCancelarProtocolo = () => {
     mutationFn: (id: string) => protocolosService.cancelar(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: PROTOCOLOS_QUERY_KEY });
+    },
+  });
+};
+
+export const useCriarRecolhimentoComOS = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: ProtocoloRecolhimentoInput) =>
+      protocolosService.criarRecolhimentoComOS(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: PROTOCOLOS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ["ordens-servico"] });
+      queryClient.invalidateQueries({ queryKey: ["equipamentos"] });
+    },
+  });
+};
+
+export const useCriarEntregaComFechamentoOS = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: ProtocoloEntregaInput) =>
+      protocolosService.criarEntregaComFechamentoOS(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: PROTOCOLOS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ["ordens-servico"] });
     },
   });
 };

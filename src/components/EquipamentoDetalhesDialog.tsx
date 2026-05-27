@@ -1,197 +1,144 @@
-import { useMemo } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { Cpu } from "lucide-react";
+import type { ReactNode } from "react";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Pencil, ClipboardList, FileBox, CalendarCheck, FileWarning } from "lucide-react";
-import { Equipamento, useData } from "@/contexts/DataContext";
-import { toast } from "@/hooks/use-toast";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import EquipamentoHistoricoSection from "@/components/EquipamentoHistoricoSection";
+import type { EquipamentoSupabase } from "@/services/equipamentosService";
 
-interface Props {
+interface EquipamentoDetalhesDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  equipamento: Equipamento | null;
-  onSelectOS?: (osId: number) => void;
-  onEdit?: (eq: Equipamento) => void;
-  onCriarOS?: (eq: Equipamento, tipoServico?: string) => void;
-  onCriarProtocolo?: (eq: Equipamento) => void;
+  equipamento: EquipamentoSupabase | null;
 }
 
-const Card = ({ title, children }: { title: string; children: React.ReactNode }) => (
-  <div className="rounded-lg border bg-card shadow-sm">
-    <div className="inline-block -mt-3 ml-4 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium">
-      {title}
-    </div>
-    <div className="p-5 pt-3 space-y-2 text-foreground">{children}</div>
-  </div>
-);
+const getTipoEquipamento = (equipamento: EquipamentoSupabase) =>
+  equipamento.tipo_equipamento?.nome ||
+  equipamento.tipo_texto ||
+  "Equipamento";
 
-const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
-  <div className="text-sm">
-    <span className="font-semibold text-foreground">{label}: </span>
-    <span className="text-foreground">{children || "—"}</span>
-  </div>
-);
+const getEmpresaNome = (equipamento: EquipamentoSupabase) =>
+  equipamento.empresa?.nome_fantasia ||
+  equipamento.empresa?.nome ||
+  "Não informado";
 
-const formatDate = (iso: string) => {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+const formatDate = (value?: string | null) => {
+  if (!value) return "-";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "-";
+
+  return date.toLocaleDateString("pt-BR");
 };
 
-const EquipamentoDetalhesDialog = ({ open, onOpenChange, equipamento, onSelectOS, onEdit, onCriarOS, onCriarProtocolo }: Props) => {
-  const { ordensServico } = useData();
+const Field = ({
+  label,
+  value,
+}: {
+  label: string;
+  value?: string | boolean | null;
+}) => {
+  const display =
+    typeof value === "boolean" ? (value ? "Sim" : "Não") : value || "-";
 
-  const futuro = (label: string) =>
-    toast({ title: label, description: "Funcionalidade em desenvolvimento." });
+  return (
+    <div className="text-sm">
+      <span className="font-medium text-muted-foreground">{label}: </span>
+      <span className="text-foreground">{display}</span>
+    </div>
+  );
+};
 
-  const historico = useMemo(() => {
-    if (!equipamento) return [];
-    return ordensServico
-      .filter((o) => o.equipamentoId === equipamento.id)
-      .sort((a, b) => (b.dataCriacao || "").localeCompare(a.dataCriacao || ""));
-  }, [ordensServico, equipamento]);
+const Section = ({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) => (
+  <section className="rounded-lg border p-4 space-y-3">
+    <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+      {children}
+    </div>
+  </section>
+);
 
-  const recorrentes = useMemo(() => {
-    const counts: Record<string, number> = {};
-    historico.forEach((o) => {
-      const key = (o.origemProblema || o.tipoServico || "").trim();
-      if (!key) return;
-      counts[key] = (counts[key] || 0) + 1;
-    });
-    return Object.entries(counts)
-      .filter(([, n]) => n >= 2)
-      .sort((a, b) => b[1] - a[1]);
-  }, [historico]);
-
+const EquipamentoDetalhesDialog = ({
+  open,
+  onOpenChange,
+  equipamento,
+}: EquipamentoDetalhesDialogProps) => {
   if (!equipamento) return null;
+
+  const tipo = getTipoEquipamento(equipamento);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl h-[90vh] flex flex-col p-0 gap-0">
-        <DialogHeader className="px-6 py-4 border-b shrink-0 flex flex-row items-center justify-between">
-          <DialogTitle className="text-xl text-foreground">
-            {equipamento.tipo} <span className="text-muted-foreground font-normal">| {equipamento.modelo}</span>
+      <DialogContent className="sm:max-w-6xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-xl flex items-center gap-2">
+            <Cpu className="w-5 h-5 text-primary" />
+            {tipo}
           </DialogTitle>
-          <div className="mr-8 flex gap-2">
-            {onEdit && (
-              <Button size="sm" variant="outline" onClick={() => onEdit(equipamento)}>
-                <Pencil className="w-4 h-4 mr-2" /> Editar
-              </Button>
-            )}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="default">
-                  <MoreHorizontal className="w-4 h-4 mr-2" /> Ações
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56 bg-popover">
-                {onCriarOS && (
-                  <DropdownMenuItem onClick={() => onCriarOS(equipamento)}>
-                    <ClipboardList className="w-4 h-4 mr-2" /> Criar Ordem de Serviço
-                  </DropdownMenuItem>
-                )}
-                {onCriarProtocolo && (
-                  <DropdownMenuItem onClick={() => onCriarProtocolo(equipamento)}>
-                    <FileBox className="w-4 h-4 mr-2" /> Criar Protocolo de Recolhimento
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => futuro("Criar Preventiva")}>
-                  <CalendarCheck className="w-4 h-4 mr-2" /> Criar Preventiva
-                </DropdownMenuItem>
-                {onCriarOS && (
-                  <DropdownMenuItem onClick={() => onCriarOS(equipamento, "Laudo De Obsolescência")}>
-                    <FileWarning className="w-4 h-4 mr-2" /> Criar Laudo de Obsolescência
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
         </DialogHeader>
-        <div className="flex-1 overflow-y-auto min-h-0 p-6 space-y-6">
-          <Card title="Dados Básicos">
-            <Field label="Identificação">{equipamento.tag}</Field>
-            <Field label="Estado">{equipamento.status}</Field>
-            <Field label="Tipo">{equipamento.tipo}</Field>
-            <Field label="Proprietário">{equipamento.empresa}</Field>
-            <Field label="Fabricante">{equipamento.fabricante}</Field>
-            <Field label="Modelo">{equipamento.modelo}</Field>
-            <Field label="Número de Série">{equipamento.serie}</Field>
-            <Field label="Patrimônio">{equipamento.patrimonio}</Field>
-            <Field label="Setor">{equipamento.setor}</Field>
-          </Card>
 
-          <div>
-            <h2 className="text-lg font-semibold text-foreground mb-3">Histórico de Atividades</h2>
+        <div className="space-y-4">
+          <Section title="Dados do Equipamento">
+            <Field label="Tipo" value={tipo} />
+            <Field label="Estado" value={equipamento.status} />
+            <Field label="Proprietário" value={getEmpresaNome(equipamento)} />
+            <Field label="Fabricante" value={equipamento.fabricante} />
+            <Field label="Modelo" value={equipamento.modelo} />
+            <Field label="TAG" value={equipamento.tag} />
+            <Field label="Número de Série" value={equipamento.numero_serie} />
+            <Field label="Patrimonio" value={equipamento.patrimonio} />
+            <Field label="Setor" value={equipamento.setor} />
+          </Section>
 
-            <Card title="Ordens de Serviço">
-              {historico.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Nenhuma ordem de serviço registrada para este equipamento.
-                </p>
-              ) : (
-                <div className="overflow-x-auto -mx-2">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b bg-muted/40">
-                        <th className="text-left px-3 py-2 font-medium text-muted-foreground">Número</th>
-                        <th className="text-left px-3 py-2 font-medium text-muted-foreground">Estado</th>
-                        <th className="text-left px-3 py-2 font-medium text-muted-foreground">Solicitante</th>
-                        <th className="text-left px-3 py-2 font-medium text-muted-foreground">Responsável</th>
-                        <th className="text-left px-3 py-2 font-medium text-muted-foreground">Tipo de Serviço</th>
-                        <th className="text-left px-3 py-2 font-medium text-muted-foreground">Data</th>
-                        <th className="text-left px-3 py-2 font-medium text-muted-foreground">Origem do Problema</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {historico.map((o) => (
-                        <tr
-                          key={o.id}
-                          className="border-b last:border-0 hover:bg-muted/30 cursor-pointer"
-                          onClick={() => onSelectOS?.(o.id)}
-                        >
-                          <td className="px-3 py-2 font-medium text-primary">{o.numero}</td>
-                          <td className="px-3 py-2">{o.estado}</td>
-                          <td className="px-3 py-2">{o.solicitante}</td>
-                          <td className="px-3 py-2">{o.responsavelTecnico || "—"}</td>
-                          <td className="px-3 py-2">{o.tipoServico}</td>
-                          <td className="px-3 py-2">{formatDate(o.dataCriacao)}</td>
-                          <td className="px-3 py-2">{o.origemProblema || "—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </Card>
+          <Section title="Preventiva e Calibração">
+            <Field
+              label="Data de Aquisição"
+              value={formatDate(equipamento.data_aquisicao)}
+            />
+            <Field
+              label="Data de Instalação"
+              value={formatDate(equipamento.data_instalacao)}
+            />
+            <Field
+              label="Última Preventiva"
+              value={formatDate(equipamento.data_ultima_preventiva)}
+            />
+            <Field
+              label="Próxima Preventiva"
+              value={formatDate(equipamento.data_proxima_preventiva)}
+            />
+            <Field
+              label="Última Calibração"
+              value={formatDate(equipamento.data_ultima_calibracao)}
+            />
+            <Field
+              label="Próxima Calibração"
+              value={formatDate(equipamento.data_proxima_calibracao)}
+            />
+          </Section>
 
-            <div className="mt-6">
-              <Card title="Defeitos Recorrentes">
-                {recorrentes.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    Nenhum defeito recorrente identificado.
-                  </p>
-                ) : (
-                  <ul className="text-sm space-y-1.5">
-                    {recorrentes.map(([nome, qtd]) => (
-                      <li key={nome} className="flex items-center justify-between">
-                        <span className="text-foreground">{nome}</span>
-                        <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
-                          {qtd}x
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </Card>
-            </div>
-          </div>
+          {equipamento.observacoes && (
+            <section className="rounded-lg border p-4 space-y-2">
+              <h3 className="text-sm font-semibold text-foreground">
+                Observações
+              </h3>
+              <p className="text-sm text-foreground whitespace-pre-wrap">
+                {equipamento.observacoes}
+              </p>
+            </section>
+          )}
+
+          <EquipamentoHistoricoSection equipamentoId={equipamento.id} />
         </div>
       </DialogContent>
     </Dialog>

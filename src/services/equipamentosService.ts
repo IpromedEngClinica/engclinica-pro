@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabaseClient";
+import type { EmpresaSupabase } from "@/services/empresasService";
 
 export type EquipamentoSupabase = {
   id: string;
@@ -23,12 +24,7 @@ export type EquipamentoSupabase = {
   ativo: boolean;
   created_at: string;
   updated_at: string;
-  empresa?: {
-    id: string;
-    nome: string;
-    nome_fantasia: string | null;
-    ativo: boolean;
-  } | null;
+  empresa?: EmpresaSupabase | null;
   tipo_equipamento?: {
     id: string;
     nome: string;
@@ -80,9 +76,27 @@ const selectEquipamentos = `
   updated_at,
   empresa:empresas (
     id,
+    organizacao_id,
     nome,
     nome_fantasia,
-    ativo
+    tipo_cliente,
+    tipo_relacao,
+    cpf_cnpj,
+    cep,
+    rua,
+    numero,
+    complemento,
+    bairro,
+    cidade,
+    estado,
+    contato,
+    email,
+    celular,
+    telefone,
+    observacoes,
+    ativo,
+    created_at,
+    updated_at
   ),
   tipo_equipamento:tipos_equipamento (
     id,

@@ -8,8 +8,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { OrdemServicoSupabase } from "@/services/ordensServicoService";
+import type {
+  OrdemServicoChecklistPreventivaItemSupabase,
+  OrdemServicoSupabase,
+} from "@/services/ordensServicoService";
+import type { EmpresaSupabase } from "@/services/empresasService";
+import type { EquipamentoSupabase } from "@/services/equipamentosService";
 import { gerarPdfOrdemServico } from "@/utils/gerarPdfOrdemServico";
+import {
+  formatResultadoGeralChecklist,
+  getChecklistMarks,
+} from "@/utils/checklistPreventiva";
 
 interface OrdemServicoDetalhesDialogProps {
   open: boolean;
@@ -17,6 +26,8 @@ interface OrdemServicoDetalhesDialogProps {
   os: OrdemServicoSupabase | null;
   onEdit?: (os: OrdemServicoSupabase) => void;
   onDelete?: (os: OrdemServicoSupabase) => void;
+  onOpenEmpresa?: (empresa: EmpresaSupabase) => void;
+  onOpenEquipamento?: (equipamento: EquipamentoSupabase) => void;
 }
 
 const getEmpresaNome = (os: OrdemServicoSupabase) =>
@@ -38,6 +49,80 @@ const getEstado = (os: OrdemServicoSupabase) =>
 
 const getTecnico = (os: OrdemServicoSupabase) => os.responsavel_texto || "—";
 
+const getChecklistPreventiva = (os: OrdemServicoSupabase) => {
+  const checklist = os.checklist_preventiva;
+
+  if (Array.isArray(checklist)) return checklist[0] || null;
+
+  return checklist || null;
+};
+
+const isOSPreventiva = (os: OrdemServicoSupabase) => {
+  const tipo = os.tipo_os?.nome?.toLowerCase() || "";
+  const descricao = os.descricao_servico?.toLowerCase() || "";
+
+  return (
+    tipo.includes("preventiva") ||
+    descricao.includes("preventiva") ||
+    Boolean(getChecklistPreventiva(os))
+  );
+};
+
+const dedupeAcessoriosView = (
+  acessorios?: Array<{
+    id?: string;
+    descricao?: string | null;
+    quantidade?: number | null;
+    observacoes?: string | null;
+  }>
+) => {
+  const map = new Map<
+    string,
+    {
+      id?: string;
+      descricao: string;
+      quantidade: number;
+      observacoes: string | null;
+    }
+  >();
+
+  (acessorios || []).forEach((item) => {
+    const descricao = item.descricao?.trim();
+    if (!descricao) return;
+
+    const chave = descricao.toLowerCase().replace(/\s+/g, " ");
+
+    if (!map.has(chave)) {
+      map.set(chave, {
+        id: item.id,
+        descricao,
+        quantidade: Number(item.quantidade || 1),
+        observacoes: item.observacoes || null,
+      });
+    }
+  });
+
+  return Array.from(map.values());
+};
+
+const resultadoGeralLabel = (resultado?: string | null) => {
+  const map: Record<string, string> = {
+    aprovado: "Aprovado para uso",
+    nao_aprovado: "Nao aprovado para uso",
+    aprovado_com_restricao: "Aprovado com restricao",
+  };
+
+  return map[resultado || ""] || "—";
+};
+
+const checklistObservacao = (
+  item: OrdemServicoChecklistPreventivaItemSupabase
+) => {
+  const marks = getChecklistMarks(item.resposta);
+
+  return item.observacao || marks.texto || "-";
+};
+
 const formatAcao = (acao: string) => {
   const map: Record<string, string> = {
     criada: "OS criada",
@@ -46,6 +131,14 @@ const formatAcao = (acao: string) => {
     fechada: "OS fechada",
     cancelada: "OS cancelada",
     excluida: "OS excluída",
+    protocolo_entrega: "Protocolo de entrega",
+    checklist_preventiva_editado: "Checklist de preventiva editado",
+    protocolo_recolhimento: "Protocolo de recolhimento",
+    orcamento_aprovado: "Orçamento aprovado",
+    orcamento_reprovado: "Orçamento reprovado",
+    orcamento_faturado: "Orçamento faturado",
+    orcamento_cancelado: "Orçamento cancelado",
+    orcamento_pendente: "Orçamento pendente",
   };
 
   return map[acao] || acao;
@@ -123,10 +216,18 @@ const OrdemServicoDetalhesDialog = ({
   os,
   onEdit,
   onDelete,
+  onOpenEmpresa,
+  onOpenEquipamento,
 }: OrdemServicoDetalhesDialogProps) => {
   if (!os) return null;
 
   const estado = getEstado(os);
+  const acessoriosUnicos = dedupeAcessoriosView(os.acessorios);
+  const preventiva = isOSPreventiva(os);
+  const checklistPreventiva = getChecklistPreventiva(os);
+  const checklistItens = [...(checklistPreventiva?.itens || [])].sort(
+    (a, b) => a.ordem - b.ordem
+  );
   const historicoOrdenado = [...(os.historico || [])].sort((a, b) => {
     return (
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -167,12 +268,36 @@ const OrdemServicoDetalhesDialog = ({
             <InfoCard title="Solicitante">
               <div>
                 <p className="text-xs text-muted-foreground">Empresa</p>
-                <p className="text-sm font-medium">{getEmpresaNome(os)}</p>
+                {os.empresa && onOpenEmpresa ? (
+                  <button
+                    type="button"
+                    className="text-primary hover:underline font-medium text-left text-sm"
+                    onClick={() => onOpenEmpresa(os.empresa as EmpresaSupabase)}
+                  >
+                    {getEmpresaNome(os)}
+                  </button>
+                ) : (
+                  <p className="text-sm font-medium">{getEmpresaNome(os)}</p>
+                )}
               </div>
             </InfoCard>
 
             <InfoCard title="Equipamento">
-              <Field label="Tipo">{getEquipamentoTipo(os)}</Field>
+              <Field label="Tipo">
+                {os.equipamento && onOpenEquipamento ? (
+                  <button
+                    type="button"
+                    className="text-primary hover:underline font-medium text-left"
+                    onClick={() =>
+                      onOpenEquipamento(os.equipamento as EquipamentoSupabase)
+                    }
+                  >
+                    {getEquipamentoTipo(os)}
+                  </button>
+                ) : (
+                  getEquipamentoTipo(os)
+                )}
+              </Field>
               <Field label="Fabricante">{os.equipamento?.fabricante || "—"}</Field>
               <Field label="Modelo">{os.equipamento?.modelo || "—"}</Field>
               <Field label="Número de série">
@@ -186,26 +311,32 @@ const OrdemServicoDetalhesDialog = ({
 
           <InfoCard title="Serviço">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
-              <Field label="Tipo de OS">{getTipoServico(os)}</Field>
+              {!preventiva && (
+                <Field label="Tipo de OS">{getTipoServico(os)}</Field>
+              )}
               <Field label="Responsável técnico">{getTecnico(os)}</Field>
               <Field label="Estado">{estado}</Field>
               <Field label="Status interno">{os.status_sistema || "—"}</Field>
             </div>
 
             <div className="pt-2 space-y-4">
-              <div>
-                <h4 className="text-sm font-medium text-muted-foreground mb-1">
-                  Problema relatado
-                </h4>
-                <TextBlock value={os.problema_relatado} />
-              </div>
+              {!preventiva && (
+                <>
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground mb-1">
+                      Problema relatado
+                    </h4>
+                    <TextBlock value={os.problema_relatado} />
+                  </div>
 
-              <div>
-                <h4 className="text-sm font-medium text-muted-foreground mb-1">
-                  Origem do problema
-                </h4>
-                <TextBlock value={os.origem_problema} />
-              </div>
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground mb-1">
+                      Origem do problema
+                    </h4>
+                    <TextBlock value={os.origem_problema} />
+                  </div>
+                </>
+              )}
 
               <div>
                 <h4 className="text-sm font-medium text-muted-foreground mb-1">
@@ -222,13 +353,78 @@ const OrdemServicoDetalhesDialog = ({
               </div>
             </div>
           </InfoCard>
+          {checklistPreventiva && (
+            <InfoCard title="Checklist de Preventiva">
+              <Field label="Procedimento">
+                {checklistPreventiva.titulo_procedimento}
+              </Field>
+
+              <div className="overflow-x-auto rounded-md border">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/50">
+                      <th className="text-center px-3 py-2 font-medium w-14">Item</th>
+                      <th className="text-left px-3 py-2 font-medium">Descricao</th>
+                      <th className="text-center px-3 py-2 font-medium">Conforme</th>
+                      <th className="text-center px-3 py-2 font-medium">Nao Conforme</th>
+                      <th className="text-center px-3 py-2 font-medium">N/A</th>
+                      <th className="text-left px-3 py-2 font-medium">Observacao</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {checklistItens.map((item, index) => {
+                      const marcadores = getChecklistMarks(item.resposta);
+
+                      return (
+                        <tr key={item.id} className="border-b last:border-0">
+                          <td className="px-3 py-2 text-center text-muted-foreground">
+                            {index + 1}
+                          </td>
+                          <td className="px-3 py-2">{item.descricao}</td>
+                          <td className="px-3 py-2 text-center font-semibold">
+                            {marcadores.conforme}
+                          </td>
+                          <td className="px-3 py-2 text-center font-semibold">
+                            {marcadores.naoConforme}
+                          </td>
+                          <td className="px-3 py-2 text-center font-semibold">
+                            {marcadores.naoAplica}
+                          </td>
+                          <td className="px-3 py-2 text-muted-foreground">
+                            {checklistObservacao(item)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+                <Field label="Resultado Geral">
+                  {formatResultadoGeralChecklist(checklistPreventiva.resultado_geral)}
+                </Field>
+                <Field label="Validade da Preventiva">
+                  {formatDate(checklistPreventiva.data_validade)}
+                </Field>
+                <Field label="Validade padrao">
+                  {checklistPreventiva.validade_meses} meses
+                </Field>
+              </div>
+
+              {checklistPreventiva.observacoes && (
+                <TextBlock value={checklistPreventiva.observacoes} />
+              )}
+            </InfoCard>
+          )}
+
 
           <InfoCard title="Acessórios">
-            {os.acessorios && os.acessorios.length > 0 ? (
+            {acessoriosUnicos.length > 0 ? (
               <ul className="divide-y rounded-md border">
-                {os.acessorios.map((acessorio) => (
+                {acessoriosUnicos.map((acessorio) => (
                   <li
-                    key={acessorio.id}
+                    key={acessorio.id || acessorio.descricao}
                     className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 px-3 py-2 text-sm"
                   >
                     <div>
@@ -284,7 +480,12 @@ const OrdemServicoDetalhesDialog = ({
         </div>
 
         <DialogFooter className="px-6 py-4 border-t">
-          <Button variant="outline" onClick={() => gerarPdfOrdemServico(os)}>
+          <Button
+            variant="outline"
+            onClick={async () => {
+              await gerarPdfOrdemServico(os);
+            }}
+          >
             <FileText className="w-4 h-4 mr-2" />
             Gerar PDF
           </Button>

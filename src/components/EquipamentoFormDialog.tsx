@@ -23,12 +23,14 @@ import {
   EquipamentoFormInput,
   EquipamentoSupabase,
 } from "@/services/equipamentosService";
+import type { EmpresaSupabase } from "@/services/empresasService";
 import {
   useAtualizarEquipamento,
   useCriarEquipamento,
 } from "@/hooks/useEquipamentos";
 import { useEmpresas } from "@/hooks/useEmpresas";
 import { useTiposEquipamento } from "@/hooks/useTiposEquipamento";
+import EquipamentoHistoricoSection from "@/components/EquipamentoHistoricoSection";
 
 export type DialogMode = "create" | "edit" | "view";
 
@@ -38,6 +40,7 @@ interface Props {
   mode?: DialogMode;
   equipamento?: EquipamentoSupabase | null;
   prefilledEmpresa?: string;
+  onOpenEmpresa?: (empresa: EmpresaSupabase) => void;
 }
 
 const emptyForm: EquipamentoFormInput = {
@@ -68,6 +71,7 @@ const EquipamentoFormDialog = ({
   mode = "create",
   equipamento = null,
   prefilledEmpresa,
+  onOpenEmpresa,
 }: Props) => {
   const criarEquipamento = useCriarEquipamento();
   const atualizarEquipamento = useAtualizarEquipamento();
@@ -104,6 +108,14 @@ const EquipamentoFormDialog = ({
       ? `${empresa.nome_fantasia} — ${empresa.nome}`
       : empresa.nome;
   }, [empresas, form.empresaId]);
+
+  const selectedEmpresa = useMemo(
+    () =>
+      empresas.find((item) => item.id === form.empresaId) ||
+      equipamento?.empresa ||
+      null,
+    [empresas, equipamento, form.empresaId]
+  );
 
   const selectedTipoLabel = useMemo(() => {
     const tipo = tiposEquipamento.find(
@@ -255,7 +267,13 @@ const EquipamentoFormDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className={
+          readOnly
+            ? "sm:max-w-6xl max-h-[90vh] overflow-y-auto"
+            : "sm:max-w-3xl max-h-[90vh] overflow-y-auto"
+        }
+      >
         <DialogHeader>
           <DialogTitle className="text-xl">{title}</DialogTitle>
         </DialogHeader>
@@ -336,7 +354,19 @@ const EquipamentoFormDialog = ({
             <div className="space-y-2">
               <Label className="text-sm">Proprietário *</Label>
               {readOnly ? (
-                <Input value={selectedEmpresaLabel} disabled />
+                selectedEmpresa && onOpenEmpresa ? (
+                  <button
+                    type="button"
+                    className="text-primary hover:underline font-medium text-left"
+                    onClick={() => onOpenEmpresa(selectedEmpresa)}
+                  >
+                    {selectedEmpresaLabel ||
+                      selectedEmpresa.nome_fantasia ||
+                      selectedEmpresa.nome}
+                  </button>
+                ) : (
+                  <Input value={selectedEmpresaLabel} disabled />
+                )
               ) : (
                 <SearchableSelect
                   value={selectedEmpresaLabel}
@@ -449,6 +479,10 @@ const EquipamentoFormDialog = ({
             rows={4}
           />
         </div>
+
+        {readOnly && (
+          <EquipamentoHistoricoSection equipamentoId={equipamento?.id} />
+        )}
 
         <DialogFooter className="pt-2">
           <Button

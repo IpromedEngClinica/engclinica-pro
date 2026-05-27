@@ -83,6 +83,40 @@ export type ProtocoloOSFormInput = {
   }>;
 };
 
+export type ProtocoloRecolhimentoInput = {
+  equipamentoId: string;
+  empresaId: string;
+  dataRecolhimento?: string;
+  responsavelNome?: string;
+  responsavelDocumento?: string;
+  responsavelContato?: string;
+  problemaRelatado?: string;
+  observacoes?: string;
+  acessorios?: Array<{
+    descricao: string;
+    quantidade?: number;
+    conferido?: boolean;
+    observacoes?: string;
+  }>;
+};
+
+export type ProtocoloEntregaInput = {
+  ordemServicoId: string;
+  empresaId: string;
+  equipamentoId: string;
+  dataEntrega?: string;
+  responsavelNome?: string;
+  responsavelDocumento?: string;
+  responsavelContato?: string;
+  observacoes?: string;
+  acessorios?: Array<{
+    descricao: string;
+    quantidade?: number;
+    conferido?: boolean;
+    observacoes?: string;
+  }>;
+};
+
 const selectProtocolos = `
   id,
   organizacao_id,
@@ -186,6 +220,149 @@ const normalizarAcessorios = (
   });
 
   return Array.from(map.values());
+};
+
+const normalizarNome = (value: string) =>
+  value.trim().toLowerCase().replace(/\s+/g, " ");
+
+const buscarEstadoEntradaOrcamento = async () => {
+  const nomesPreferidos = [
+    "Entrada de Equipamento para Orçamento",
+    "Entrada de equipamentos para orçamento",
+    "Entrada de equipamento para orçamento",
+    "Entrada de equipamentos",
+    "Entrada para orçamento",
+    "Orçamentar",
+  ];
+
+  for (const nome of nomesPreferidos) {
+    const { data, error } = await supabase
+      .from("estados_os")
+      .select("id, nome, finaliza_os, cancela_os")
+      .ilike("nome", nome)
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    if (data?.id) return data;
+  }
+
+  const { data, error } = await supabase
+    .from("estados_os")
+    .select("id, nome, finaliza_os, cancela_os")
+    .eq("finaliza_os", false)
+    .eq("cancela_os", false)
+    .order("ordem", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (data?.id) {
+    console.warn(
+      'Estado de entrada para orçamento não encontrado. Usando primeiro estado não finalizador e não cancelador.'
+    );
+    return data;
+  }
+
+  console.warn(
+    "Nenhum estado compatível encontrado para OS criada por protocolo de recolhimento."
+  );
+  return null;
+};
+
+const buscarTipoEntradaEquipamento = async () => {
+  const { data, error } = await supabase
+    .from("tipos_os")
+    .select("id, nome, ativo")
+    .eq("ativo", true)
+    .order("nome", { ascending: true });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const nomesPreferidos = [
+    "Entrada de equipamentos",
+    "Orçamentar",
+    "Manutenção corretiva",
+  ].map(normalizarNome);
+
+  const tipo = (data || []).find((item) =>
+    nomesPreferidos.includes(normalizarNome(item.nome))
+  );
+
+  return (tipo?.id as string | undefined) || null;
+};
+
+const registrarHistoricoOS = async ({
+  ordemServicoId,
+  acao,
+  observacao,
+  estadoAnteriorId = null,
+  estadoNovoId = null,
+}: {
+  ordemServicoId: string;
+  acao: string;
+  observacao?: string;
+  estadoAnteriorId?: string | null;
+  estadoNovoId?: string | null;
+}) => {
+  const { error } = await supabase.from("ordem_servico_historico").insert({
+    ordem_servico_id: ordemServicoId,
+    usuario_id: null,
+    estado_anterior_id: estadoAnteriorId,
+    estado_novo_id: estadoNovoId,
+    acao,
+    observacao: observacao || null,
+  });
+
+  if (error) {
+    console.warn("Erro ao registrar histórico da OS:", error.message);
+  }
+};
+
+const buscarEstadoFechamentoOS = async () => {
+  const nomes = [
+    "Fechada",
+    "Equipamento Entregue",
+    "Entregue",
+    "Serviço finalizado",
+    "Servico finalizado",
+  ];
+
+  for (const nome of nomes) {
+    const { data, error } = await supabase
+      .from("estados_os")
+      .select("id, nome, finaliza_os")
+      .ilike("nome", nome)
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    if (data?.id) return data;
+  }
+
+  const { data, error } = await supabase
+    .from("estados_os")
+    .select("id, nome, finaliza_os")
+    .eq("finaliza_os", true)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data || null;
 };
 
 export const protocolosService = {
@@ -323,5 +500,213 @@ export const protocolosService = {
     }
 
     return protocolosService.buscarPorId(id);
+  },
+
+  async criarRecolhimentoComOS(input: ProtocoloRecolhimentoInput) {
+    const { data: organizacaoId, error: orgError } = await supabase.rpc(
+      "current_organizacao_id"
+    );
+
+    if (orgError) {
+      throw new Error(orgError.message);
+    }
+
+    if (!organizacaoId) {
+      throw new Error("Não foi possível identificar a organização do usuário.");
+    }
+
+    const estadoEntrada = await buscarEstadoEntradaOrcamento();
+    const tipoOsId = await buscarTipoEntradaEquipamento();
+    const acessorios = normalizarAcessorios(input.acessorios);
+
+    const { data: osCriada, error: osError } = await supabase
+      .from("ordens_servico")
+      .insert({
+        organizacao_id: organizacaoId,
+        empresa_id: input.empresaId,
+        equipamento_id: input.equipamentoId,
+        tipo_os_id: tipoOsId,
+        estado_os_id: estadoEntrada?.id || null,
+        solicitante_texto: null,
+        responsavel_texto: input.responsavelNome || null,
+        problema_relatado: input.problemaRelatado || null,
+        origem_problema: "Protocolo de recolhimento",
+        descricao_servico: "Entrada de equipamento para orçamento.",
+        observacoes: input.observacoes || null,
+        prioridade: "normal",
+        status_sistema: "aberta",
+        data_fechamento: null,
+        ativo: true,
+      })
+      .select("id")
+      .single();
+
+    if (osError) {
+      throw new Error(`Erro ao criar OS do protocolo: ${osError.message}`);
+    }
+
+    const { data: protocoloCriado, error: protocoloError } = await supabase
+      .from("protocolos_os")
+      .insert({
+        organizacao_id: organizacaoId,
+        tipo: "recolhimento",
+        empresa_id: input.empresaId,
+        equipamento_id: input.equipamentoId,
+        ordem_servico_id: osCriada.id,
+        data_recolhimento: input.dataRecolhimento || new Date().toISOString(),
+        responsavel_nome: input.responsavelNome || null,
+        responsavel_documento: input.responsavelDocumento || null,
+        responsavel_contato: input.responsavelContato || null,
+        problema_relatado: input.problemaRelatado || null,
+        observacoes: input.observacoes || null,
+        status: "emitido",
+        ativo: true,
+      })
+      .select("id, numero")
+      .single();
+
+    if (protocoloError) {
+      throw new Error(
+        `OS criada, mas houve erro ao criar o protocolo: ${protocoloError.message}`
+      );
+    }
+
+    if (acessorios.length > 0) {
+      const { error: protocoloAcessoriosError } = await supabase
+        .from("protocolo_os_acessorios")
+        .insert(
+          acessorios.map((acessorio) => ({
+            protocolo_id: protocoloCriado.id,
+            ...acessorio,
+          }))
+        );
+
+      if (protocoloAcessoriosError) {
+        throw new Error(
+          `Protocolo criado, mas houve erro ao salvar acessórios do protocolo: ${protocoloAcessoriosError.message}`
+        );
+      }
+
+      const { error: osAcessoriosError } = await supabase
+        .from("ordem_servico_acessorios")
+        .insert(
+          acessorios.map((acessorio) => ({
+            ordem_servico_id: osCriada.id,
+            descricao: acessorio.descricao,
+            quantidade: acessorio.quantidade,
+            observacoes: acessorio.observacoes,
+          }))
+        );
+
+      if (osAcessoriosError) {
+        throw new Error(
+          `Protocolo criado, mas houve erro ao salvar acessórios da OS: ${osAcessoriosError.message}`
+        );
+      }
+    }
+
+    await registrarHistoricoOS({
+      ordemServicoId: osCriada.id,
+      acao: "protocolo_recolhimento",
+      observacao: `Ordem de Serviço criada automaticamente a partir do Protocolo de Recolhimento nº ${protocoloCriado.numero}.`,
+      estadoNovoId: estadoEntrada?.id || null,
+    });
+
+    return protocolosService.buscarPorId(protocoloCriado.id);
+  },
+
+  async criarEntregaComFechamentoOS(input: ProtocoloEntregaInput) {
+    const { data: organizacaoId, error: orgError } = await supabase.rpc(
+      "current_organizacao_id"
+    );
+
+    if (orgError) {
+      throw new Error(orgError.message);
+    }
+
+    if (!organizacaoId) {
+      throw new Error("Não foi possível identificar a organização do usuário.");
+    }
+
+    const dataEntrega = input.dataEntrega || new Date().toISOString();
+
+    const { data: osAtual, error: osAtualError } = await supabase
+      .from("ordens_servico")
+      .select("id, estado_os_id, status_sistema")
+      .eq("id", input.ordemServicoId)
+      .single();
+
+    if (osAtualError) {
+      throw new Error(osAtualError.message);
+    }
+
+    const { data: protocoloCriado, error: protocoloError } = await supabase
+      .from("protocolos_os")
+      .insert({
+        organizacao_id: organizacaoId,
+        tipo: "entrega",
+        empresa_id: input.empresaId,
+        equipamento_id: input.equipamentoId,
+        ordem_servico_id: input.ordemServicoId,
+        data_entrega: dataEntrega,
+        responsavel_nome: input.responsavelNome || null,
+        responsavel_documento: input.responsavelDocumento || null,
+        responsavel_contato: input.responsavelContato || null,
+        observacoes: input.observacoes || null,
+        status: "emitido",
+        ativo: true,
+      })
+      .select("id, numero")
+      .single();
+
+    if (protocoloError) {
+      throw new Error(protocoloError.message);
+    }
+
+    const acessorios = normalizarAcessorios(input.acessorios);
+
+    if (acessorios.length > 0) {
+      const { error: acessoriosError } = await supabase
+        .from("protocolo_os_acessorios")
+        .insert(
+          acessorios.map((acessorio) => ({
+            protocolo_id: protocoloCriado.id,
+            ...acessorio,
+          }))
+        );
+
+      if (acessoriosError) {
+        throw new Error(acessoriosError.message);
+      }
+    }
+
+    const estadoFechamento = await buscarEstadoFechamentoOS();
+
+    const { error: osUpdateError } = await supabase
+      .from("ordens_servico")
+      .update({
+        estado_os_id: estadoFechamento?.id || osAtual.estado_os_id,
+        status_sistema: "fechada",
+        data_fechamento: dataEntrega,
+      })
+      .eq("id", input.ordemServicoId);
+
+    if (osUpdateError) {
+      throw new Error(osUpdateError.message);
+    }
+
+    const dataEntregaFormatada = new Date(dataEntrega).toLocaleDateString(
+      "pt-BR"
+    );
+
+    await registrarHistoricoOS({
+      ordemServicoId: input.ordemServicoId,
+      acao: "protocolo_entrega",
+      observacao: `Protocolo de entrega nº ${protocoloCriado.numero} criado. Entrega realizada em ${dataEntregaFormatada}. Ordem de Serviço fechada automaticamente.`,
+      estadoAnteriorId: osAtual.estado_os_id,
+      estadoNovoId: estadoFechamento?.id || osAtual.estado_os_id,
+    });
+
+    return protocolosService.buscarPorId(protocoloCriado.id);
   },
 };

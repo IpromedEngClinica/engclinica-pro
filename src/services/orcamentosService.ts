@@ -1,13 +1,18 @@
 import { supabase } from "@/lib/supabaseClient";
 
 export type OrcamentoStatus =
-  | "rascunho"
-  | "emitido"
+  | "pendente"
   | "aprovado"
   | "reprovado"
+  | "faturado"
   | "cancelado";
 
 export type OrcamentoItemTipo = "servico" | "peca" | "deslocamento" | "outro";
+export type OrcamentoTipo = "servico" | "pecas" | "pecas_servicos";
+export type OrcamentoOrigem = "os" | "avulso";
+export type FormaPagamento = "dinheiro" | "cartao" | "boleto" | "pix";
+export type ModoPagamento = "avista" | "parcelado" | "entrada_parcela";
+export type FreteTipo = "cif" | "fob";
 
 export type OrcamentoItemSupabase = {
   id: string;
@@ -18,14 +23,32 @@ export type OrcamentoItemSupabase = {
   valor_unitario: number;
   valor_total: number;
   observacoes: string | null;
+  garantia: string | null;
+  tipo_servico_id: string | null;
+  tipo_equipamento_id: string | null;
+  peca_id: string | null;
+  peca_nome: string | null;
   ordem: number;
   created_at: string;
+  tipo_servico?: {
+    id: string;
+    nome: string;
+  } | null;
+  tipo_equipamento?: {
+    id: string;
+    nome: string;
+  } | null;
+  peca?: {
+    id: string;
+    nome: string;
+  } | null;
 };
 
 export type OrcamentoSupabase = {
   id: string;
   organizacao_id: string;
   numero: string;
+  identificador: string | null;
 
   empresa_id: string;
   equipamento_id: string | null;
@@ -35,13 +58,26 @@ export type OrcamentoSupabase = {
   data_validade: string | null;
 
   status: OrcamentoStatus;
+  tipo_orcamento: OrcamentoTipo;
+  origem: OrcamentoOrigem;
 
   observacoes: string | null;
   condicoes_pagamento: string | null;
   prazo_execucao: string | null;
   garantia: string | null;
 
+  forma_pagamento: FormaPagamento | null;
+  modo_pagamento: ModoPagamento | null;
+  numero_parcelas: number | null;
+  valor_entrada: number | null;
+  valor_parcela: number | null;
+  valor_pecas: number;
+  valor_servicos: number;
   valor_total: number;
+  prazo_entrega: string | null;
+  frete: FreteTipo | null;
+  detalhes_orcamento: string | null;
+  responsavel_orcamentista: string | null;
 
   aprovado_por: string | null;
   data_aprovacao: string | null;
@@ -91,6 +127,11 @@ export type OrcamentoItemInput = {
   quantidade?: number;
   valorUnitario?: number;
   observacoes?: string;
+  garantia?: string;
+  tipoServicoId?: string;
+  tipoEquipamentoId?: string;
+  pecaId?: string;
+  pecaNome?: string;
 };
 
 export type OrcamentoFormInput = {
@@ -98,14 +139,28 @@ export type OrcamentoFormInput = {
   equipamentoId?: string;
   ordemServicoId?: string;
 
+  identificador?: string;
+  dataOrcamento?: string;
   dataValidade?: string;
 
   status?: OrcamentoStatus;
+  tipoOrcamento?: OrcamentoTipo;
+  origem?: OrcamentoOrigem;
 
   observacoes?: string;
   condicoesPagamento?: string;
   prazoExecucao?: string;
   garantia?: string;
+
+  formaPagamento?: FormaPagamento;
+  modoPagamento?: ModoPagamento;
+  numeroParcelas?: number;
+  valorEntrada?: number;
+  valorParcela?: number;
+  prazoEntrega?: string;
+  frete?: FreteTipo;
+  detalhesOrcamento?: string;
+  responsavelOrcamentista?: string;
 
   aprovadoPor?: string;
   dataAprovacao?: string;
@@ -118,17 +173,31 @@ const selectOrcamentos = `
   id,
   organizacao_id,
   numero,
+  identificador,
   empresa_id,
   equipamento_id,
   ordem_servico_id,
   data_orcamento,
   data_validade,
   status,
+  tipo_orcamento,
+  origem,
   observacoes,
   condicoes_pagamento,
   prazo_execucao,
   garantia,
+  forma_pagamento,
+  modo_pagamento,
+  numero_parcelas,
+  valor_entrada,
+  valor_parcela,
+  valor_pecas,
+  valor_servicos,
   valor_total,
+  prazo_entrega,
+  frete,
+  detalhes_orcamento,
+  responsavel_orcamentista,
   aprovado_por,
   data_aprovacao,
   motivo_reprovacao,
@@ -171,8 +240,25 @@ const selectOrcamentos = `
     valor_unitario,
     valor_total,
     observacoes,
+    garantia,
+    tipo_servico_id,
+    tipo_equipamento_id,
+    peca_id,
+    peca_nome,
     ordem,
-    created_at
+    created_at,
+    tipo_servico:tipos_os (
+      id,
+      nome
+    ),
+    tipo_equipamento:tipos_equipamento (
+      id,
+      nome
+    ),
+    peca:pecas (
+      id,
+      nome
+    )
   )
 `;
 
@@ -180,12 +266,25 @@ const toDatabasePayload = (input: OrcamentoFormInput) => ({
   empresa_id: input.empresaId,
   equipamento_id: input.equipamentoId || null,
   ordem_servico_id: input.ordemServicoId || null,
+  identificador: input.identificador || null,
+  data_orcamento: input.dataOrcamento || undefined,
   data_validade: input.dataValidade || null,
-  status: input.status || "rascunho",
+  status: input.status || "pendente",
+  tipo_orcamento: input.tipoOrcamento || "servico",
+  origem: input.origem || "avulso",
   observacoes: input.observacoes || null,
   condicoes_pagamento: input.condicoesPagamento || null,
   prazo_execucao: input.prazoExecucao || null,
   garantia: input.garantia || null,
+  forma_pagamento: input.formaPagamento || null,
+  modo_pagamento: input.modoPagamento || null,
+  numero_parcelas: input.numeroParcelas || null,
+  valor_entrada: input.valorEntrada ?? null,
+  valor_parcela: input.valorParcela ?? null,
+  prazo_entrega: input.prazoEntrega || null,
+  frete: input.frete || null,
+  detalhes_orcamento: input.detalhesOrcamento || null,
+  responsavel_orcamentista: input.responsavelOrcamentista || "Icaro Rezende",
   aprovado_por: input.aprovadoPor || null,
   data_aprovacao: input.dataAprovacao || null,
   motivo_reprovacao: input.motivoReprovacao || null,
@@ -196,18 +295,167 @@ const normalizarItens = (itens?: OrcamentoItemInput[]) => {
     .map((item, index) => {
       const quantidade = Number(item.quantidade || 1);
       const valorUnitario = Number(item.valorUnitario || 0);
+      const descricao =
+        item.descricao?.trim() ||
+        item.pecaNome?.trim() ||
+        item.observacoes?.trim() ||
+        "";
 
       return {
         tipo: item.tipo || "servico",
-        descricao: item.descricao.trim(),
+        descricao,
         quantidade,
         valor_unitario: valorUnitario,
         valor_total: quantidade * valorUnitario,
         observacoes: item.observacoes?.trim() || null,
+        garantia: item.garantia?.trim() || null,
+        tipo_servico_id: item.tipoServicoId || null,
+        tipo_equipamento_id: item.tipoEquipamentoId || null,
+        peca_id: item.pecaId || null,
+        peca_nome: item.pecaNome?.trim() || null,
         ordem: index + 1,
       };
     })
     .filter((item) => item.descricao);
+};
+
+const registrarHistoricoOS = async ({
+  ordemServicoId,
+  acao,
+  observacao,
+  estadoAnteriorId = null,
+  estadoNovoId = null,
+}: {
+  ordemServicoId: string;
+  acao: string;
+  observacao?: string;
+  estadoAnteriorId?: string | null;
+  estadoNovoId?: string | null;
+}) => {
+  const { error } = await supabase.from("ordem_servico_historico").insert({
+    ordem_servico_id: ordemServicoId,
+    usuario_id: null,
+    estado_anterior_id: estadoAnteriorId,
+    estado_novo_id: estadoNovoId,
+    acao,
+    observacao: observacao || null,
+  });
+
+  if (error) {
+    console.warn("Erro ao registrar historico da OS:", error.message);
+  }
+};
+
+const buscarEstadoOSPorNomes = async (nomes: string[]) => {
+  for (const nome of nomes) {
+    const { data, error } = await supabase
+      .from("estados_os")
+      .select("id, nome")
+      .ilike("nome", nome)
+      .limit(1)
+      .maybeSingle();
+
+    if (!error && data?.id) return data as { id: string; nome: string };
+  }
+
+  return null;
+};
+
+const aplicarReflexoNaOS = async ({
+  orcamentoNumero,
+  ordemServicoId,
+  estadoAnteriorId,
+  status,
+  aprovadoPor,
+  motivoReprovacao,
+}: {
+  orcamentoNumero: string;
+  ordemServicoId: string;
+  estadoAnteriorId: string | null;
+  status: OrcamentoStatus;
+  aprovadoPor?: string;
+  motivoReprovacao?: string;
+}) => {
+  let estadoNovoId: string | null = estadoAnteriorId;
+  let acao = "";
+  let observacao = "";
+
+  if (status === "aprovado") {
+    const estado = await buscarEstadoOSPorNomes([
+      "Orçamento aprovado",
+      "Orcamento aprovado",
+      "Aprovado",
+      "Orçamento Aprovado",
+    ]);
+
+    estadoNovoId = estado?.id || estadoAnteriorId;
+    acao = "orcamento_aprovado";
+    observacao = aprovadoPor
+      ? `Orçamento nº ${orcamentoNumero} aprovado por ${aprovadoPor}.`
+      : `Orçamento nº ${orcamentoNumero} aprovado.`;
+
+    const { error } = await supabase
+      .from("ordens_servico")
+      .update({
+        estado_os_id: estadoNovoId,
+        status_sistema: "aberta",
+        data_fechamento: null,
+      })
+      .eq("id", ordemServicoId);
+
+    if (error) throw new Error(error.message);
+  }
+
+  if (status === "reprovado") {
+    const estado = await buscarEstadoOSPorNomes([
+      "Orçamento não aprovado",
+      "Orcamento nao aprovado",
+      "Orçamento reprovado",
+      "Reprovado",
+    ]);
+
+    estadoNovoId = estado?.id || estadoAnteriorId;
+    acao = "orcamento_reprovado";
+    observacao = motivoReprovacao
+      ? `Orçamento nº ${orcamentoNumero} reprovado. Motivo: ${motivoReprovacao}.`
+      : `Orçamento nº ${orcamentoNumero} reprovado.`;
+
+    const { error } = await supabase
+      .from("ordens_servico")
+      .update({
+        estado_os_id: estadoNovoId,
+        status_sistema: "aberta",
+        data_fechamento: null,
+      })
+      .eq("id", ordemServicoId);
+
+    if (error) throw new Error(error.message);
+  }
+
+  if (status === "faturado") {
+    acao = "orcamento_faturado";
+    observacao = `Orçamento nº ${orcamentoNumero} marcado como faturado.`;
+  }
+
+  if (status === "cancelado") {
+    acao = "orcamento_cancelado";
+    observacao = `Orçamento nº ${orcamentoNumero} cancelado.`;
+  }
+
+  if (status === "pendente") {
+    acao = "orcamento_pendente";
+    observacao = `Orçamento nº ${orcamentoNumero} marcado como pendente.`;
+  }
+
+  if (acao) {
+    await registrarHistoricoOS({
+      ordemServicoId,
+      acao,
+      observacao,
+      estadoAnteriorId,
+      estadoNovoId,
+    });
+  }
 };
 
 export const orcamentosService = {
@@ -337,6 +585,42 @@ export const orcamentosService = {
       motivoReprovacao?: string;
     }
   ) {
+    const { data: orcamentoAtual, error: orcamentoError } = await supabase
+      .from("orcamentos")
+      .select(
+        `
+          id,
+          numero,
+          status,
+          ordem_servico_id,
+          valor_total,
+          aprovado_por,
+          motivo_reprovacao
+        `
+      )
+      .eq("id", id)
+      .single();
+
+    if (orcamentoError) {
+      throw new Error(orcamentoError.message);
+    }
+
+    let osAtual: { id: string; estado_os_id: string | null } | null = null;
+
+    if (orcamentoAtual.ordem_servico_id) {
+      const { data: osData, error: osError } = await supabase
+        .from("ordens_servico")
+        .select("id, estado_os_id")
+        .eq("id", orcamentoAtual.ordem_servico_id)
+        .single();
+
+      if (osError) {
+        throw new Error(osError.message);
+      }
+
+      osAtual = osData;
+    }
+
     const payload: Record<string, unknown> = {
       status,
     };
@@ -352,8 +636,10 @@ export const orcamentosService = {
       payload.data_aprovacao = new Date().toISOString();
     }
 
-    if (status === "cancelado") {
-      payload.ativo = false;
+    if (status === "pendente") {
+      payload.aprovado_por = null;
+      payload.data_aprovacao = null;
+      payload.motivo_reprovacao = null;
     }
 
     const { error } = await supabase
@@ -363,6 +649,17 @@ export const orcamentosService = {
 
     if (error) {
       throw new Error(error.message);
+    }
+
+    if (orcamentoAtual.ordem_servico_id && osAtual) {
+      await aplicarReflexoNaOS({
+        orcamentoNumero: orcamentoAtual.numero,
+        ordemServicoId: orcamentoAtual.ordem_servico_id,
+        estadoAnteriorId: osAtual.estado_os_id,
+        status,
+        aprovadoPor: extra?.aprovadoPor,
+        motivoReprovacao: extra?.motivoReprovacao,
+      });
     }
 
     return orcamentosService.buscarPorId(id);

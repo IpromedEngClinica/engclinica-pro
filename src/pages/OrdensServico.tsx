@@ -1,5 +1,6 @@
 import {
   ClipboardList,
+  FileText,
   FileSignature,
   Plus,
   Search,
@@ -32,12 +33,22 @@ import {
   useOrdensServico,
 } from "@/hooks/useOrdensServico";
 import { useEstadosOS } from "@/hooks/useCamposOS";
-import { OrdemServicoSupabase } from "@/services/ordensServicoService";
+import {
+  OrdemServicoSupabase,
+  ordensServicoService,
+} from "@/services/ordensServicoService";
+import type { EmpresaSupabase } from "@/services/empresasService";
+import type { EquipamentoSupabase } from "@/services/equipamentosService";
 import { toast } from "@/hooks/use-toast";
 import OrdemServicoFormDialog, {
   DialogMode,
 } from "@/components/OrdemServicoFormDialog";
 import OrdemServicoDetalhesDialog from "@/components/OrdemServicoDetalhesDialog";
+import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
+import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
+import ProtocoloEntregaDialog from "@/components/ProtocoloEntregaDialog";
+import OrcamentoFormDialog from "@/components/OrcamentoFormDialog";
+import { gerarPdfOrdemServico } from "@/utils/gerarPdfOrdemServico";
 
 const ALL = "__all__";
 
@@ -120,6 +131,18 @@ const OrdensServico = () => {
   const [detalhesOS, setDetalhesOS] = useState<OrdemServicoSupabase | null>(
     null
   );
+  const [entregaOpen, setEntregaOpen] = useState(false);
+  const [osEntrega, setOsEntrega] = useState<OrdemServicoSupabase | null>(null);
+  const [orcamentoOpen, setOrcamentoOpen] = useState(false);
+  const [osOrcamento, setOsOrcamento] = useState<OrdemServicoSupabase | null>(
+    null
+  );
+  const [empresaDetalhesOpen, setEmpresaDetalhesOpen] = useState(false);
+  const [empresaSelecionada, setEmpresaSelecionada] =
+    useState<EmpresaSupabase | null>(null);
+  const [equipamentoDetalhesOpen, setEquipamentoDetalhesOpen] = useState(false);
+  const [equipamentoSelecionado, setEquipamentoSelecionado] =
+    useState<EquipamentoSupabase | null>(null);
   const [editingEstadoId, setEditingEstadoId] = useState<string | null>(null);
 
   const [hideClosed, setHideClosed] = useState(false);
@@ -235,6 +258,34 @@ const OrdensServico = () => {
     setOpen(true);
   };
 
+  const openEntrega = (os: OrdemServicoSupabase) => {
+    setOsEntrega(os);
+    setEntregaOpen(true);
+  };
+
+  const openOrcamento = (os: OrdemServicoSupabase) => {
+    setOsOrcamento(os);
+    setOrcamentoOpen(true);
+  };
+
+  const openEmpresaDetalhes = (
+    empresa: EmpresaSupabase | null | undefined
+  ) => {
+    if (!empresa) return;
+
+    setEmpresaSelecionada(empresa);
+    setEmpresaDetalhesOpen(true);
+  };
+
+  const openEquipamentoDetalhes = (
+    equipamento: EquipamentoSupabase | null | undefined
+  ) => {
+    if (!equipamento) return;
+
+    setEquipamentoSelecionado(equipamento);
+    setEquipamentoDetalhesOpen(true);
+  };
+
   const featurePending = (label: string) => {
     toast({
       title: label,
@@ -307,6 +358,20 @@ const OrdensServico = () => {
     }
   };
 
+  const handleGerarPdfOS = async (os: OrdemServicoSupabase) => {
+    try {
+      const osCompleta = await ordensServicoService.buscarPorId(os.id);
+      await gerarPdfOrdemServico(osCompleta);
+    } catch (error) {
+      toast({
+        title: "Erro ao gerar PDF",
+        description:
+          error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="p-6 lg:p-8">
       <PageHeader
@@ -344,6 +409,45 @@ const OrdensServico = () => {
           setDetalhesOS(null);
           handleExcluir(ordem);
         }}
+        onOpenEmpresa={openEmpresaDetalhes}
+        onOpenEquipamento={openEquipamentoDetalhes}
+      />
+
+      <EmpresaDetalhesDialog
+        open={empresaDetalhesOpen}
+        onOpenChange={(value) => {
+          setEmpresaDetalhesOpen(value);
+          if (!value) setEmpresaSelecionada(null);
+        }}
+        empresa={empresaSelecionada}
+      />
+
+      <EquipamentoDetalhesDialog
+        open={equipamentoDetalhesOpen}
+        onOpenChange={(value) => {
+          setEquipamentoDetalhesOpen(value);
+          if (!value) setEquipamentoSelecionado(null);
+        }}
+        equipamento={equipamentoSelecionado}
+      />
+
+      <ProtocoloEntregaDialog
+        open={entregaOpen}
+        onOpenChange={(value) => {
+          setEntregaOpen(value);
+          if (!value) setOsEntrega(null);
+        }}
+        os={osEntrega}
+      />
+
+      <OrcamentoFormDialog
+        open={orcamentoOpen}
+        onOpenChange={(value) => {
+          setOrcamentoOpen(value);
+          if (!value) setOsOrcamento(null);
+        }}
+        mode="create"
+        fromOS={osOrcamento}
       />
 
       <div className="bg-card rounded-xl border mb-4">
@@ -570,11 +674,33 @@ const OrdensServico = () => {
                       </td>
 
                       <td className="px-5 py-3 text-muted-foreground">
-                        {solicitante}
+                        {os.empresa ? (
+                          <button
+                            type="button"
+                            className="text-primary hover:underline font-medium text-left"
+                            onClick={() => openEmpresaDetalhes(os.empresa)}
+                          >
+                            {solicitante}
+                          </button>
+                        ) : (
+                          solicitante
+                        )}
                       </td>
 
                       <td className="px-5 py-3 text-muted-foreground">
-                        {equipamento}
+                        {os.equipamento ? (
+                          <button
+                            type="button"
+                            className="text-primary hover:underline font-medium text-left"
+                            onClick={() =>
+                              openEquipamentoDetalhes(os.equipamento)
+                            }
+                          >
+                            {equipamento}
+                          </button>
+                        ) : (
+                          equipamento
+                        )}
                       </td>
 
                       <td className="px-5 py-3 text-muted-foreground">
@@ -613,18 +739,20 @@ const OrdensServico = () => {
                               <DropdownMenuSeparator />
 
                               <DropdownMenuItem
-                                onClick={() =>
-                                  featurePending("Geração de orçamento")
-                                }
+                                onClick={() => handleGerarPdfOS(os)}
+                              >
+                                <FileText className="w-4 h-4 mr-2" /> Gerar PDF
+                              </DropdownMenuItem>
+
+                              <DropdownMenuItem
+                                onClick={() => openOrcamento(os)}
                               >
                                 <FileSignature className="w-4 h-4 mr-2" /> Gerar
                                 Orçamento
                               </DropdownMenuItem>
 
                               <DropdownMenuItem
-                                onClick={() =>
-                                  featurePending("Protocolo de entrega")
-                                }
+                                onClick={() => openEntrega(os)}
                               >
                                 <PackageCheck className="w-4 h-4 mr-2" />{" "}
                                 Protocolo de Entrega

@@ -1,4 +1,6 @@
 import { supabase } from "@/lib/supabaseClient";
+import type { EmpresaSupabase } from "@/services/empresasService";
+import type { EquipamentoSupabase } from "@/services/equipamentosService";
 
 export type OrdemServicoAcessorioSupabase = {
   id: string;
@@ -19,6 +21,46 @@ export type OrdemServicoHistoricoSupabase = {
   observacao: string | null;
   created_at: string;
 };
+
+export type OrdemServicoChecklistPreventivaItemSupabase = {
+  id: string;
+  checklist_id: string;
+  procedimento_item_id: string | null;
+  descricao: string;
+  tipo_resposta: "conformidade" | "aprovacao_uso";
+  resposta:
+    | "conforme"
+    | "nao_conforme"
+    | "nao_aplica"
+    | "aprovado"
+    | "nao_aprovado"
+    | "aprovado_com_restricao";
+  observacao: string | null;
+  ordem: number;
+  created_at: string;
+};
+
+export type OrdemServicoChecklistPreventivaSupabase = {
+  id: string;
+  ordem_servico_id: string;
+  procedimento_id: string;
+  titulo_procedimento: string;
+  tipo_equipamento_nome: string | null;
+  validade_meses: number;
+  data_validade: string | null;
+  resultado_geral: "aprovado" | "nao_aprovado" | "aprovado_com_restricao";
+  observacoes: string | null;
+  created_at: string;
+  itens?: OrdemServicoChecklistPreventivaItemSupabase[];
+};
+
+export type OrdemServicoAcessorioFormInput =
+  | string
+  | {
+      descricao?: string | null;
+      quantidade?: number | string | null;
+      observacoes?: string | null;
+    };
 
 export type OrdemServicoSupabase = {
   id: string;
@@ -42,27 +84,8 @@ export type OrdemServicoSupabase = {
   ativo: boolean;
   created_at: string;
   updated_at: string;
-  empresa?: {
-    id: string;
-    nome: string;
-    nome_fantasia: string | null;
-    ativo: boolean;
-  } | null;
-  equipamento?: {
-    id: string;
-    tipo_texto: string | null;
-    fabricante: string | null;
-    modelo: string | null;
-    numero_serie: string | null;
-    patrimonio: string | null;
-    tag: string | null;
-    setor: string | null;
-    ativo: boolean;
-    tipo_equipamento?: {
-      id: string;
-      nome: string;
-    } | null;
-  } | null;
+  empresa?: EmpresaSupabase | null;
+  equipamento?: EquipamentoSupabase | null;
   tipo_os?: {
     id: string;
     nome: string;
@@ -75,6 +98,7 @@ export type OrdemServicoSupabase = {
   } | null;
   acessorios?: OrdemServicoAcessorioSupabase[];
   historico?: OrdemServicoHistoricoSupabase[];
+  checklist_preventiva?: OrdemServicoChecklistPreventivaSupabase[];
 };
 
 export type OrdemServicoFormInput = {
@@ -90,7 +114,7 @@ export type OrdemServicoFormInput = {
   descricaoServico?: string;
   observacoes?: string;
   statusSistema?: string;
-  acessorios?: string[];
+  acessorios?: OrdemServicoAcessorioFormInput[];
 };
 
 const selectOrdensServico = `
@@ -117,12 +141,33 @@ const selectOrdensServico = `
   updated_at,
   empresa:empresas (
     id,
+    organizacao_id,
     nome,
     nome_fantasia,
-    ativo
+    tipo_cliente,
+    tipo_relacao,
+    cpf_cnpj,
+    cep,
+    rua,
+    numero,
+    complemento,
+    bairro,
+    cidade,
+    estado,
+    contato,
+    email,
+    celular,
+    telefone,
+    observacoes,
+    ativo,
+    created_at,
+    updated_at
   ),
   equipamento:equipamentos (
     id,
+    organizacao_id,
+    empresa_id,
+    tipo_equipamento_id,
     tipo_texto,
     fabricante,
     modelo,
@@ -130,7 +175,41 @@ const selectOrdensServico = `
     patrimonio,
     tag,
     setor,
+    status,
+    data_aquisicao,
+    data_instalacao,
+    data_ultima_preventiva,
+    data_proxima_preventiva,
+    data_ultima_calibracao,
+    data_proxima_calibracao,
+    observacoes,
     ativo,
+    created_at,
+    updated_at,
+    empresa:empresas (
+      id,
+      organizacao_id,
+      nome,
+      nome_fantasia,
+      tipo_cliente,
+      tipo_relacao,
+      cpf_cnpj,
+      cep,
+      rua,
+      numero,
+      complemento,
+      bairro,
+      cidade,
+      estado,
+      contato,
+      email,
+      celular,
+      telefone,
+      observacoes,
+      ativo,
+      created_at,
+      updated_at
+    ),
     tipo_equipamento:tipos_equipamento (
       id,
       nome
@@ -153,6 +232,29 @@ const selectOrdensServico = `
     quantidade,
     observacoes,
     created_at
+  ),
+  checklist_preventiva:os_checklists_preventiva (
+    id,
+    ordem_servico_id,
+    procedimento_id,
+    titulo_procedimento,
+    tipo_equipamento_nome,
+    validade_meses,
+    data_validade,
+    resultado_geral,
+    observacoes,
+    created_at,
+    itens:os_checklist_preventiva_itens (
+      id,
+      checklist_id,
+      procedimento_item_id,
+      descricao,
+      tipo_resposta,
+      resposta,
+      observacao,
+      ordem,
+      created_at
+    )
   ),
   historico:ordem_servico_historico (
     id,
@@ -181,32 +283,69 @@ const toDatabasePayload = (input: OrdemServicoFormInput) => ({
   status_sistema: input.statusSistema || "aberta",
 });
 
-const normalizarAcessorios = (acessorios?: string[]) => {
-  const map = new Map<string, string>();
+type AcessorioNormalizado = {
+  descricao: string;
+  quantidade: number;
+  observacoes: string | null;
+};
+
+const normalizarQuantidade = (
+  quantidade?: number | string | null
+) => {
+  const value = Number(quantidade || 1);
+
+  return Number.isFinite(value) && value > 0 ? value : 1;
+};
+
+const normalizarAcessorios = (
+  acessorios?: OrdemServicoAcessorioFormInput[]
+) => {
+  const map = new Map<string, AcessorioNormalizado>();
 
   (acessorios || []).forEach((item) => {
-    const descricao = item.trim();
+    const descricao =
+      typeof item === "string" ? item.trim() : item.descricao?.trim();
 
     if (!descricao) return;
 
     const chave = descricao.toLowerCase().replace(/\s+/g, " ");
+    const quantidade =
+      typeof item === "string" ? 1 : normalizarQuantidade(item.quantidade);
+    const observacoes =
+      typeof item === "string" ? null : item.observacoes?.trim() || null;
 
     if (!map.has(chave)) {
-      map.set(chave, descricao);
+      map.set(chave, {
+        descricao,
+        quantidade,
+        observacoes,
+      });
     }
   });
 
-  return Array.from(map.values()).map((descricao) => ({
-    descricao,
-    quantidade: 1,
-    observacoes: null,
-  }));
+  return Array.from(map.values());
 };
 
 const texto = (value?: string | null) => value?.trim() || "";
 
 const chaveAcessorio = (descricao: string) =>
   descricao.trim().toLowerCase().replace(/\s+/g, " ");
+
+const normalizarListaAcessoriosParaComparacao = (
+  acessorios: Array<{
+    descricao?: string | null;
+    quantidade?: number | string | null;
+  }> = []
+) =>
+  acessorios
+    .map((item) => ({
+      descricao: item.descricao?.trim()
+        ? chaveAcessorio(item.descricao)
+        : "",
+      quantidade: normalizarQuantidade(item.quantidade),
+    }))
+    .filter((item) => item.descricao)
+    .sort((a, b) => a.descricao.localeCompare(b.descricao));
 
 const buscarNomeEstado = async (estadoId?: string | null) => {
   if (!estadoId) return "não informado";
@@ -242,12 +381,11 @@ const montarDescricaoAlteracoes = async ({
     observacoes: string | null;
   };
   input: OrdemServicoFormInput;
-  acessoriosAnteriores: { descricao: string | null }[] | null;
-  acessoriosNovos: {
-    descricao: string;
-    quantidade: number;
-    observacoes: null;
-  }[];
+  acessoriosAnteriores: {
+    descricao: string | null;
+    quantidade?: number | string | null;
+  }[] | null;
+  acessoriosNovos: AcessorioNormalizado[];
 }) => {
   const alteracoes: string[] = [];
 
@@ -292,19 +430,15 @@ const montarDescricaoAlteracoes = async ({
     alteracoes.push("Observações alteradas.");
   }
 
+  const anterioresNormalizados = normalizarListaAcessoriosParaComparacao(
+    acessoriosAnteriores || []
+  );
+  const novosNormalizados =
+    normalizarListaAcessoriosParaComparacao(acessoriosNovos);
   const anteriores = new Set(
-    (acessoriosAnteriores || [])
-      .map((item) => item.descricao?.trim())
-      .filter((descricao): descricao is string => Boolean(descricao))
-      .map(chaveAcessorio)
+    anterioresNormalizados.map((item) => item.descricao)
   );
-
-  const novos = new Set(
-    acessoriosNovos
-      .map((item) => item.descricao?.trim())
-      .filter((descricao): descricao is string => Boolean(descricao))
-      .map(chaveAcessorio)
-  );
+  const novos = new Set(novosNormalizados.map((item) => item.descricao));
 
   const adicionados = acessoriosNovos
     .filter((item) => !anteriores.has(chaveAcessorio(item.descricao)))
@@ -355,7 +489,25 @@ const registrarHistorico = async ({
   }
 };
 
+const buscarOrdemServicoPorId = async (id: string) => {
+  const { data, error } = await supabase
+    .from("ordens_servico")
+    .select(selectOrdensServico)
+    .eq("id", id)
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data as unknown as OrdemServicoSupabase;
+};
+
 export const ordensServicoService = {
+  async buscarPorId(id: string) {
+    return buscarOrdemServicoPorId(id);
+  },
+
   async listar() {
     const { data, error } = await supabase
       .from("ordens_servico")
@@ -431,17 +583,7 @@ export const ordensServicoService = {
       estadoNovoId: input.estadoOsId || null,
     });
 
-    const { data, error: selectError } = await supabase
-      .from("ordens_servico")
-      .select(selectOrdensServico)
-      .eq("id", osCriada.id)
-      .single();
-
-    if (selectError) {
-      throw new Error(selectError.message);
-    }
-
-    return data as unknown as OrdemServicoSupabase;
+    return buscarOrdemServicoPorId(osCriada.id);
   },
 
   async atualizar(id: string, input: OrdemServicoFormInput) {
@@ -471,7 +613,7 @@ export const ordensServicoService = {
 
     const { data: acessoriosAnteriores } = await supabase
       .from("ordem_servico_acessorios")
-      .select("descricao")
+      .select("descricao, quantidade")
       .eq("ordem_servico_id", id);
 
     const acessorios = normalizarAcessorios(input.acessorios);
@@ -524,17 +666,7 @@ export const ordensServicoService = {
       estadoNovoId: input.estadoOsId || null,
     });
 
-    const { data, error: selectError } = await supabase
-      .from("ordens_servico")
-      .select(selectOrdensServico)
-      .eq("id", id)
-      .single();
-
-    if (selectError) {
-      throw new Error(selectError.message);
-    }
-
-    return data as unknown as OrdemServicoSupabase;
+    return buscarOrdemServicoPorId(id);
   },
 
   async alterarEstado(id: string, estadoOsId: string) {

@@ -10,25 +10,28 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
-import { useExecutarPreventiva } from "@/hooks/usePreventivas";
-import type { EquipamentoSupabase } from "@/services/equipamentosService";
+import { useAtualizarChecklistPreventiva } from "@/hooks/usePreventivas";
+import type { OrdemServicoSupabase } from "@/services/ordensServicoService";
 import type {
   AprovacaoUsoResposta,
   ChecklistResposta,
-  ProcedimentoPreventiva,
-  ProcedimentoPreventivaItem,
 } from "@/services/procedimentosPreventivaService";
 
-interface PreventivaChecklistDialogProps {
+interface PreventivaChecklistEditDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  equipamento: EquipamentoSupabase | null;
-  procedimento: ProcedimentoPreventiva | null;
+  ordemServico: OrdemServicoSupabase | null;
 }
 
+type ChecklistEditResposta =
+  | ChecklistResposta
+  | AprovacaoUsoResposta
+  | "";
+
 type RespostaItem = {
-  resposta: ChecklistResposta | AprovacaoUsoResposta | "";
+  resposta: ChecklistEditResposta;
   observacao: string;
 };
 
@@ -50,86 +53,78 @@ const aprovacaoOptions: Array<{
   { value: "aprovado_com_restricao", label: "Aprovado com restricao" },
 ];
 
-const getEquipamentoLabel = (equipamento: EquipamentoSupabase) =>
-  [
-    equipamento.tipo_equipamento?.nome || equipamento.tipo_texto || "Equipamento",
-    equipamento.fabricante,
-    equipamento.modelo,
-    equipamento.tag || equipamento.patrimonio || equipamento.numero_serie,
-  ]
-    .filter(Boolean)
-    .join(" - ");
+const getChecklistPreventiva = (os: OrdemServicoSupabase | null) => {
+  const checklist = os?.checklist_preventiva;
 
-const getEmpresaNome = (equipamento: EquipamentoSupabase) =>
-  equipamento.empresa?.nome_fantasia ||
-  equipamento.empresa?.nome ||
-  "Nao informado";
+  if (Array.isArray(checklist)) return checklist[0] || null;
 
-const PreventivaChecklistDialog = ({
+  return checklist || null;
+};
+
+const PreventivaChecklistEditDialog = ({
   open,
   onOpenChange,
-  equipamento,
-  procedimento,
-}: PreventivaChecklistDialogProps) => {
-  const executarPreventiva = useExecutarPreventiva();
-  const [respostas, setRespostas] = useState<Record<string, RespostaItem>>({});
-  const [observacoes, setObservacoes] = useState("");
+  ordemServico,
+}: PreventivaChecklistEditDialogProps) => {
+  const atualizarChecklist = useAtualizarChecklistPreventiva();
+  const checklist = getChecklistPreventiva(ordemServico);
 
   const itens = useMemo(
-    () => [...(procedimento?.itens || [])].sort((a, b) => a.ordem - b.ordem),
-    [procedimento]
+    () =>
+      [...(checklist?.itens || [])].sort(
+        (a, b) => Number(a.ordem || 0) - Number(b.ordem || 0)
+      ),
+    [checklist]
   );
 
+  const [resultadoGeral, setResultadoGeral] =
+    useState<AprovacaoUsoResposta | "">("");
+  const [observacoes, setObservacoes] = useState("");
+  const [respostas, setRespostas] = useState<Record<string, RespostaItem>>({});
+
   useEffect(() => {
-    if (!open || !procedimento) return;
+    if (!open || !checklist) return;
 
     const initial: Record<string, RespostaItem> = {};
-    (procedimento.itens || []).forEach((item) => {
+
+    (checklist.itens || []).forEach((item) => {
       initial[item.id] = {
-        resposta: item.tipo_resposta === "conformidade" ? "conforme" : "",
-        observacao: "",
+        resposta: item.resposta || "",
+        observacao: item.observacao || "",
       };
     });
+
+    setResultadoGeral(checklist.resultado_geral || "");
+    setObservacoes(checklist.observacoes || "");
     setRespostas(initial);
-    setObservacoes("");
-  }, [open, procedimento]);
+  }, [open, checklist]);
 
-  if (!equipamento || !procedimento) return null;
+  if (!ordemServico || !checklist) return null;
 
-  const setResposta = (
-    item: ProcedimentoPreventivaItem,
-    patch: Partial<RespostaItem>
-  ) => {
+  const setResposta = (itemId: string, patch: Partial<RespostaItem>) => {
     setRespostas((prev) => ({
       ...prev,
-      [item.id]: {
-        ...(prev[item.id] || { resposta: "", observacao: "" }),
+      [itemId]: {
+        ...(prev[itemId] || { resposta: "", observacao: "" }),
         ...patch,
       },
     }));
   };
 
   const handleSubmit = async () => {
-    const faltantes = itens.filter((item) => {
-      if (!item.obrigatorio) return false;
-      return !respostas[item.id]?.resposta;
-    });
-
-    if (faltantes.length > 0) {
+    if (!resultadoGeral) {
       toast({
-        title: "Preencha todos os itens obrigatorios.",
+        title: "Informe o resultado geral.",
         variant: "destructive",
       });
       return;
     }
 
-    const aprovacao = itens.find(
-      (item) => item.tipo_resposta === "aprovacao_uso"
-    );
+    const faltantes = itens.filter((item) => !respostas[item.id]?.resposta);
 
-    if (!aprovacao || !respostas[aprovacao.id]?.resposta) {
+    if (faltantes.length > 0) {
       toast({
-        title: "Informe a aprovacao para uso.",
+        title: "Preencha todos os itens do checklist.",
         variant: "destructive",
       });
       return;
@@ -138,43 +133,41 @@ const PreventivaChecklistDialog = ({
     const temNaoConforme = itens.some(
       (item) => respostas[item.id]?.resposta === "nao_conforme"
     );
-    const aprovadoParaUso = respostas[aprovacao.id]?.resposta === "aprovado";
 
-    if (
-      (temNaoConforme && aprovadoParaUso) ||
-      (!temNaoConforme && respostas[aprovacao.id]?.resposta === "nao_aprovado")
-    ) {
+    if (temNaoConforme && resultadoGeral === "aprovado") {
       const continuar = window.confirm(
-        "A aprovacao escolhida parece inconsistente com as respostas. Deseja continuar?"
+        "Existem itens nao conformes. Deseja manter o resultado geral como aprovado?"
       );
+
       if (!continuar) return;
     }
 
     try {
-      const os = await executarPreventiva.mutateAsync({
-        equipamentoId: equipamento.id,
-        empresaId: equipamento.empresa_id,
-        procedimentoId: procedimento.id,
+      await atualizarChecklist.mutateAsync({
+        checklistId: checklist.id,
+        ordemServicoId: ordemServico.id,
+        resultadoGeral,
         observacoes,
-        respostas: itens.map((item, index) => ({
-          procedimentoItemId: item.id,
+        itens: itens.map((item, index) => ({
+          id: item.id,
+          procedimentoItemId: item.procedimento_item_id,
           descricao: item.descricao,
           tipoResposta: item.tipo_resposta,
-          resposta: respostas[item.id]?.resposta || "nao_aplica",
-          observacao: respostas[item.id]?.observacao,
+          resposta: respostas[item.id].resposta as
+            | ChecklistResposta
+            | AprovacaoUsoResposta,
+          observacao: respostas[item.id].observacao,
           ordem: item.ordem || index + 1,
         })),
       });
 
-      toast({
-        title: "OS de preventiva criada.",
-        description: `OS ${os.numero} criada e fechada.`,
-      });
+      toast({ title: "Checklist atualizado com sucesso." });
       onOpenChange(false);
     } catch (error) {
       toast({
-        title: "Erro ao executar preventiva",
-        description: error instanceof Error ? error.message : "Erro inesperado.",
+        title: "Erro ao atualizar checklist",
+        description:
+          error instanceof Error ? error.message : "Erro inesperado.",
         variant: "destructive",
       });
     }
@@ -186,27 +179,56 @@ const PreventivaChecklistDialog = ({
         <DialogHeader className="px-6 pt-6">
           <DialogTitle className="flex items-center gap-2">
             <CheckCircle2 className="w-5 h-5 text-primary" />
-            Checklist de Preventiva
+            Editar checklist de preventiva
           </DialogTitle>
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 rounded-md border p-4 text-sm">
             <div>
-              <p className="text-muted-foreground">Equipamento</p>
-              <p className="font-medium">{getEquipamentoLabel(equipamento)}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Empresa</p>
-              <p className="font-medium">{getEmpresaNome(equipamento)}</p>
+              <p className="text-muted-foreground">OS</p>
+              <p className="font-medium">{ordemServico.numero}</p>
             </div>
             <div>
               <p className="text-muted-foreground">Procedimento</p>
-              <p className="font-medium">{procedimento.titulo}</p>
+              <p className="font-medium">
+                {checklist.titulo_procedimento || "Checklist de Preventiva"}
+              </p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Tipo de equipamento</p>
+              <p className="font-medium">
+                {checklist.tipo_equipamento_nome || "Nao informado"}
+              </p>
             </div>
             <div>
               <p className="text-muted-foreground">Validade padrao</p>
-              <p className="font-medium">{procedimento.validade_meses} meses</p>
+              <p className="font-medium">{checklist.validade_meses} meses</p>
+            </div>
+          </div>
+
+          <div className="rounded-md border p-4 space-y-3">
+            <Label className="text-sm font-medium">Resultado geral</Label>
+            <div className="flex flex-wrap gap-2">
+              {aprovacaoOptions.map((option) => {
+                const selected = resultadoGeral === option.value;
+
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setResultadoGeral(option.value)}
+                    disabled={atualizarChecklist.isPending}
+                    className={`px-3 py-1.5 rounded-md border text-sm transition-colors ${
+                      selected
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-background hover:bg-muted/50"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -236,7 +258,7 @@ const PreventivaChecklistDialog = ({
                         <p className="font-medium">{item.descricao}</p>
                         {item.tipo_resposta === "aprovacao_uso" && (
                           <p className="text-xs text-muted-foreground">
-                            Resultado geral da preventiva
+                            Aprovacao para uso
                           </p>
                         )}
                       </td>
@@ -251,10 +273,11 @@ const PreventivaChecklistDialog = ({
                                 key={option.value}
                                 type="button"
                                 onClick={() =>
-                                  setResposta(item, {
+                                  setResposta(item.id, {
                                     resposta: option.value,
                                   })
                                 }
+                                disabled={atualizarChecklist.isPending}
                                 className={`px-2 py-1 rounded-md border text-xs transition-colors ${
                                   selected
                                     ? "bg-primary text-primary-foreground border-primary"
@@ -271,12 +294,13 @@ const PreventivaChecklistDialog = ({
                         <Input
                           value={respostas[item.id]?.observacao || ""}
                           onChange={(event) =>
-                            setResposta(item, {
+                            setResposta(item.id, {
                               observacao: event.target.value,
                             })
                           }
                           placeholder="Opcional"
                           className="h-8"
+                          disabled={atualizarChecklist.isPending}
                         />
                       </td>
                     </tr>
@@ -287,11 +311,12 @@ const PreventivaChecklistDialog = ({
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Observacoes gerais</label>
+            <Label className="text-sm font-medium">Observacoes gerais</Label>
             <Textarea
               rows={3}
               value={observacoes}
               onChange={(event) => setObservacoes(event.target.value)}
+              disabled={atualizarChecklist.isPending}
             />
           </div>
         </div>
@@ -300,17 +325,15 @@ const PreventivaChecklistDialog = ({
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
-            disabled={executarPreventiva.isPending}
+            disabled={atualizarChecklist.isPending}
           >
             Cancelar
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={executarPreventiva.isPending}
+            disabled={atualizarChecklist.isPending}
           >
-            {executarPreventiva.isPending
-              ? "Gerando OS..."
-              : "Concluir e gerar OS"}
+            {atualizarChecklist.isPending ? "Salvando..." : "Salvar checklist"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -318,4 +341,4 @@ const PreventivaChecklistDialog = ({
   );
 };
 
-export default PreventivaChecklistDialog;
+export default PreventivaChecklistEditDialog;
