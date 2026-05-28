@@ -48,6 +48,10 @@ import {
   useCriarOrcamento,
 } from "@/hooks/useOrcamentos";
 import { cn } from "@/lib/utils";
+import {
+  getEquipamentoLabel as formatEquipamentoLabel,
+  getIdentificadorEquipamento,
+} from "@/utils/equipamentoDisplay";
 
 export type OrcamentoDialogMode = "create" | "edit" | "view";
 export type DialogMode = OrcamentoDialogMode;
@@ -87,6 +91,7 @@ type FormState = {
   formaPagamento: FormaPagamento | "";
   modoPagamento: ModoPagamento;
   numeroParcelas: number;
+  diasEntreParcelas: number;
   valorEntrada: number;
   prazoEntrega: string;
   validadeDias: number;
@@ -108,6 +113,7 @@ const emptyForm: FormState = {
   formaPagamento: "",
   modoPagamento: "avista",
   numeroParcelas: 1,
+  diasEntreParcelas: 30,
   valorEntrada: 0,
   prazoEntrega: "",
   validadeDias: 90,
@@ -166,6 +172,27 @@ const formatCurrency = (value?: number | null) =>
     currency: "BRL",
   }).format(Number(value || 0));
 
+const formatFormaPagamento = (forma?: FormaPagamento | "" | null) => {
+  const map: Record<string, string> = {
+    dinheiro: "Dinheiro",
+    cartao: "Cartao",
+    boleto: "Boleto",
+    pix: "Pix",
+  };
+
+  return forma ? map[forma] || forma : "Nao informado";
+};
+
+const formatModoPagamento = (modo?: ModoPagamento | null) => {
+  const map: Record<string, string> = {
+    avista: "A vista",
+    parcelado: "Parcelado",
+    entrada_parcela: "Entrada + parcelas",
+  };
+
+  return modo ? map[modo] || modo : "A vista";
+};
+
 const formatDate = (iso?: string | null) => {
   if (!iso) return "-";
   const d = new Date(iso);
@@ -198,24 +225,7 @@ const getEmpresaNome = (
 
 const getEquipamentoLabel = (
   source?: OrdemServicoSupabase | OrcamentoSupabase | null
-) => {
-  const equipamento = source?.equipamento;
-  if (!equipamento) return "-";
-
-  const tipo =
-    equipamento.tipo_equipamento?.nome ||
-    equipamento.tipo_texto ||
-    "Equipamento";
-
-  return [
-    tipo,
-    equipamento.fabricante,
-    equipamento.modelo,
-    equipamento.tag || equipamento.patrimonio || equipamento.numero_serie,
-  ]
-    .filter(Boolean)
-    .join(" - ");
-};
+) => formatEquipamentoLabel(source?.equipamento);
 
 const toDateTimeLocalValue = (iso?: string | null) => {
   const date = iso ? new Date(iso) : new Date();
@@ -232,10 +242,7 @@ const montarIdentificadorPorOS = (os: OrdemServicoSupabase) => {
     os.equipamento?.tipo_texto ||
     "Equipamento";
   const modelo = os.equipamento?.modelo;
-  const identificador =
-    os.equipamento?.tag ||
-    os.equipamento?.patrimonio ||
-    os.equipamento?.numero_serie;
+  const identificador = getIdentificadorEquipamento(os.equipamento);
 
   return [tipoServico, tipoEquipamento, modelo, identificador]
     .filter(Boolean)
@@ -304,6 +311,7 @@ const OrcamentoFormDialog = ({
         formaPagamento: orcamento.forma_pagamento || "",
         modoPagamento: orcamento.modo_pagamento || "avista",
         numeroParcelas: orcamento.numero_parcelas || 1,
+        diasEntreParcelas: orcamento.dias_entre_parcelas || 30,
         valorEntrada: Number(orcamento.valor_entrada || 0),
         prazoEntrega:
           orcamento.prazo_entrega || orcamento.prazo_execucao || "",
@@ -409,6 +417,7 @@ const OrcamentoFormDialog = ({
 
   const totalGeral = totalPecas + totalServicos;
   const numeroParcelas = Math.max(1, Number(form.numeroParcelas || 1));
+  const diasEntreParcelas = Math.max(1, Number(form.diasEntreParcelas || 30));
   const valorEntrada =
     form.modoPagamento === "entrada_parcela"
       ? Math.min(Number(form.valorEntrada || 0), totalGeral)
@@ -419,6 +428,26 @@ const OrcamentoFormDialog = ({
       : form.modoPagamento === "entrada_parcela"
         ? (totalGeral - valorEntrada) / numeroParcelas
         : totalGeral;
+  const condicoesPagamentoTexto = (() => {
+    const forma = formatFormaPagamento(form.formaPagamento);
+    const modo = formatModoPagamento(form.modoPagamento);
+
+    if (form.modoPagamento === "parcelado") {
+      return `${forma} - ${numeroParcelas} parcelas de ${formatCurrency(
+        valorParcela
+      )} a cada ${diasEntreParcelas} dias.`;
+    }
+
+    if (form.modoPagamento === "entrada_parcela") {
+      return `${forma} - Entrada de ${formatCurrency(
+        valorEntrada
+      )} + ${numeroParcelas} parcelas de ${formatCurrency(
+        valorParcela
+      )} a cada ${diasEntreParcelas} dias.`;
+    }
+
+    return `${forma} - ${modo}.`;
+  })();
 
   const updatePeca = (index: number, patch: Partial<PecaForm>) => {
     setPecas((current) =>
@@ -500,6 +529,35 @@ const OrcamentoFormDialog = ({
       return false;
     }
 
+    if (form.modoPagamento !== "avista") {
+      if (Number(form.numeroParcelas || 0) < 1) {
+        toast({
+          title: "Numero de parcelas deve ser maior que zero.",
+          variant: "destructive",
+        });
+        return false;
+      }
+
+      if (Number(form.diasEntreParcelas || 0) < 1) {
+        toast({
+          title: "Dias entre parcelas deve ser maior que zero.",
+          variant: "destructive",
+        });
+        return false;
+      }
+    }
+
+    if (
+      form.modoPagamento === "entrada_parcela" &&
+      Number(form.valorEntrada || 0) > totalGeral
+    ) {
+      toast({
+        title: "Valor da entrada nao pode ser maior que o total.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
     return true;
   };
 
@@ -560,10 +618,13 @@ const OrcamentoFormDialog = ({
       modoPagamento: form.modoPagamento,
       numeroParcelas:
         form.modoPagamento === "avista" ? undefined : numeroParcelas,
+      diasEntreParcelas:
+        form.modoPagamento === "avista" ? undefined : diasEntreParcelas,
       valorEntrada:
         form.modoPagamento === "entrada_parcela" ? valorEntrada : undefined,
       valorParcela:
         form.modoPagamento === "avista" ? undefined : valorParcela,
+      condicoesPagamento: condicoesPagamentoTexto,
       prazoEntrega: form.prazoEntrega.trim(),
       frete: form.frete || undefined,
       detalhesOrcamento: form.detalhesOrcamento.trim(),
@@ -1108,6 +1169,12 @@ const OrcamentoFormDialog = ({
                     setForm((current) => ({
                       ...current,
                       modoPagamento: value as ModoPagamento,
+                      numeroParcelas:
+                        value === "avista" ? 1 : Math.max(2, current.numeroParcelas || 2),
+                      diasEntreParcelas:
+                        value === "avista" ? 30 : current.diasEntreParcelas || 30,
+                      valorEntrada:
+                        value === "entrada_parcela" ? current.valorEntrada || 0 : 0,
                     }))
                   }
                 >
@@ -1118,7 +1185,7 @@ const OrcamentoFormDialog = ({
                     <SelectItem value="avista">A vista</SelectItem>
                     <SelectItem value="parcelado">Parcelado</SelectItem>
                     <SelectItem value="entrada_parcela">
-                      Entrada + Parcela
+                      Entrada + Parcelas
                     </SelectItem>
                   </SelectContent>
                 </Select>
@@ -1162,8 +1229,28 @@ const OrcamentoFormDialog = ({
                   />
                 </div>
                 <div className="space-y-2">
+                  <Label>Dias entre parcelas</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={form.diasEntreParcelas}
+                    disabled={isView}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        diasEntreParcelas: Number(event.target.value),
+                      }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
                   <Label>Valor da parcela</Label>
                   <Input value={formatCurrency(valorParcela)} readOnly />
+                </div>
+                <div className="space-y-2 md:col-span-3">
+                  <Label>Condicoes de pagamento</Label>
+                  <Input value={condicoesPagamentoTexto} readOnly />
                 </div>
               </div>
             )}

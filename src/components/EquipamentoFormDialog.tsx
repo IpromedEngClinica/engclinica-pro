@@ -65,6 +65,17 @@ const emptyForm: EquipamentoFormInput = {
 
 const statusOptions = ["Ativo", "Em manutenção", "Desativado"];
 
+const getEquipamentoStatusLabel = (
+  equipamento: EquipamentoSupabase | null,
+  status: string | undefined
+) => {
+  if (equipamento?.ativo === false) {
+    return "Desativado";
+  }
+
+  return status || "Ativo";
+};
+
 const EquipamentoFormDialog = ({
   open,
   onOpenChange,
@@ -320,9 +331,12 @@ const EquipamentoFormDialog = ({
             </div>
 
             <div className="space-y-2">
-              <Label className="text-sm">Estado</Label>
+              <Label className="text-sm">{readOnly ? "Status" : "Estado"}</Label>
               {readOnly ? (
-                <Input value={form.status} disabled />
+                <Input
+                  value={getEquipamentoStatusLabel(equipamento, form.status)}
+                  disabled
+                />
               ) : (
                 <Select
                   value={form.status || "Ativo"}

@@ -51,5 +51,5 @@ export const registerMontserrat = async (doc: jsPDF) => {
   doc.addFileToVFS("Montserrat-ExtraBold.ttf", extraBold);
   doc.addFont("Montserrat-ExtraBold.ttf", "Montserrat", "extrabold");
 
-  doc.setFont("Montserrat", "normal");
+  doc.setFont("Montserrat", "semibold");
 };

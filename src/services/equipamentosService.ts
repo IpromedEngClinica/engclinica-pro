@@ -51,6 +51,14 @@ export type EquipamentoFormInput = {
   observacoes?: string;
 };
 
+export type StatusEquipamentoFiltro = "ativos" | "todos" | "desativados";
+
+export type ListarEquipamentosFiltros = {
+  statusFiltro?: StatusEquipamentoFiltro;
+  empresaId?: string;
+  termo?: string;
+};
+
 const selectEquipamentos = `
   id,
   organizacao_id,
@@ -125,13 +133,43 @@ const toDatabasePayload = (input: EquipamentoFormInput) => ({
 });
 
 export const equipamentosService = {
-  async listar() {
-    const { data, error } = await supabase
+  async listar(filtros?: ListarEquipamentosFiltros) {
+    const statusFiltro = filtros?.statusFiltro || "ativos";
+
+    let query = supabase
       .from("equipamentos")
       .select(selectEquipamentos)
-      .eq("ativo", true)
       .eq("empresa.ativo", true)
       .order("created_at", { ascending: false });
+
+    if (statusFiltro === "ativos") {
+      query = query.eq("ativo", true);
+    }
+
+    if (statusFiltro === "desativados") {
+      query = query.eq("ativo", false);
+    }
+
+    if (filtros?.empresaId) {
+      query = query.eq("empresa_id", filtros.empresaId);
+    }
+
+    if (filtros?.termo?.trim()) {
+      const termo = `%${filtros.termo.trim()}%`;
+      query = query.or(
+        [
+          `tipo_texto.ilike.${termo}`,
+          `fabricante.ilike.${termo}`,
+          `modelo.ilike.${termo}`,
+          `numero_serie.ilike.${termo}`,
+          `patrimonio.ilike.${termo}`,
+          `tag.ilike.${termo}`,
+          `setor.ilike.${termo}`,
+        ].join(",")
+      );
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       throw new Error(error.message);

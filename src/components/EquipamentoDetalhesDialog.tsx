@@ -25,6 +25,14 @@ const getEmpresaNome = (equipamento: EquipamentoSupabase) =>
   equipamento.empresa?.nome ||
   "Não informado";
 
+const getEquipamentoStatusLabel = (equipamento: EquipamentoSupabase) => {
+  if (equipamento.ativo === false) {
+    return "Desativado";
+  }
+
+  return equipamento.status || "Ativo";
+};
+
 const formatDate = (value?: string | null) => {
   if (!value) return "-";
 
@@ -90,7 +98,7 @@ const EquipamentoDetalhesDialog = ({
         <div className="space-y-4">
           <Section title="Dados do Equipamento">
             <Field label="Tipo" value={tipo} />
-            <Field label="Estado" value={equipamento.status} />
+            <Field label="Status" value={getEquipamentoStatusLabel(equipamento)} />
             <Field label="Proprietário" value={getEmpresaNome(equipamento)} />
             <Field label="Fabricante" value={equipamento.fabricante} />
             <Field label="Modelo" value={equipamento.modelo} />

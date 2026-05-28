@@ -9,12 +9,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { OrcamentoSupabase } from "@/services/orcamentosService";
+import { getEquipamentoLabel } from "@/utils/equipamentoDisplay";
 import { gerarPdfOrcamento } from "@/utils/gerarPdfOrcamento";
 
 interface OrcamentoDetalhesDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   orcamento: OrcamentoSupabase | null;
+  onOpenEmpresa?: (empresa: OrcamentoSupabase["empresa"]) => void;
+  onOpenEquipamento?: (equipamento: OrcamentoSupabase["equipamento"]) => void;
 }
 
 const formatCurrency = (value?: number | null) =>
@@ -59,26 +62,6 @@ const getEmpresaNome = (orcamento: OrcamentoSupabase) =>
   orcamento.empresa?.nome ||
   "Nao informado";
 
-const getEquipamentoLabel = (orcamento: OrcamentoSupabase) => {
-  if (!orcamento.equipamento) return "-";
-
-  const tipo =
-    orcamento.equipamento.tipo_equipamento?.nome ||
-    orcamento.equipamento.tipo_texto ||
-    "Equipamento";
-
-  return [
-    tipo,
-    orcamento.equipamento.fabricante,
-    orcamento.equipamento.modelo,
-    orcamento.equipamento.tag ||
-      orcamento.equipamento.patrimonio ||
-      orcamento.equipamento.numero_serie,
-  ]
-    .filter(Boolean)
-    .join(" - ");
-};
-
 const Field = ({
   label,
   children,
@@ -100,6 +83,8 @@ const OrcamentoDetalhesDialog = ({
   open,
   onOpenChange,
   orcamento,
+  onOpenEmpresa,
+  onOpenEquipamento,
 }: OrcamentoDetalhesDialogProps) => {
   if (!orcamento) return null;
 
@@ -123,9 +108,31 @@ const OrcamentoDetalhesDialog = ({
               <Field label="Status">{label(orcamento.status)}</Field>
               <Field label="Tipo">{label(orcamento.tipo_orcamento)}</Field>
               <Field label="Origem">{label(orcamento.origem)}</Field>
-              <Field label="Empresa">{getEmpresaNome(orcamento)}</Field>
+              <Field label="Empresa">
+                {orcamento.empresa && onOpenEmpresa ? (
+                  <button
+                    type="button"
+                    className="text-primary hover:underline font-medium text-left"
+                    onClick={() => onOpenEmpresa(orcamento.empresa)}
+                  >
+                    {getEmpresaNome(orcamento)}
+                  </button>
+                ) : (
+                  getEmpresaNome(orcamento)
+                )}
+              </Field>
               <Field label="Equipamento">
-                {getEquipamentoLabel(orcamento)}
+                {orcamento.equipamento && onOpenEquipamento ? (
+                  <button
+                    type="button"
+                    className="text-primary hover:underline font-medium text-left"
+                    onClick={() => onOpenEquipamento(orcamento.equipamento)}
+                  >
+                    {getEquipamentoLabel(orcamento.equipamento)}
+                  </button>
+                ) : (
+                  getEquipamentoLabel(orcamento.equipamento)
+                )}
               </Field>
               <Field label="OS vinculada">
                 {orcamento.ordem_servico?.numero || "-"}

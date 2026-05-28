@@ -327,6 +327,60 @@ const registrarHistoricoOS = async ({
   }
 };
 
+const atualizarStatusEquipamento = async (
+  equipamentoId: string | null | undefined,
+  status: "Ativo" | "Em manutenção"
+) => {
+  if (!equipamentoId) return;
+
+  const { data: equipamento, error: equipamentoError } = await supabase
+    .from("equipamentos")
+    .select("id, ativo")
+    .eq("id", equipamentoId)
+    .maybeSingle();
+
+  if (equipamentoError) {
+    throw new Error(equipamentoError.message);
+  }
+
+  if (!equipamento || equipamento.ativo === false) return;
+
+  const { error } = await supabase
+    .from("equipamentos")
+    .update({
+      status,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", equipamentoId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+};
+
+const atualizarEquipamentoParaAtivoSeSemOSAberta = async (
+  equipamentoId: string | null | undefined,
+  ordemServicoIdAtual: string
+) => {
+  if (!equipamentoId) return;
+
+  const { count, error } = await supabase
+    .from("ordens_servico")
+    .select("id", { count: "exact", head: true })
+    .eq("equipamento_id", equipamentoId)
+    .eq("ativo", true)
+    .eq("status_sistema", "aberta")
+    .neq("id", ordemServicoIdAtual);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if ((count || 0) === 0) {
+    await atualizarStatusEquipamento(equipamentoId, "Ativo");
+  }
+};
+
 const buscarEstadoFechamentoOS = async () => {
   const nomes = [
     "Fechada",
@@ -612,6 +666,8 @@ export const protocolosService = {
       estadoNovoId: estadoEntrada?.id || null,
     });
 
+    await atualizarStatusEquipamento(input.equipamentoId, "Em manutenção");
+
     return protocolosService.buscarPorId(protocoloCriado.id);
   },
 
@@ -706,6 +762,11 @@ export const protocolosService = {
       estadoAnteriorId: osAtual.estado_os_id,
       estadoNovoId: estadoFechamento?.id || osAtual.estado_os_id,
     });
+
+    await atualizarEquipamentoParaAtivoSeSemOSAberta(
+      input.equipamentoId,
+      input.ordemServicoId
+    );
 
     return protocolosService.buscarPorId(protocoloCriado.id);
   },

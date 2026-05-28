@@ -17,6 +17,7 @@ import type { EquipamentoSupabase } from "@/services/equipamentosService";
 import { gerarPdfOrdemServico } from "@/utils/gerarPdfOrdemServico";
 import {
   formatResultadoGeralChecklist,
+  formatRespostaChecklist,
   getChecklistMarks,
 } from "@/utils/checklistPreventiva";
 
@@ -118,9 +119,12 @@ const resultadoGeralLabel = (resultado?: string | null) => {
 const checklistObservacao = (
   item: OrdemServicoChecklistPreventivaItemSupabase
 ) => {
-  const marks = getChecklistMarks(item.resposta);
+  const respostaFormatada = formatRespostaChecklist(item.resposta);
 
-  return item.observacao || marks.texto || "-";
+  return (
+    item.observacao ||
+    (item.tipo_resposta === "aprovacao_uso" ? respostaFormatada : "-")
+  );
 };
 
 const formatAcao = (acao: string) => {

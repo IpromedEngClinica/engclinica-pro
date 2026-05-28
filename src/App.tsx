@@ -16,6 +16,7 @@ import EstadosOS from "./pages/EstadosOS";
 import Pecas from "./pages/Pecas";
 import Protocolos from "./pages/Protocolos";
 import Procedimentos from "./pages/Procedimentos";
+import LaudosObsolescencia from "./pages/LaudosObsolescencia";
 import NotFound from "./pages/NotFound";
 import { DataProvider } from "./contexts/DataContext";
 import SupabaseTest from "./pages/SupabaseTest";
@@ -46,6 +47,10 @@ const App = () => (
                   <Route path="/ordens-servico" element={<OrdensServico />} />
                   <Route path="/orcamentos" element={<Orcamentos />} />
                   <Route path="/protocolos" element={<Protocolos />} />
+                  <Route
+                    path="/laudos-obsolescencia"
+                    element={<LaudosObsolescencia />}
+                  />
                   <Route path="/procedimentos" element={<Procedimentos />} />
                   <Route
                     path="/procedimentos-preventiva"

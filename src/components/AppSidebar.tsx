@@ -7,6 +7,7 @@ import {
   ClipboardList,
   FileSignature,
   FileBox,
+  FileWarning,
   CalendarCheck,
   ChevronLeft,
   ChevronRight,
@@ -26,6 +27,7 @@ const menuItems = [
   { icon: ClipboardList, label: "Ordens de Serviço", path: "/ordens-servico" },
   { icon: FileSignature, label: "Orçamentos", path: "/orcamentos" },
   { icon: FileBox, label: "Protocolos", path: "/protocolos" },
+  { icon: FileWarning, label: "Laudos de Obsolescencia", path: "/laudos-obsolescencia" },
   { icon: CalendarCheck, label: "Procedimentos Preventivos", path: "/procedimentos" },
 ];
 

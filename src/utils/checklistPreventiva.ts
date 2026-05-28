@@ -9,7 +9,8 @@ export const normalizarRespostaChecklist = (resposta?: string | null) => {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, "_");
+    .replace(/\s+/g, "_")
+    .replace(/-/g, "_");
 };
 
 export const formatRespostaChecklist = (respostaRaw?: string | null) => {
@@ -19,6 +20,8 @@ export const formatRespostaChecklist = (respostaRaw?: string | null) => {
     conforme: "Conforme",
     nao_conforme: "Nao Conforme",
     nao_aplica: "N/A",
+    n_a: "N/A",
+    na: "N/A",
     aprovado: "Aprovado",
     nao_aprovado: "Nao aprovado",
     aprovado_com_restricao: "Aprovado com restricao",
@@ -29,22 +32,22 @@ export const formatRespostaChecklist = (respostaRaw?: string | null) => {
 
 export const getChecklistMarks = (respostaRaw?: string | null) => {
   const resposta = normalizarRespostaChecklist(respostaRaw);
+  const isConforme =
+    resposta === "conforme" ||
+    resposta === "aprovado" ||
+    resposta === "aprovado_com_restricao";
+  const isNaoConforme =
+    resposta === "nao_conforme" || resposta === "nao_aprovado";
+  const isNaoAplica =
+    resposta === "nao_aplica" ||
+    resposta === "n_a" ||
+    resposta === "na" ||
+    resposta === "n/a";
 
   return {
-    conforme:
-      resposta === "conforme" || resposta === "aprovado"
-        ? CHECKLIST_CHECK_MARK
-        : resposta === "aprovado_com_restricao"
-          ? CHECKLIST_WARNING_MARK
-          : "",
-    naoConforme:
-      resposta === "nao_conforme" || resposta === "nao_aprovado"
-        ? CHECKLIST_CROSS_MARK
-        : "",
-    naoAplica:
-      resposta === "nao_aplica" || resposta === "n/a" || resposta === "na"
-        ? "N/A"
-        : "",
+    conforme: isConforme ? "X" : "",
+    naoConforme: isNaoConforme ? "X" : "",
+    naoAplica: isNaoAplica ? "X" : "",
     texto: formatRespostaChecklist(respostaRaw),
   };
 };

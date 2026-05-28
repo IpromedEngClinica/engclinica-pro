@@ -9,36 +9,19 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ProtocoloOSSupabase } from "@/services/protocolosService";
+import { getEquipamentoLabel } from "@/utils/equipamentoDisplay";
 import { gerarPdfProtocolo } from "@/utils/gerarPdfProtocolo";
 
 interface ProtocoloDetalhesDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   protocolo: ProtocoloOSSupabase | null;
+  onOpenEmpresa?: (empresa: ProtocoloOSSupabase["empresa"]) => void;
+  onOpenEquipamento?: (equipamento: ProtocoloOSSupabase["equipamento"]) => void;
 }
 
 const getEmpresaNome = (p: ProtocoloOSSupabase) =>
   p.empresa?.nome_fantasia || p.empresa?.nome || "Não informado";
-
-const getEquipamentoLabel = (p: ProtocoloOSSupabase) => {
-  if (!p.equipamento) return "-";
-
-  const tipo =
-    p.equipamento.tipo_equipamento?.nome ||
-    p.equipamento.tipo_texto ||
-    "Equipamento";
-
-  return [
-    tipo,
-    p.equipamento.fabricante,
-    p.equipamento.modelo,
-    p.equipamento.tag ||
-      p.equipamento.patrimonio ||
-      p.equipamento.numero_serie,
-  ]
-    .filter(Boolean)
-    .join(" - ");
-};
 
 const formatTipo = (tipo: string) => {
   const map: Record<string, string> = {
@@ -89,6 +72,8 @@ const ProtocoloDetalhesDialog = ({
   open,
   onOpenChange,
   protocolo,
+  onOpenEmpresa,
+  onOpenEquipamento,
 }: ProtocoloDetalhesDialogProps) => {
   if (!protocolo) return null;
 
@@ -126,9 +111,31 @@ const ProtocoloDetalhesDialog = ({
           <section className="rounded-lg border p-4 space-y-3">
             <h3 className="text-sm font-semibold">Empresa e equipamento</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Field label="Empresa">{getEmpresaNome(protocolo)}</Field>
+              <Field label="Empresa">
+                {protocolo.empresa && onOpenEmpresa ? (
+                  <button
+                    type="button"
+                    className="text-primary hover:underline font-medium text-left"
+                    onClick={() => onOpenEmpresa(protocolo.empresa)}
+                  >
+                    {getEmpresaNome(protocolo)}
+                  </button>
+                ) : (
+                  getEmpresaNome(protocolo)
+                )}
+              </Field>
               <Field label="Equipamento">
-                {getEquipamentoLabel(protocolo)}
+                {protocolo.equipamento && onOpenEquipamento ? (
+                  <button
+                    type="button"
+                    className="text-primary hover:underline font-medium text-left"
+                    onClick={() => onOpenEquipamento(protocolo.equipamento)}
+                  >
+                    {getEquipamentoLabel(protocolo.equipamento)}
+                  </button>
+                ) : (
+                  getEquipamentoLabel(protocolo.equipamento)
+                )}
               </Field>
             </div>
           </section>

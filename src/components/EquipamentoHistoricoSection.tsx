@@ -90,6 +90,7 @@ const EquipamentoHistoricoSection = ({
   const ordensServico = data?.ordensServico || [];
   const protocolos = data?.protocolos || [];
   const orcamentos = data?.orcamentos || [];
+  const laudosObsolescencia = data?.laudosObsolescencia || [];
 
   return (
     <div className="space-y-4">
@@ -291,9 +292,50 @@ const EquipamentoHistoricoSection = ({
       </SectionCard>
 
       <SectionCard title="Laudo de Obsolescência">
-        <EmptyText>
-          Nenhum laudo de obsolescência vinculado a este equipamento.
-        </EmptyText>
+        {laudosObsolescencia.length === 0 ? (
+          <EmptyText>
+            Nenhum laudo de obsolescência vinculado a este equipamento.
+          </EmptyText>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/40">
+                  <th className="text-left px-3 py-2 font-medium text-muted-foreground">
+                    Número
+                  </th>
+                  <th className="text-left px-3 py-2 font-medium text-muted-foreground">
+                    Data
+                  </th>
+                  <th className="text-left px-3 py-2 font-medium text-muted-foreground">
+                    Motivo
+                  </th>
+                  <th className="text-left px-3 py-2 font-medium text-muted-foreground">
+                    Responsável
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {laudosObsolescencia.map((laudo) => (
+                  <tr key={laudo.id} className="border-b last:border-0">
+                    <td className="px-3 py-2 font-medium text-primary">
+                      {laudo.numero}
+                    </td>
+                    <td className="px-3 py-2">
+                      {formatDate(laudo.data_criacao)}
+                    </td>
+                    <td className="px-3 py-2 max-w-[360px] truncate">
+                      {laudo.motivo_texto || "-"}
+                    </td>
+                    <td className="px-3 py-2">
+                      {laudo.responsavel_nome || "-"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </SectionCard>
     </div>
   );

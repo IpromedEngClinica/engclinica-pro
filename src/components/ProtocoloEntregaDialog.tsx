@@ -55,6 +55,7 @@ const getEquipamentoLabel = (os: OrdemServicoSupabase) => {
     tipo,
     os.equipamento.fabricante,
     os.equipamento.modelo,
+    os.equipamento.numero_serie,
     os.equipamento.tag,
   ]
     .filter(Boolean)

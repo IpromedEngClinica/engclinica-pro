@@ -489,6 +489,60 @@ const registrarHistorico = async ({
   }
 };
 
+const atualizarStatusEquipamento = async (
+  equipamentoId: string | null | undefined,
+  status: "Ativo" | "Em manutenção"
+) => {
+  if (!equipamentoId) return;
+
+  const { data: equipamento, error: equipamentoError } = await supabase
+    .from("equipamentos")
+    .select("id, ativo")
+    .eq("id", equipamentoId)
+    .maybeSingle();
+
+  if (equipamentoError) {
+    throw new Error(equipamentoError.message);
+  }
+
+  if (!equipamento || equipamento.ativo === false) return;
+
+  const { error } = await supabase
+    .from("equipamentos")
+    .update({
+      status,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", equipamentoId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+};
+
+const atualizarEquipamentoParaAtivoSeSemOSAberta = async (
+  equipamentoId: string | null | undefined,
+  ordemServicoIdAtual: string
+) => {
+  if (!equipamentoId) return;
+
+  const { count, error } = await supabase
+    .from("ordens_servico")
+    .select("id", { count: "exact", head: true })
+    .eq("equipamento_id", equipamentoId)
+    .eq("ativo", true)
+    .eq("status_sistema", "aberta")
+    .neq("id", ordemServicoIdAtual);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if ((count || 0) === 0) {
+    await atualizarStatusEquipamento(equipamentoId, "Ativo");
+  }
+};
+
 const buscarOrdemServicoPorId = async (id: string) => {
   const { data, error } = await supabase
     .from("ordens_servico")
@@ -583,6 +637,8 @@ export const ordensServicoService = {
       estadoNovoId: input.estadoOsId || null,
     });
 
+    await atualizarStatusEquipamento(input.equipamentoId, "Em manutenção");
+
     return buscarOrdemServicoPorId(osCriada.id);
   },
 
@@ -666,6 +722,15 @@ export const ordensServicoService = {
       estadoNovoId: input.estadoOsId || null,
     });
 
+    if (input.statusSistema === "fechada" || input.statusSistema === "cancelada") {
+      await atualizarEquipamentoParaAtivoSeSemOSAberta(
+        input.equipamentoId || osAnterior.equipamento_id,
+        id
+      );
+    } else if (input.equipamentoId) {
+      await atualizarStatusEquipamento(input.equipamentoId, "Em manutenção");
+    }
+
     return buscarOrdemServicoPorId(id);
   },
 
@@ -735,13 +800,19 @@ export const ordensServicoService = {
       estadoNovoId: estado.id,
     });
 
+    if (estado.finaliza_os || estado.cancela_os) {
+      await atualizarEquipamentoParaAtivoSeSemOSAberta(data.equipamento_id, id);
+    } else {
+      await atualizarStatusEquipamento(data.equipamento_id, "Em manutenção");
+    }
+
     return data as unknown as OrdemServicoSupabase;
   },
 
   async excluir(id: string) {
     const { data: osAtual, error: osAtualError } = await supabase
       .from("ordens_servico")
-      .select("id, estado_os_id, status_sistema")
+      .select("id, estado_os_id, status_sistema, equipamento_id")
       .eq("id", id)
       .single();
 
@@ -769,6 +840,8 @@ export const ordensServicoService = {
       estadoAnteriorId: osAtual.estado_os_id,
       estadoNovoId: osAtual.estado_os_id,
     });
+
+    await atualizarEquipamentoParaAtivoSeSemOSAberta(osAtual.equipamento_id, id);
 
     const { data, error: selectError } = await supabase
       .from("ordens_servico")

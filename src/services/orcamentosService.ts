@@ -69,6 +69,7 @@ export type OrcamentoSupabase = {
   forma_pagamento: FormaPagamento | null;
   modo_pagamento: ModoPagamento | null;
   numero_parcelas: number | null;
+  dias_entre_parcelas: number | null;
   valor_entrada: number | null;
   valor_parcela: number | null;
   valor_pecas: number;
@@ -155,6 +156,7 @@ export type OrcamentoFormInput = {
   formaPagamento?: FormaPagamento;
   modoPagamento?: ModoPagamento;
   numeroParcelas?: number;
+  diasEntreParcelas?: number;
   valorEntrada?: number;
   valorParcela?: number;
   prazoEntrega?: string;
@@ -189,6 +191,7 @@ const selectOrcamentos = `
   forma_pagamento,
   modo_pagamento,
   numero_parcelas,
+  dias_entre_parcelas,
   valor_entrada,
   valor_parcela,
   valor_pecas,
@@ -279,6 +282,7 @@ const toDatabasePayload = (input: OrcamentoFormInput) => ({
   forma_pagamento: input.formaPagamento || null,
   modo_pagamento: input.modoPagamento || null,
   numero_parcelas: input.numeroParcelas || null,
+  dias_entre_parcelas: input.diasEntreParcelas || null,
   valor_entrada: input.valorEntrada ?? null,
   valor_parcela: input.valorParcela ?? null,
   prazo_entrega: input.prazoEntrega || null,

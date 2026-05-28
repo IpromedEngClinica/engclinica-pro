@@ -14,9 +14,9 @@ export const PDF_FOOTER_RESERVED = 24;
 export const PDF_EMPTY = "—";
 
 export const PDF_PRIMARY = [190, 20, 30] as const;
-export const PDF_TEXT = [45, 45, 45] as const;
-export const PDF_MUTED = [95, 95, 95] as const;
-export const PDF_LINE = [75, 75, 75] as const;
+export const PDF_TEXT = [35, 35, 35] as const;
+export const PDF_MUTED = [65, 65, 65] as const;
+export const PDF_LINE = [45, 45, 45] as const;
 
 export const PDF_FONT = {
   title: 14.5,
@@ -44,19 +44,19 @@ const getLogoDataUrl = async () => {
 
 export const setFont = (
   doc: jsPDF,
-  weight: "normal" | "medium" | "semibold" | "bold" | "extrabold" = "normal",
+  weight: "normal" | "medium" | "semibold" | "bold" | "extrabold" = "semibold",
   size = PDF_FONT.body
 ) => {
   const safeWeight =
-    weight === "medium"
-      ? "normal"
+    weight === "normal" || weight === "medium"
+      ? "semibold"
       : weight === "extrabold"
         ? "extrabold"
         : weight === "semibold"
           ? "semibold"
           : weight === "bold"
             ? "bold"
-            : "normal";
+            : "semibold";
 
   try {
     doc.setFont("Montserrat", safeWeight);
@@ -193,8 +193,8 @@ export const drawLabelValue = (
   setTextColor(doc, PDF_TEXT);
   doc.text(label, xLabel, y);
 
-  setFont(doc, "normal", PDF_FONT.body);
-  setTextColor(doc, [55, 55, 55] as const);
+  setFont(doc, "semibold", PDF_FONT.body);
+  setTextColor(doc, [45, 45, 45] as const);
 
   const lines = doc.splitTextToSize(value?.trim() || PDF_EMPTY, maxWidth);
   doc.text(lines, xValue, y);
@@ -219,7 +219,7 @@ export const addFooter = (doc: jsPDF) => {
       pageHeight - 14
     );
 
-    setFont(doc, "normal", PDF_FONT.small);
+    setFont(doc, "semibold", PDF_FONT.small);
     setTextColor(doc, PDF_MUTED);
 
     const footerLines = doc.splitTextToSize(FOOTER_TEXT, pageWidth - 30);
@@ -239,11 +239,11 @@ export const commonTableOptions = {
   theme: "plain" as const,
   styles: {
     font: "Montserrat",
-    fontStyle: "normal" as const,
+    fontStyle: "semibold" as const,
     fontSize: PDF_FONT.table,
     cellPadding: 1.1,
-    textColor: [45, 45, 45] as [number, number, number],
-    lineColor: [70, 70, 70] as [number, number, number],
+    textColor: [35, 35, 35] as [number, number, number],
+    lineColor: [45, 45, 45] as [number, number, number],
     lineWidth: 0.08,
     overflow: "linebreak" as const,
     valign: "top" as const,
@@ -259,7 +259,8 @@ export const commonTableOptions = {
   },
   bodyStyles: {
     font: "Montserrat",
-    fontStyle: "normal" as const,
+    fontStyle: "semibold" as const,
+    textColor: [35, 35, 35] as [number, number, number],
   },
   margin: {
     left: PDF_MARGIN,

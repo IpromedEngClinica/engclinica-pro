@@ -3,14 +3,15 @@ import {
   EquipamentoFormInput,
   equipamentosService,
   EquipamentoSupabase,
+  ListarEquipamentosFiltros,
 } from "@/services/equipamentosService";
 
 export const EQUIPAMENTOS_QUERY_KEY = ["equipamentos"];
 
-export const useEquipamentos = () => {
+export const useEquipamentos = (filtros?: ListarEquipamentosFiltros) => {
   return useQuery<EquipamentoSupabase[]>({
-    queryKey: EQUIPAMENTOS_QUERY_KEY,
-    queryFn: equipamentosService.listar,
+    queryKey: [...EQUIPAMENTOS_QUERY_KEY, filtros],
+    queryFn: () => equipamentosService.listar(filtros),
   });
 };
 

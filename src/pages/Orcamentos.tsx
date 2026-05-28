@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import PageHeader from "@/components/PageHeader";
+import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
+import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import OrcamentoDetalhesDialog from "@/components/OrcamentoDetalhesDialog";
 import OrcamentoFormDialog, {
   OrcamentoDialogMode,
@@ -39,7 +41,11 @@ import {
 import {
   OrcamentoStatus,
   OrcamentoSupabase,
+  orcamentosService,
 } from "@/services/orcamentosService";
+import type { EmpresaSupabase } from "@/services/empresasService";
+import type { EquipamentoSupabase } from "@/services/equipamentosService";
+import { getEquipamentoLabel } from "@/utils/equipamentoDisplay";
 import { gerarPdfOrcamento } from "@/utils/gerarPdfOrcamento";
 
 const ALL = "__all__";
@@ -104,26 +110,6 @@ const getStatusBadgeClass = (status: string) =>
     status
   )}`;
 
-const getEquipamentoLabel = (orcamento: OrcamentoSupabase) => {
-  if (!orcamento.equipamento) return "-";
-
-  const tipo =
-    orcamento.equipamento.tipo_equipamento?.nome ||
-    orcamento.equipamento.tipo_texto ||
-    "Equipamento";
-
-  return [
-    tipo,
-    orcamento.equipamento.fabricante,
-    orcamento.equipamento.modelo,
-    orcamento.equipamento.tag ||
-      orcamento.equipamento.patrimonio ||
-      orcamento.equipamento.numero_serie,
-  ]
-    .filter(Boolean)
-    .join(" - ");
-};
-
 const statusTabs: Array<{ value: OrcamentoStatus; label: string }> = [
   { value: "pendente", label: "Pendentes" },
   { value: "aprovado", label: "Aprovados" },
@@ -149,6 +135,12 @@ const Orcamentos = () => {
   const [detalhesOpen, setDetalhesOpen] = useState(false);
   const [mode, setMode] = useState<OrcamentoDialogMode>("create");
   const [selected, setSelected] = useState<OrcamentoSupabase | null>(null);
+  const [empresaDialogOpen, setEmpresaDialogOpen] = useState(false);
+  const [empresaSelecionada, setEmpresaSelecionada] =
+    useState<EmpresaSupabase | null>(null);
+  const [equipamentoDialogOpen, setEquipamentoDialogOpen] = useState(false);
+  const [equipamentoSelecionado, setEquipamentoSelecionado] =
+    useState<EquipamentoSupabase | null>(null);
   const { data: orcamentos = [], isLoading, isError, error, refetch } =
     useOrcamentos();
   const alterarStatus = useAlterarStatusOrcamento();
@@ -197,6 +189,18 @@ const Orcamentos = () => {
     setSelected(orcamento);
     setMode("edit");
     setFormOpen(true);
+  };
+
+  const abrirEmpresa = (empresa: OrcamentoSupabase["empresa"]) => {
+    if (!empresa) return;
+    setEmpresaSelecionada(empresa as unknown as EmpresaSupabase);
+    setEmpresaDialogOpen(true);
+  };
+
+  const abrirEquipamento = (equipamento: OrcamentoSupabase["equipamento"]) => {
+    if (!equipamento) return;
+    setEquipamentoSelecionado(equipamento as unknown as EquipamentoSupabase);
+    setEquipamentoDialogOpen(true);
   };
 
   const handleAlterarStatusRapido = async (
@@ -289,6 +293,26 @@ const Orcamentos = () => {
           if (!value) setSelected(null);
         }}
         orcamento={selected}
+        onOpenEmpresa={abrirEmpresa}
+        onOpenEquipamento={abrirEquipamento}
+      />
+
+      <EmpresaDetalhesDialog
+        open={empresaDialogOpen}
+        onOpenChange={(value) => {
+          setEmpresaDialogOpen(value);
+          if (!value) setEmpresaSelecionada(null);
+        }}
+        empresa={empresaSelecionada}
+      />
+
+      <EquipamentoDetalhesDialog
+        open={equipamentoDialogOpen}
+        onOpenChange={(value) => {
+          setEquipamentoDialogOpen(value);
+          if (!value) setEquipamentoSelecionado(null);
+        }}
+        equipamento={equipamentoSelecionado}
       />
 
       <div className="flex flex-wrap gap-1 border-b mb-6">
@@ -439,7 +463,8 @@ const Orcamentos = () => {
                 {filtered.map((orcamento) => {
                   const empresa = getEmpresaNome(orcamento);
                   const identificacao =
-                    orcamento.identificador || getEquipamentoLabel(orcamento);
+                    orcamento.identificador ||
+                    getEquipamentoLabel(orcamento.equipamento);
 
                   return (
                     <tr
@@ -499,10 +524,32 @@ const Orcamentos = () => {
                         </DropdownMenu>
                       </td>
                       <td className="px-5 py-3 text-muted-foreground">
-                        {empresa}
+                        {orcamento.empresa ? (
+                          <button
+                            type="button"
+                            className="text-primary hover:underline font-medium text-left"
+                            onClick={() => abrirEmpresa(orcamento.empresa)}
+                          >
+                            {empresa}
+                          </button>
+                        ) : (
+                          empresa
+                        )}
                       </td>
                       <td className="px-5 py-3 text-muted-foreground max-w-[280px]">
-                        <span className="line-clamp-2">{identificacao}</span>
+                        {orcamento.equipamento ? (
+                          <button
+                            type="button"
+                            className="text-primary hover:underline text-left line-clamp-2"
+                            onClick={() =>
+                              abrirEquipamento(orcamento.equipamento)
+                            }
+                          >
+                            {identificacao}
+                          </button>
+                        ) : (
+                          <span className="line-clamp-2">{identificacao}</span>
+                        )}
                       </td>
                       <td className="px-5 py-3 text-muted-foreground">
                         {orcamento.ordem_servico?.numero || "-"}
@@ -548,7 +595,9 @@ const Orcamentos = () => {
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={async () => {
-                                  await gerarPdfOrcamento(orcamento);
+                                  const orcamentoCompleto =
+                                    await orcamentosService.buscarPorId(orcamento.id);
+                                  await gerarPdfOrcamento(orcamentoCompleto);
                                 }}
                               >
                                 <FileText className="w-4 h-4 mr-2" />

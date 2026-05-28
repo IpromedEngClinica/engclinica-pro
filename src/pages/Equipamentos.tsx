@@ -15,7 +15,15 @@ import {
   Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,7 +36,10 @@ import PageHeader from "@/components/PageHeader";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useEquipamentos } from "@/hooks/useEquipamentos";
-import { EquipamentoSupabase } from "@/services/equipamentosService";
+import {
+  EquipamentoSupabase,
+  StatusEquipamentoFiltro,
+} from "@/services/equipamentosService";
 import type { EmpresaSupabase } from "@/services/empresasService";
 import { toast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
@@ -38,17 +49,12 @@ import EquipamentoFormDialog, {
 import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
 import ProtocoloRecolhimentoDialog from "@/components/ProtocoloRecolhimentoDialog";
 import PreventivaChecklistDialog from "@/components/PreventivaChecklistDialog";
+import LaudoObsolescenciaFormDialog from "@/components/LaudoObsolescenciaFormDialog";
 import { procedimentosPreventivaService } from "@/services/procedimentosPreventivaService";
 import type { ProcedimentoPreventiva } from "@/services/procedimentosPreventivaService";
 import OrdemServicoFormDialog, {
   DialogMode as OrdemServicoDialogMode,
 } from "@/components/OrdemServicoFormDialog";
-
-const statusColor: Record<string, string> = {
-  Ativo: "bg-success/10 text-success",
-  "Em manutenção": "bg-warning/10 text-warning",
-  Desativado: "bg-destructive/10 text-destructive",
-};
 
 const ALL = "__all__";
 
@@ -68,9 +74,38 @@ const getEmpresaNome = (equipamento: EquipamentoSupabase) => {
   );
 };
 
+const getEquipamentoStatusLabel = (equipamento: EquipamentoSupabase) => {
+  if (equipamento.ativo === false) {
+    return "Desativado";
+  }
+
+  return equipamento.status || "Ativo";
+};
+
+const getEquipamentoStatusBadge = (equipamento: EquipamentoSupabase) => {
+  if (equipamento.ativo === false) {
+    return (
+      <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+        Desativado
+      </Badge>
+    );
+  }
+
+  return (
+    <Badge
+      variant="outline"
+      className="bg-green-50 text-green-700 border-green-200"
+    >
+      {getEquipamentoStatusLabel(equipamento)}
+    </Badge>
+  );
+};
+
 const Equipamentos = () => {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
+  const [statusFiltro, setStatusFiltro] =
+    useState<StatusEquipamentoFiltro>("ativos");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [mode, setMode] = useState<DialogMode>("create");
   const [selected, setSelected] = useState<EquipamentoSupabase | null>(null);
@@ -89,9 +124,12 @@ const Equipamentos = () => {
     useState<EquipamentoSupabase | null>(null);
   const [procedimentoPreventiva, setProcedimentoPreventiva] =
     useState<ProcedimentoPreventiva | null>(null);
+  const [laudoOpen, setLaudoOpen] = useState(false);
+  const [equipamentoLaudo, setEquipamentoLaudo] =
+    useState<EquipamentoSupabase | null>(null);
 
   const { data: equipamentos = [], isLoading, isError, error, refetch } =
-    useEquipamentos();
+    useEquipamentos({ statusFiltro });
 
   const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -168,13 +206,14 @@ const Equipamentos = () => {
     if (filters.tipo !== ALL) n++;
     if (filters.fabricante !== ALL) n++;
     if (filters.setor !== ALL) n++;
+    if (statusFiltro !== "ativos") n++;
 
     (["modelo", "tag", "serie", "patrimonio"] as const).forEach((k) => {
       if (filters[k].trim()) n++;
     });
 
     return n;
-  }, [filters]);
+  }, [filters, statusFiltro]);
 
   const openCreate = () => {
     setSelected(null);
@@ -195,17 +234,47 @@ const Equipamentos = () => {
   };
 
   const openRecolhimento = (equipamento: EquipamentoSupabase) => {
+    if (equipamento.ativo === false) {
+      toast({
+        title: "Equipamento desativado.",
+        description:
+          "Nao e possivel criar protocolo de recolhimento para equipamento desativado.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setEquipamentoRecolhimento(equipamento);
     setRecolhimentoOpen(true);
   };
 
   const openCriarOS = (equipamento: EquipamentoSupabase) => {
+    if (equipamento.ativo === false) {
+      toast({
+        title: "Equipamento desativado.",
+        description:
+          "Nao e possivel criar ordem de servico para equipamento desativado.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setEquipamentoParaOS(equipamento);
     setOsMode("create");
     setOsOpen(true);
   };
 
   const openCriarPreventiva = async (equipamento: EquipamentoSupabase) => {
+    if (equipamento.ativo === false) {
+      toast({
+        title: "Equipamento desativado.",
+        description:
+          "Nao e possivel criar preventiva para equipamento desativado.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!equipamento.tipo_equipamento_id) {
       toast({
         title: "Tipo de equipamento nao informado.",
@@ -253,6 +322,19 @@ const Equipamentos = () => {
         variant: "destructive",
       });
     }
+  };
+
+  const openCriarLaudo = (equipamento: EquipamentoSupabase) => {
+    if (!equipamento.ativo) {
+      toast({
+        title: "Equipamento ja esta desativado.",
+        description: "Consulte os laudos existentes na tela de laudos.",
+      });
+      return;
+    }
+
+    setEquipamentoLaudo(equipamento);
+    setLaudoOpen(true);
   };
 
   const openEmpresaDetalhes = (
@@ -338,6 +420,16 @@ const Equipamentos = () => {
         }
       />
 
+      <LaudoObsolescenciaFormDialog
+        open={laudoOpen}
+        onOpenChange={(value) => {
+          setLaudoOpen(value);
+          if (!value) setEquipamentoLaudo(null);
+        }}
+        initialEmpresaId={equipamentoLaudo?.empresa_id}
+        initialEquipamentoId={equipamentoLaudo?.id}
+      />
+
       <div className="bg-card rounded-xl border mb-4">
         <button
           type="button"
@@ -363,6 +455,22 @@ const Equipamentos = () => {
         {filtersOpen && (
           <div className="border-t px-5 py-4 space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <Select
+                value={statusFiltro}
+                onValueChange={(value) =>
+                  setStatusFiltro(value as StatusEquipamentoFiltro)
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Status (ativos)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ativos">Somente ativos</SelectItem>
+                  <SelectItem value="todos">Ativos e desativados</SelectItem>
+                  <SelectItem value="desativados">Somente desativados</SelectItem>
+                </SelectContent>
+              </Select>
+
               <SearchableSelect
                 value={filters.estado === ALL ? "" : filters.estado}
                 onValueChange={(v) =>
@@ -450,7 +558,10 @@ const Equipamentos = () => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setFilters(emptyFilters)}
+                onClick={() => {
+                  setFilters(emptyFilters);
+                  setStatusFiltro("ativos");
+                }}
               >
                 Limpar filtros
               </Button>
@@ -508,7 +619,7 @@ const Equipamentos = () => {
                     Tipo
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Estado
+                    Status
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
                     Proprietário
@@ -541,6 +652,7 @@ const Equipamentos = () => {
                 {filtered.map((e) => {
                   const tipo = getTipoEquipamento(e);
                   const empresa = getEmpresaNome(e);
+                  const isAtivo = e.ativo !== false;
 
                   return (
                     <tr
@@ -558,14 +670,7 @@ const Equipamentos = () => {
                       </td>
 
                       <td className="px-5 py-3">
-                        <span
-                          className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-                            statusColor[e.status] ||
-                            "bg-muted text-muted-foreground"
-                          }`}
-                        >
-                          {e.status}
-                        </span>
+                        {getEquipamentoStatusBadge(e)}
                       </td>
 
                       <td className="px-5 py-3 text-muted-foreground">
@@ -623,12 +728,16 @@ const Equipamentos = () => {
 
                               <DropdownMenuSeparator />
 
-                              <DropdownMenuItem onClick={() => openCriarOS(e)}>
+                              <DropdownMenuItem
+                                disabled={!isAtivo}
+                                onClick={() => openCriarOS(e)}
+                              >
                                 <ClipboardList className="w-4 h-4 mr-2" /> Criar
                                 Ordem de Serviço
                               </DropdownMenuItem>
 
                               <DropdownMenuItem
+                                disabled={!isAtivo}
                                 onClick={() => openRecolhimento(e)}
                               >
                                 <PackageCheck className="w-4 h-4 mr-2" /> Criar
@@ -636,6 +745,7 @@ const Equipamentos = () => {
                               </DropdownMenuItem>
 
                               <DropdownMenuItem
+                                disabled={!isAtivo}
                                 onClick={() => openCriarPreventiva(e)}
                               >
                                 <CalendarCheck className="w-4 h-4 mr-2" /> Criar
@@ -643,9 +753,8 @@ const Equipamentos = () => {
                               </DropdownMenuItem>
 
                               <DropdownMenuItem
-                                onClick={() =>
-                                  featurePending("Criação de laudo de obsolescência")
-                                }
+                                disabled={!isAtivo}
+                                onClick={() => openCriarLaudo(e)}
                               >
                                 <FileWarning className="w-4 h-4 mr-2" /> Criar
                                 Laudo de Obsolescência
