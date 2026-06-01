@@ -3,12 +3,14 @@ import { LaudoObsolescenciaSupabase } from "@/services/laudosObsolescenciaServic
 import { OrcamentoSupabase } from "@/services/orcamentosService";
 import { OrdemServicoSupabase } from "@/services/ordensServicoService";
 import { ProtocoloOSSupabase } from "@/services/protocolosService";
+import type { CalibracaoExecucao } from "@/services/calibracaoExecucoesService";
 
 export type EquipamentoHistorico = {
   ordensServico: OrdemServicoSupabase[];
   protocolos: ProtocoloOSSupabase[];
   orcamentos: OrcamentoSupabase[];
   laudosObsolescencia: LaudoObsolescenciaSupabase[];
+  calibracoes: CalibracaoExecucao[];
 };
 
 const selectOSHistorico = `
@@ -139,11 +141,32 @@ const selectLaudosObsolescenciaHistorico = `
   updated_at
 `;
 
+const selectCalibracoesHistorico = `
+  id,
+  organizacao_id,
+  numero_certificado,
+  empresa_id,
+  equipamento_id,
+  procedimento_id,
+  procedimento_nome_snapshot,
+  procedimento_versao_snapshot,
+  data_calibracao,
+  data_emissao,
+  data_validade,
+  status,
+  resultado_geral,
+  pdf_storage_path,
+  pdf_hash,
+  ativo,
+  created_at,
+  updated_at
+`;
+
 export const equipamentoHistoricoService = {
   async buscarPorEquipamento(
     equipamentoId: string
   ): Promise<EquipamentoHistorico> {
-    const [ordensResult, protocolosResult, orcamentosResult, laudosResult] =
+    const [ordensResult, protocolosResult, orcamentosResult, laudosResult, calibracoesResult] =
       await Promise.all([
         supabase
           .from("ordens_servico")
@@ -172,6 +195,14 @@ export const equipamentoHistoricoService = {
           .eq("equipamento_id", equipamentoId)
           .eq("ativo", true)
           .order("data_criacao", { ascending: false }),
+
+        supabase
+          .from("calibracao_execucoes")
+          .select(selectCalibracoesHistorico)
+          .eq("equipamento_id", equipamentoId)
+          .eq("ativo", true)
+          .eq("status", "fechada")
+          .order("data_calibracao", { ascending: false }),
       ]);
 
     if (ordensResult.error) {
@@ -190,6 +221,10 @@ export const equipamentoHistoricoService = {
       throw new Error(laudosResult.error.message);
     }
 
+    if (calibracoesResult.error) {
+      throw new Error(calibracoesResult.error.message);
+    }
+
     return {
       ordensServico:
         (ordensResult.data as unknown as OrdemServicoSupabase[]) || [],
@@ -199,6 +234,8 @@ export const equipamentoHistoricoService = {
         (orcamentosResult.data as unknown as OrcamentoSupabase[]) || [],
       laudosObsolescencia:
         (laudosResult.data as unknown as LaudoObsolescenciaSupabase[]) || [],
+      calibracoes:
+        (calibracoesResult.data as unknown as CalibracaoExecucao[]) || [],
     };
   },
 };

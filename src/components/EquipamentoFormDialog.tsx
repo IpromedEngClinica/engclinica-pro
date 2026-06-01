@@ -39,7 +39,9 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   mode?: DialogMode;
   equipamento?: EquipamentoSupabase | null;
-  prefilledEmpresa?: string;
+  empresaInicialId?: string | null;
+  empresaInicial?: EmpresaSupabase | null;
+  onSaved?: (equipamento: EquipamentoSupabase) => void;
   onOpenEmpresa?: (empresa: EmpresaSupabase) => void;
 }
 
@@ -81,13 +83,15 @@ const EquipamentoFormDialog = ({
   onOpenChange,
   mode = "create",
   equipamento = null,
-  prefilledEmpresa,
+  empresaInicialId,
+  empresaInicial = null,
+  onSaved,
   onOpenEmpresa,
 }: Props) => {
   const criarEquipamento = useCriarEquipamento();
   const atualizarEquipamento = useAtualizarEquipamento();
 
-  const { data: empresas = [] } = useEmpresas("ativas");
+  const { data: empresas = [] } = useEmpresas({ statusFiltro: "ativas" });
   const { data: tiposEquipamento = [] } = useTiposEquipamento();
 
   const [form, setForm] = useState<EquipamentoFormInput>(emptyForm);
@@ -95,14 +99,22 @@ const EquipamentoFormDialog = ({
   const readOnly = mode === "view";
   const saving = criarEquipamento.isPending || atualizarEquipamento.isPending;
 
+  const empresasDisponiveis = useMemo(
+    () =>
+      empresaInicial && !empresas.some((empresa) => empresa.id === empresaInicial.id)
+        ? [empresaInicial, ...empresas]
+        : empresas,
+    [empresaInicial, empresas]
+  );
+
   const empresaOptions = useMemo(
     () =>
-      empresas.map((empresa) =>
+      empresasDisponiveis.map((empresa) =>
         empresa.nome_fantasia
           ? `${empresa.nome_fantasia} — ${empresa.nome}`
           : empresa.nome
       ),
-    [empresas]
+    [empresasDisponiveis]
   );
 
   const tipoOptions = useMemo(
@@ -111,21 +123,21 @@ const EquipamentoFormDialog = ({
   );
 
   const selectedEmpresaLabel = useMemo(() => {
-    const empresa = empresas.find((item) => item.id === form.empresaId);
+    const empresa = empresasDisponiveis.find((item) => item.id === form.empresaId);
 
     if (!empresa) return "";
 
     return empresa.nome_fantasia
       ? `${empresa.nome_fantasia} — ${empresa.nome}`
       : empresa.nome;
-  }, [empresas, form.empresaId]);
+  }, [empresasDisponiveis, form.empresaId]);
 
   const selectedEmpresa = useMemo(
     () =>
-      empresas.find((item) => item.id === form.empresaId) ||
+      empresasDisponiveis.find((item) => item.id === form.empresaId) ||
       equipamento?.empresa ||
       null,
-    [empresas, equipamento, form.empresaId]
+    [empresasDisponiveis, equipamento, form.empresaId]
   );
 
   const selectedTipoLabel = useMemo(() => {
@@ -162,19 +174,11 @@ const EquipamentoFormDialog = ({
       return;
     }
 
-    const empresaPrefill = empresas.find((empresa) => {
-      const label = empresa.nome_fantasia
-        ? `${empresa.nome_fantasia} — ${empresa.nome}`
-        : empresa.nome;
-
-      return label === prefilledEmpresa || empresa.nome === prefilledEmpresa;
-    });
-
     setForm({
       ...emptyForm,
-      empresaId: empresaPrefill?.id || "",
+      empresaId: empresaInicialId || empresaInicial?.id || "",
     });
-  }, [open, equipamento, mode, prefilledEmpresa, empresas]);
+  }, [open, equipamento, mode, empresaInicialId, empresaInicial]);
 
   const update = (field: keyof EquipamentoFormInput, value: string) => {
     if (readOnly) return;
@@ -183,7 +187,7 @@ const EquipamentoFormDialog = ({
   };
 
   const handleEmpresaChange = (label: string) => {
-    const empresa = empresas.find((item) => {
+    const empresa = empresasDisponiveis.find((item) => {
       const optionLabel = item.nome_fantasia
         ? `${item.nome_fantasia} — ${item.nome}`
         : item.nome;
@@ -241,19 +245,22 @@ const EquipamentoFormDialog = ({
         tipoTexto: form.tipoTexto?.trim(),
       };
 
+      let equipamentoSalvo: EquipamentoSupabase;
+
       if (mode === "edit" && equipamento) {
-        await atualizarEquipamento.mutateAsync({
+        equipamentoSalvo = await atualizarEquipamento.mutateAsync({
           id: equipamento.id,
           input: payload,
         });
 
         toast({ title: "Equipamento atualizado com sucesso!" });
       } else {
-        await criarEquipamento.mutateAsync(payload);
+        equipamentoSalvo = await criarEquipamento.mutateAsync(payload);
 
         toast({ title: "Equipamento cadastrado com sucesso!" });
       }
 
+      onSaved?.(equipamentoSalvo);
       onOpenChange(false);
     } catch (error) {
       const message =

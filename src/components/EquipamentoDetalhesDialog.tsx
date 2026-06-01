@@ -1,18 +1,44 @@
-import { Cpu } from "lucide-react";
+import {
+  CalendarCheck,
+  ClipboardList,
+  Cpu,
+  FileWarning,
+  PackageCheck,
+  Pencil,
+} from "lucide-react";
+import { useState } from "react";
 import type { ReactNode } from "react";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import EquipamentoHistoricoSection from "@/components/EquipamentoHistoricoSection";
+import EquipamentoFormDialog from "@/components/EquipamentoFormDialog";
+import LaudoObsolescenciaFormDialog from "@/components/LaudoObsolescenciaFormDialog";
+import ModalActionsBar from "@/components/ModalActionsBar";
+import OrdemServicoFormDialog from "@/components/OrdemServicoFormDialog";
+import PreventivaChecklistDialog from "@/components/PreventivaChecklistDialog";
+import ProtocoloRecolhimentoDialog from "@/components/ProtocoloRecolhimentoDialog";
+import { toast } from "@/hooks/use-toast";
+import {
+  procedimentosPreventivaService,
+  type ProcedimentoPreventiva,
+} from "@/services/procedimentosPreventivaService";
 import type { EquipamentoSupabase } from "@/services/equipamentosService";
 
 interface EquipamentoDetalhesDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   equipamento: EquipamentoSupabase | null;
+  onEditar?: (equipamento: EquipamentoSupabase) => void;
+  onCriarOS?: (equipamento: EquipamentoSupabase) => void;
+  onCriarPreventiva?: (equipamento: EquipamentoSupabase) => void;
+  onCriarProtocoloRecolhimento?: (equipamento: EquipamentoSupabase) => void;
+  onCriarLaudo?: (equipamento: EquipamentoSupabase) => void;
 }
 
 const getTipoEquipamento = (equipamento: EquipamentoSupabase) =>
@@ -80,22 +106,141 @@ const EquipamentoDetalhesDialog = ({
   open,
   onOpenChange,
   equipamento,
+  onEditar,
+  onCriarOS,
+  onCriarPreventiva,
+  onCriarProtocoloRecolhimento,
+  onCriarLaudo,
 }: EquipamentoDetalhesDialogProps) => {
+  const [editarOpen, setEditarOpen] = useState(false);
+  const [osOpen, setOsOpen] = useState(false);
+  const [recolhimentoOpen, setRecolhimentoOpen] = useState(false);
+  const [preventivaOpen, setPreventivaOpen] = useState(false);
+  const [procedimentoPreventiva, setProcedimentoPreventiva] =
+    useState<ProcedimentoPreventiva | null>(null);
+  const [laudoOpen, setLaudoOpen] = useState(false);
+
   if (!equipamento) return null;
 
   const tipo = getTipoEquipamento(equipamento);
+  const isAtivo = equipamento.ativo !== false;
+
+  const handleEditar = () => {
+    if (onEditar) {
+      onEditar(equipamento);
+      return;
+    }
+
+    setEditarOpen(true);
+  };
+
+  const handleCriarOS = () => {
+    if (onCriarOS) {
+      onCriarOS(equipamento);
+      return;
+    }
+
+    setOsOpen(true);
+  };
+
+  const handleRecolhimento = () => {
+    if (onCriarProtocoloRecolhimento) {
+      onCriarProtocoloRecolhimento(equipamento);
+      return;
+    }
+
+    setRecolhimentoOpen(true);
+  };
+
+  const handlePreventiva = async () => {
+    if (onCriarPreventiva) {
+      onCriarPreventiva(equipamento);
+      return;
+    }
+
+    if (!equipamento.tipo_equipamento_id) {
+      toast({
+        title: "Tipo de equipamento nao informado.",
+        description: "Cadastre o tipo de equipamento antes de criar a preventiva.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const procedimento =
+        await procedimentosPreventivaService.buscarAtivoPorTipoEquipamento(
+          equipamento.tipo_equipamento_id
+        );
+
+      if (!procedimento) {
+        toast({
+          title: "Nenhum procedimento preventivo cadastrado.",
+          description: "Cadastre um procedimento para este tipo de equipamento.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setProcedimentoPreventiva(procedimento);
+      setPreventivaOpen(true);
+    } catch (error) {
+      toast({
+        title: "Erro ao buscar procedimento preventivo",
+        description: error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleLaudo = () => {
+    if (onCriarLaudo) {
+      onCriarLaudo(equipamento);
+      return;
+    }
+
+    setLaudoOpen(true);
+  };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-6xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-xl flex items-center gap-2">
-            <Cpu className="w-5 h-5 text-primary" />
-            {tipo}
-          </DialogTitle>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-6xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center gap-2">
+              <Cpu className="w-5 h-5 text-primary" />
+              {tipo}
+            </DialogTitle>
+          </DialogHeader>
 
-        <div className="space-y-4">
+          <ModalActionsBar>
+            <Button variant="outline" size="sm" onClick={handleEditar}>
+              <Pencil className="w-4 h-4 mr-2" />
+              Editar
+            </Button>
+            {isAtivo && (
+              <>
+                <Button variant="outline" size="sm" onClick={handleCriarOS}>
+                  <ClipboardList className="w-4 h-4 mr-2" />
+                  Criar OS
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleRecolhimento}>
+                  <PackageCheck className="w-4 h-4 mr-2" />
+                  Recolhimento
+                </Button>
+                <Button variant="outline" size="sm" onClick={handlePreventiva}>
+                  <CalendarCheck className="w-4 h-4 mr-2" />
+                  Preventiva
+                </Button>
+              </>
+            )}
+            <Button size="sm" onClick={handleLaudo}>
+              <FileWarning className="w-4 h-4 mr-2" />
+              Laudo
+            </Button>
+          </ModalActionsBar>
+
+          <div className="space-y-4">
           <Section title="Dados do Equipamento">
             <Field label="Tipo" value={tipo} />
             <Field label="Status" value={getEquipamentoStatusLabel(equipamento)} />
@@ -109,14 +254,6 @@ const EquipamentoDetalhesDialog = ({
           </Section>
 
           <Section title="Preventiva e Calibração">
-            <Field
-              label="Data de Aquisição"
-              value={formatDate(equipamento.data_aquisicao)}
-            />
-            <Field
-              label="Data de Instalação"
-              value={formatDate(equipamento.data_instalacao)}
-            />
             <Field
               label="Última Preventiva"
               value={formatDate(equipamento.data_ultima_preventiva)}
@@ -147,9 +284,56 @@ const EquipamentoDetalhesDialog = ({
           )}
 
           <EquipamentoHistoricoSection equipamentoId={equipamento.id} />
-        </div>
-      </DialogContent>
-    </Dialog>
+          </div>
+
+          <DialogFooter className="pt-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <EquipamentoFormDialog
+        open={editarOpen}
+        onOpenChange={setEditarOpen}
+        mode="edit"
+        equipamento={equipamento}
+      />
+
+      <OrdemServicoFormDialog
+        open={osOpen}
+        onOpenChange={setOsOpen}
+        mode="create"
+        fromEquipamento={{
+          id: equipamento.id,
+          empresaId: equipamento.empresa_id,
+        }}
+      />
+
+      <ProtocoloRecolhimentoDialog
+        open={recolhimentoOpen}
+        onOpenChange={setRecolhimentoOpen}
+        equipamento={equipamento}
+      />
+
+      <PreventivaChecklistDialog
+        open={preventivaOpen}
+        onOpenChange={(value) => {
+          setPreventivaOpen(value);
+          if (!value) setProcedimentoPreventiva(null);
+        }}
+        equipamento={equipamento}
+        procedimento={procedimentoPreventiva}
+      />
+
+      <LaudoObsolescenciaFormDialog
+        open={laudoOpen}
+        onOpenChange={setLaudoOpen}
+        initialEmpresaId={equipamento.empresa_id}
+        initialEquipamentoId={equipamento.id}
+      />
+    </>
   );
 };
 

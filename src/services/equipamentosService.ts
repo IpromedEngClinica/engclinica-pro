@@ -178,7 +178,25 @@ export const equipamentosService = {
     return data as unknown as EquipamentoSupabase[];
   },
 
+  async buscarPorId(id: string) {
+    const { data, error } = await supabase
+      .from("equipamentos")
+      .select(selectEquipamentos)
+      .eq("id", id)
+      .single();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return data as unknown as EquipamentoSupabase;
+  },
+
   async criar(input: EquipamentoFormInput) {
+    if (!input.empresaId) {
+      throw new Error("Selecione a empresa vinculada ao equipamento.");
+    }
+
     const { data: organizacaoId, error: orgError } = await supabase.rpc(
       "current_organizacao_id"
     );

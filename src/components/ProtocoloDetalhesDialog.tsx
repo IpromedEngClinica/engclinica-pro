@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import ModalActionsBar from "@/components/ModalActionsBar";
 import { ProtocoloOSSupabase } from "@/services/protocolosService";
 import { getEquipamentoLabel } from "@/utils/equipamentoDisplay";
 import { gerarPdfProtocolo } from "@/utils/gerarPdfProtocolo";
@@ -88,6 +89,37 @@ const ProtocoloDetalhesDialog = ({
             Protocolo de {formatTipo(protocolo.tipo)} {protocolo.numero}
           </DialogTitle>
         </DialogHeader>
+
+        <ModalActionsBar>
+          {protocolo.empresa && onOpenEmpresa && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onOpenEmpresa(protocolo.empresa)}
+            >
+              Abrir empresa
+            </Button>
+          )}
+          {protocolo.equipamento && onOpenEquipamento && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onOpenEquipamento(protocolo.equipamento)}
+            >
+              Abrir equipamento
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              await gerarPdfProtocolo(protocolo);
+            }}
+          >
+            <FileText className="w-4 h-4 mr-2" />
+            Gerar PDF
+          </Button>
+        </ModalActionsBar>
 
         <div className="space-y-4">
           <section className="rounded-lg border p-4 space-y-3">
@@ -206,14 +238,8 @@ const ProtocoloDetalhesDialog = ({
         </div>
 
         <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={async () => {
-              await gerarPdfProtocolo(protocolo);
-            }}
-          >
-            <FileText className="w-4 h-4 mr-2" />
-            Gerar PDF
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Fechar
           </Button>
         </DialogFooter>
       </DialogContent>

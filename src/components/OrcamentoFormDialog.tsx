@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import SearchableSelect from "@/components/SearchableSelect";
+import PecaQuickCreateDialog from "@/components/PecaQuickCreateDialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -30,7 +31,12 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useTiposOS } from "@/hooks/useCamposOS";
 import { useEmpresas } from "@/hooks/useEmpresas";
-import { usePecas } from "@/hooks/usePecas";
+import {
+  encontrarVariacaoPeca,
+  getPrecoSugeridoPeca,
+  PecaSupabase,
+  usePecas,
+} from "@/hooks/usePecas";
 import { useTiposEquipamento } from "@/hooks/useTiposEquipamento";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -67,8 +73,16 @@ interface OrcamentoFormDialogProps {
 type PecaForm = {
   pecaId: string;
   pecaNome: string;
+  pecaVariacaoId: string;
+  pecaFabricanteId: string;
+  pecaModeloId: string;
+  fabricanteTexto: string;
+  modeloTexto: string;
+  mostrarFabricante: boolean;
+  mostrarModelo: boolean;
   quantidade: number;
   valorUnitario: number;
+  valorUnitarioEditadoManual: boolean;
   garantia: string;
 };
 
@@ -126,8 +140,16 @@ const emptyForm: FormState = {
 const emptyPeca = (): PecaForm => ({
   pecaId: "",
   pecaNome: "",
+  pecaVariacaoId: "",
+  pecaFabricanteId: "",
+  pecaModeloId: "",
+  fabricanteTexto: "",
+  modeloTexto: "",
+  mostrarFabricante: false,
+  mostrarModelo: false,
   quantidade: 1,
   valorUnitario: 0,
+  valorUnitarioEditadoManual: false,
   garantia: "",
 });
 
@@ -267,6 +289,8 @@ const OrcamentoFormDialog = ({
   const [pecas, setPecas] = useState<PecaForm[]>([emptyPeca()]);
   const [servicos, setServicos] = useState<ServicoForm[]>([emptyServico()]);
   const [preventiva, setPreventiva] = useState(false);
+  const [quickCreateOpen, setQuickCreateOpen] = useState(false);
+  const [quickCreateIndex, setQuickCreateIndex] = useState<number | null>(null);
 
   const isView = mode === "view";
   const isSubmitting = criarOrcamento.isPending || atualizarOrcamento.isPending;
@@ -295,6 +319,52 @@ const OrcamentoFormDialog = ({
 
   const getTipoEquipamentoNome = (id: string) =>
     tiposEquipamento.find((tipo) => tipo.id === id)?.nome || "";
+
+  const getPecaCadastro = (item: PecaForm) =>
+    pecasCadastro.find((peca) => peca.id === item.pecaId) ||
+    pecasCadastro.find((peca) => peca.nome === item.pecaNome);
+
+  const buildPecaPatch = (
+    item: PecaForm,
+    peca: PecaSupabase | null | undefined,
+    fabricanteId?: string | null,
+    modeloId?: string | null,
+    forcePreco = false
+  ): Partial<PecaForm> => {
+    const variacao = encontrarVariacaoPeca(peca, fabricanteId, modeloId);
+    const precoSugerido = getPrecoSugeridoPeca(peca, fabricanteId, modeloId);
+    const shouldApplyPrice =
+      forcePreco || !item.valorUnitarioEditadoManual;
+
+    return {
+      pecaVariacaoId: variacao?.id || "",
+      ...(shouldApplyPrice && precoSugerido !== null
+        ? { valorUnitario: precoSugerido }
+        : {}),
+    };
+  };
+
+  const selecionarPecaNoItem = (
+    index: number,
+    peca: PecaSupabase,
+    forcePreco = true
+  ) => {
+    const baseItem = pecas[index] || emptyPeca();
+    updatePeca(index, {
+      pecaId: peca.id,
+      pecaNome: peca.nome,
+      pecaFabricanteId: "",
+      pecaModeloId: "",
+      fabricanteTexto: "",
+      modeloTexto: "",
+      mostrarFabricante: false,
+      mostrarModelo: false,
+      valorUnitarioEditadoManual: forcePreco
+        ? false
+        : baseItem.valorUnitarioEditadoManual,
+      ...buildPecaPatch(baseItem, peca, null, null, forcePreco),
+    });
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -329,8 +399,24 @@ const OrcamentoFormDialog = ({
         .map((item) => ({
           pecaId: item.peca_id || "",
           pecaNome: item.peca?.nome || item.peca_nome || item.descricao || "",
+          pecaVariacaoId: item.peca_variacao_id || "",
+          pecaFabricanteId: item.peca_fabricante_id || "",
+          pecaModeloId: item.peca_modelo_id || "",
+          fabricanteTexto:
+            item.fabricante_texto ||
+            item.peca_variacao?.fabricante_texto ||
+            item.peca_fabricante?.nome ||
+            "",
+          modeloTexto:
+            item.modelo_texto ||
+            item.peca_variacao?.modelo_texto ||
+            item.peca_modelo?.nome ||
+            "",
+          mostrarFabricante: Boolean(item.mostrar_fabricante),
+          mostrarModelo: Boolean(item.mostrar_modelo),
           quantidade: Number(item.quantidade || 1),
           valorUnitario: Number(item.valor_unitario || 0),
+          valorUnitarioEditadoManual: true,
           garantia: item.garantia || "",
         }));
       const servicosBanco = itens
@@ -570,6 +656,13 @@ const OrcamentoFormDialog = ({
             descricao: item.pecaNome.trim(),
             pecaId: item.pecaId || undefined,
             pecaNome: item.pecaNome.trim(),
+            pecaVariacaoId: item.pecaVariacaoId || undefined,
+            pecaFabricanteId: item.pecaFabricanteId || undefined,
+            pecaModeloId: item.pecaModeloId || undefined,
+            fabricanteTexto: item.fabricanteTexto.trim(),
+            modeloTexto: item.modeloTexto.trim(),
+            mostrarFabricante: item.mostrarFabricante,
+            mostrarModelo: item.mostrarModelo,
             quantidade: Number(item.quantidade || 1),
             valorUnitario: Number(item.valorUnitario || 0),
             garantia: item.garantia.trim(),
@@ -682,6 +775,7 @@ const OrcamentoFormDialog = ({
   const dataCriacao = orcamento?.data_orcamento || new Date().toISOString();
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-hidden flex flex-col p-0">
         <DialogHeader className="px-6 py-4 border-b">
@@ -840,16 +934,31 @@ const OrcamentoFormDialog = ({
           >
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-sm font-semibold">Pecas</h3>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={!incluiPecas || isView}
-                onClick={() => setPecas((current) => [...current, emptyPeca()])}
-              >
-                <Plus className="w-4 h-4 mr-1" />
-                Adicionar peca
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={!incluiPecas || isView}
+                  onClick={() => {
+                    setQuickCreateIndex(Math.max(0, pecas.length - 1));
+                    setQuickCreateOpen(true);
+                  }}
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  Nova peca
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={!incluiPecas || isView}
+                  onClick={() => setPecas((current) => [...current, emptyPeca()])}
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  Adicionar peca
+                </Button>
+              </div>
             </div>
 
             {!incluiPecas ? (
@@ -858,28 +967,48 @@ const OrcamentoFormDialog = ({
               </p>
             ) : (
               <div className="space-y-3">
-                {pecas.map((item, index) => (
+                {pecas.map((item, index) => {
+                  const pecaCadastro = getPecaCadastro(item);
+                  const fabricantes = (pecaCadastro?.fabricantes || []).filter(
+                    (fabricante) => fabricante.ativo
+                  );
+                  const modelos = (pecaCadastro?.modelos || []).filter(
+                    (modelo) => modelo.ativo
+                  );
+
+                  const handlePecaSelecionada = (value: string) => {
+                    const peca = pecasCadastro.find(
+                      (itemCadastro) => itemCadastro.nome === value
+                    );
+                    if (peca) {
+                      selecionarPecaNoItem(index, peca, false);
+                    } else {
+                      updatePeca(index, {
+                        pecaId: "",
+                        pecaNome: value,
+                        pecaVariacaoId: "",
+                        pecaFabricanteId: "",
+                        pecaModeloId: "",
+                        fabricanteTexto: "",
+                        modeloTexto: "",
+                        mostrarFabricante: false,
+                        mostrarModelo: false,
+                      });
+                    }
+                  };
+
+                  return (
                   <div
                     key={index}
-                    className="rounded-md border p-4 grid grid-cols-1 md:grid-cols-12 gap-3 items-end"
+                    className="rounded-md border p-4 space-y-3"
                   >
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
                     <div className="space-y-2 md:col-span-3">
                       <Label>Peça cadastrada</Label>
                       <SearchableSelect
-                        value={
-                          pecasCadastro.find((peca) => peca.id === item.pecaId)
-                            ?.nome || ""
-                        }
+                        value={pecaCadastro?.nome || ""}
                         disabled={isView}
-                        onValueChange={(value) => {
-                          const peca = pecasCadastro.find(
-                            (itemCadastro) => itemCadastro.nome === value
-                          );
-                          updatePeca(index, {
-                            pecaId: peca?.id || "",
-                            pecaNome: value,
-                          });
-                        }}
+                        onValueChange={handlePecaSelecionada}
                         options={pecaOptions}
                         placeholder="Selecione uma peça..."
                         emptyText="Nenhuma peça cadastrada."
@@ -890,16 +1019,9 @@ const OrcamentoFormDialog = ({
                       <Input
                         value={item.pecaNome}
                         disabled={isView}
-                        onChange={(event) => {
-                          const value = event.target.value;
-                          const peca = pecasCadastro.find(
-                            (itemCadastro) => itemCadastro.nome === value
-                          );
-                          updatePeca(index, {
-                            pecaId: peca?.id || "",
-                            pecaNome: value,
-                          });
-                        }}
+                        onChange={(event) =>
+                          handlePecaSelecionada(event.target.value)
+                        }
                       />
                     </div>
                     <div className="space-y-2 md:col-span-2">
@@ -928,9 +1050,39 @@ const OrcamentoFormDialog = ({
                         onChange={(event) =>
                           updatePeca(index, {
                             valorUnitario: Number(event.target.value),
+                            valorUnitarioEditadoManual: true,
                           })
                         }
                       />
+                      {pecaCadastro && item.valorUnitarioEditadoManual && (
+                        <Button
+                          type="button"
+                          variant="link"
+                          size="sm"
+                          className="h-auto px-0 py-0 text-xs"
+                          disabled={isView}
+                          onClick={() => {
+                            const preco = getPrecoSugeridoPeca(
+                              pecaCadastro,
+                              item.pecaFabricanteId || null,
+                              item.pecaModeloId || null
+                            );
+                            updatePeca(index, {
+                              ...buildPecaPatch(
+                                item,
+                                pecaCadastro,
+                                item.pecaFabricanteId || null,
+                                item.pecaModeloId || null,
+                                true
+                              ),
+                              valorUnitario: preco ?? item.valorUnitario,
+                              valorUnitarioEditadoManual: false,
+                            });
+                          }}
+                        >
+                          Usar preco sugerido
+                        </Button>
+                      )}
                     </div>
                     <div className="space-y-2 md:col-span-2">
                       <Label>Garantia</Label>
@@ -955,8 +1107,110 @@ const OrcamentoFormDialog = ({
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                      <div className="space-y-2 md:col-span-3">
+                        <Label>Fabricante</Label>
+                        <Select
+                          value={item.pecaFabricanteId || "none"}
+                          disabled={isView || fabricantes.length === 0}
+                          onValueChange={(value) => {
+                            const fabricante =
+                              value === "none"
+                                ? null
+                                : fabricantes.find((option) => option.id === value);
+                            updatePeca(index, {
+                              pecaFabricanteId: fabricante?.id || "",
+                              fabricanteTexto: fabricante?.nome || "",
+                              mostrarFabricante: fabricante
+                                ? item.mostrarFabricante
+                                : false,
+                              ...buildPecaPatch(
+                                item,
+                                pecaCadastro,
+                                fabricante?.id || null,
+                                item.pecaModeloId || null
+                              ),
+                            });
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Nao informar" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Nao informar</SelectItem>
+                            {fabricantes.map((fabricante) => (
+                              <SelectItem key={fabricante.id} value={fabricante.id}>
+                                {fabricante.nome}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2 md:col-span-3">
+                        <Label>Modelo</Label>
+                        <Select
+                          value={item.pecaModeloId || "none"}
+                          disabled={isView || modelos.length === 0}
+                          onValueChange={(value) => {
+                            const modelo =
+                              value === "none"
+                                ? null
+                                : modelos.find((option) => option.id === value);
+                            updatePeca(index, {
+                              pecaModeloId: modelo?.id || "",
+                              modeloTexto: modelo?.nome || "",
+                              mostrarModelo: modelo ? item.mostrarModelo : false,
+                              ...buildPecaPatch(
+                                item,
+                                pecaCadastro,
+                                item.pecaFabricanteId || null,
+                                modelo?.id || null
+                              ),
+                            });
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Nao informar" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Nao informar</SelectItem>
+                            {modelos.map((modelo) => (
+                              <SelectItem key={modelo.id} value={modelo.id}>
+                                {modelo.nome}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <label className="flex items-center gap-2 md:col-span-3 text-sm">
+                        <Checkbox
+                          checked={item.mostrarFabricante}
+                          disabled={isView || !item.fabricanteTexto}
+                          onCheckedChange={(checked) =>
+                            updatePeca(index, {
+                              mostrarFabricante: Boolean(checked),
+                            })
+                          }
+                        />
+                        Mostrar fabricante para o cliente
+                      </label>
+                      <label className="flex items-center gap-2 md:col-span-3 text-sm">
+                        <Checkbox
+                          checked={item.mostrarModelo}
+                          disabled={isView || !item.modeloTexto}
+                          onCheckedChange={(checked) =>
+                            updatePeca(index, {
+                              mostrarModelo: Boolean(checked),
+                            })
+                          }
+                        />
+                        Mostrar modelo para o cliente
+                      </label>
+                    </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </section>
@@ -1349,6 +1603,15 @@ const OrcamentoFormDialog = ({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <PecaQuickCreateDialog
+      open={quickCreateOpen}
+      onOpenChange={setQuickCreateOpen}
+      onCreated={(peca) => {
+        const index = quickCreateIndex ?? Math.max(0, pecas.length - 1);
+        selecionarPecaNoItem(index, peca, true);
+      }}
+    />
+    </>
   );
 };
 

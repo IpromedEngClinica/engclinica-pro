@@ -8,6 +8,8 @@ import {
   Pencil,
   Plus,
   Search,
+  SlidersHorizontal,
+  ChevronDown,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import PageHeader from "@/components/PageHeader";
@@ -17,6 +19,8 @@ import OrcamentoDetalhesDialog from "@/components/OrcamentoDetalhesDialog";
 import OrcamentoFormDialog, {
   OrcamentoDialogMode,
 } from "@/components/OrcamentoFormDialog";
+import SearchableSelect from "@/components/SearchableSelect";
+import SortableTableHeader from "@/components/SortableTableHeader";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -43,10 +47,17 @@ import {
   OrcamentoSupabase,
   orcamentosService,
 } from "@/services/orcamentosService";
-import type { EmpresaSupabase } from "@/services/empresasService";
-import type { EquipamentoSupabase } from "@/services/equipamentosService";
+import {
+  empresasService,
+  type EmpresaSupabase,
+} from "@/services/empresasService";
+import {
+  equipamentosService,
+  type EquipamentoSupabase,
+} from "@/services/equipamentosService";
 import { getEquipamentoLabel } from "@/utils/equipamentoDisplay";
 import { gerarPdfOrcamento } from "@/utils/gerarPdfOrcamento";
+import { sortByValue, type SortDirection } from "@/utils/sortUtils";
 
 const ALL = "__all__";
 
@@ -128,9 +139,24 @@ const statusOptions: Array<{ value: OrcamentoStatus; label: string }> = [
 
 const Orcamentos = () => {
   const [search, setSearch] = useState("");
+  const [sortKey, setSortKey] = useState("data");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [statusFiltro, setStatusFiltro] =
-    useState<OrcamentoStatus>("pendente");
+    useState<OrcamentoStatus | typeof ALL>(ALL);
   const [tipoFilter, setTipoFilter] = useState(ALL);
+  const [clienteFiltro, setClienteFiltro] = useState(ALL);
+  const [formaPagamentoFiltro, setFormaPagamentoFiltro] = useState(ALL);
+  const [modoPagamentoFiltro, setModoPagamentoFiltro] = useState(ALL);
+  const [freteFiltro, setFreteFiltro] = useState(ALL);
+  const [orcamentistaFiltro, setOrcamentistaFiltro] = useState(ALL);
+  const [dataInicioFiltro, setDataInicioFiltro] = useState("");
+  const [dataFimFiltro, setDataFimFiltro] = useState("");
+  const [valorMinFiltro, setValorMinFiltro] = useState("");
+  const [valorMaxFiltro, setValorMaxFiltro] = useState("");
+  const [origemFiltro, setOrigemFiltro] = useState<
+    typeof ALL | "com_os" | "avulso"
+  >(ALL);
   const [formOpen, setFormOpen] = useState(false);
   const [detalhesOpen, setDetalhesOpen] = useState(false);
   const [mode, setMode] = useState<OrcamentoDialogMode>("create");
@@ -144,6 +170,28 @@ const Orcamentos = () => {
   const { data: orcamentos = [], isLoading, isError, error, refetch } =
     useOrcamentos();
   const alterarStatus = useAlterarStatusOrcamento();
+
+  const uniq = (arr: string[]) =>
+    Array.from(new Set(arr.filter(Boolean))).sort((a, b) =>
+      a.localeCompare(b, "pt-BR")
+    );
+
+  const opts = useMemo(
+    () => ({
+      clientes: uniq(orcamentos.map((orcamento) => getEmpresaNome(orcamento))),
+      formasPagamento: uniq(
+        orcamentos.map((orcamento) => orcamento.forma_pagamento || "")
+      ),
+      modosPagamento: uniq(
+        orcamentos.map((orcamento) => orcamento.modo_pagamento || "")
+      ),
+      fretes: uniq(orcamentos.map((orcamento) => orcamento.frete || "")),
+      orcamentistas: uniq(
+        orcamentos.map((orcamento) => orcamento.responsavel_orcamentista || "")
+      ),
+    }),
+    [orcamentos]
+  );
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -161,15 +209,155 @@ const Orcamentos = () => {
         statusLabel(orcamento.status).toLowerCase().includes(q);
 
       const matchStatus =
-        orcamento.status === statusFiltro;
+        statusFiltro === ALL || orcamento.status === statusFiltro;
       const matchTipo =
         tipoFilter === ALL || orcamento.tipo_orcamento === tipoFilter;
+      const matchCliente =
+        clienteFiltro === ALL || empresa === clienteFiltro;
+      const matchFormaPagamento =
+        formaPagamentoFiltro === ALL ||
+        orcamento.forma_pagamento === formaPagamentoFiltro;
+      const matchModoPagamento =
+        modoPagamentoFiltro === ALL ||
+        orcamento.modo_pagamento === modoPagamentoFiltro;
+      const matchFrete =
+        freteFiltro === ALL || orcamento.frete === freteFiltro;
+      const matchOrcamentista =
+        orcamentistaFiltro === ALL ||
+        orcamento.responsavel_orcamentista === orcamentistaFiltro;
+      const matchDataInicio =
+        !dataInicioFiltro || orcamento.data_orcamento >= dataInicioFiltro;
+      const matchDataFim =
+        !dataFimFiltro || orcamento.data_orcamento <= dataFimFiltro;
+      const valorMin = Number(valorMinFiltro);
+      const valorMax = Number(valorMaxFiltro);
+      const matchValorMin =
+        !valorMinFiltro || orcamento.valor_total >= valorMin;
+      const matchValorMax =
+        !valorMaxFiltro || orcamento.valor_total <= valorMax;
+      const matchOrigem =
+        origemFiltro === ALL ||
+        (origemFiltro === "com_os"
+          ? Boolean(orcamento.ordem_servico_id)
+          : !orcamento.ordem_servico_id || orcamento.origem === "avulso");
 
-      return matchSearch && matchStatus && matchTipo;
+      return (
+        matchSearch &&
+        matchStatus &&
+        matchTipo &&
+        matchCliente &&
+        matchFormaPagamento &&
+        matchModoPagamento &&
+        matchFrete &&
+        matchOrcamentista &&
+        matchDataInicio &&
+        matchDataFim &&
+        matchValorMin &&
+        matchValorMax &&
+        matchOrigem
+      );
     });
-  }, [orcamentos, search, statusFiltro, tipoFilter]);
+  }, [
+    clienteFiltro,
+    dataFimFiltro,
+    dataInicioFiltro,
+    formaPagamentoFiltro,
+    freteFiltro,
+    modoPagamentoFiltro,
+    orcamentistaFiltro,
+    orcamentos,
+    origemFiltro,
+    search,
+    statusFiltro,
+    tipoFilter,
+    valorMaxFiltro,
+    valorMinFiltro,
+  ]);
+
+  const sortGetters: Record<string, (item: OrcamentoSupabase) => unknown> = {
+    numero: (o) => o.numero,
+    data: (o) => o.data_orcamento || o.created_at,
+    cliente: getEmpresaNome,
+    equipamento: (o) => o.identificador || getEquipamentoLabel(o.equipamento),
+    status: (o) => o.status,
+    tipo: (o) => o.tipo_orcamento,
+    origem: (o) => o.origem,
+    os: (o) => o.ordem_servico?.numero,
+    valor_pecas: (o) => o.valor_pecas,
+    valor_servicos: (o) => o.valor_servicos,
+    valor_total: (o) => o.valor_total,
+    forma_pagamento: (o) => o.forma_pagamento,
+    orcamentista: (o) => o.responsavel_orcamentista,
+    validade: (o) => o.data_validade,
+  };
+
+  const sortedFiltered = useMemo(
+    () =>
+      sortByValue(
+        filtered,
+        sortGetters[sortKey] || sortGetters.data,
+        sortDirection
+      ),
+    [filtered, sortDirection, sortKey]
+  );
+
+  const handleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortKey(key);
+    setSortDirection("asc");
+  };
 
   const activeTab = statusTabs.find((tab) => tab.value === statusFiltro);
+
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (statusFiltro !== ALL) count++;
+    if (tipoFilter !== ALL) count++;
+    if (clienteFiltro !== ALL) count++;
+    if (formaPagamentoFiltro !== ALL) count++;
+    if (modoPagamentoFiltro !== ALL) count++;
+    if (freteFiltro !== ALL) count++;
+    if (orcamentistaFiltro !== ALL) count++;
+    if (dataInicioFiltro) count++;
+    if (dataFimFiltro) count++;
+    if (valorMinFiltro) count++;
+    if (valorMaxFiltro) count++;
+    if (origemFiltro !== ALL) count++;
+    return count;
+  }, [
+    clienteFiltro,
+    dataFimFiltro,
+    dataInicioFiltro,
+    formaPagamentoFiltro,
+    freteFiltro,
+    modoPagamentoFiltro,
+    orcamentistaFiltro,
+    origemFiltro,
+    statusFiltro,
+    tipoFilter,
+    valorMaxFiltro,
+    valorMinFiltro,
+  ]);
+
+  const limparFiltros = () => {
+    setSearch("");
+    setStatusFiltro(ALL);
+    setTipoFilter(ALL);
+    setClienteFiltro(ALL);
+    setFormaPagamentoFiltro(ALL);
+    setModoPagamentoFiltro(ALL);
+    setFreteFiltro(ALL);
+    setOrcamentistaFiltro(ALL);
+    setDataInicioFiltro("");
+    setDataFimFiltro("");
+    setValorMinFiltro("");
+    setValorMaxFiltro("");
+    setOrigemFiltro(ALL);
+  };
 
   const countByStatus = (status: OrcamentoStatus) =>
     orcamentos.filter((orcamento) => orcamento.status === status).length;
@@ -191,16 +379,38 @@ const Orcamentos = () => {
     setFormOpen(true);
   };
 
-  const abrirEmpresa = (empresa: OrcamentoSupabase["empresa"]) => {
+  const abrirEmpresa = async (empresa: OrcamentoSupabase["empresa"]) => {
     if (!empresa) return;
-    setEmpresaSelecionada(empresa as unknown as EmpresaSupabase);
-    setEmpresaDialogOpen(true);
+    try {
+      const empresaCompleta = await empresasService.buscarPorId(empresa.id);
+      setEmpresaSelecionada(empresaCompleta);
+      setEmpresaDialogOpen(true);
+    } catch (error) {
+      toast({
+        title: "Erro ao abrir empresa",
+        description: error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const abrirEquipamento = (equipamento: OrcamentoSupabase["equipamento"]) => {
+  const abrirEquipamento = async (
+    equipamento: OrcamentoSupabase["equipamento"]
+  ) => {
     if (!equipamento) return;
-    setEquipamentoSelecionado(equipamento as unknown as EquipamentoSupabase);
-    setEquipamentoDialogOpen(true);
+    try {
+      const equipamentoCompleto = await equipamentosService.buscarPorId(
+        equipamento.id
+      );
+      setEquipamentoSelecionado(equipamentoCompleto);
+      setEquipamentoDialogOpen(true);
+    } catch (error) {
+      toast({
+        title: "Erro ao abrir equipamento",
+        description: error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleAlterarStatusRapido = async (
@@ -295,6 +505,11 @@ const Orcamentos = () => {
         orcamento={selected}
         onOpenEmpresa={abrirEmpresa}
         onOpenEquipamento={abrirEquipamento}
+        onEditar={(orcamento) => {
+          setDetalhesOpen(false);
+          openEdit(orcamento);
+        }}
+        onAlterarStatus={handleAlterarStatusRapido}
       />
 
       <EmpresaDetalhesDialog
@@ -345,6 +560,159 @@ const Orcamentos = () => {
         })}
       </div>
 
+      <div className="bg-card rounded-xl border mb-4">
+        <button
+          type="button"
+          onClick={() => setFiltersOpen((value) => !value)}
+          className="w-full flex items-center justify-between px-5 py-3 hover:bg-muted/30 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <SlidersHorizontal className="w-4 h-4 text-primary" />
+            <span className="text-sm font-medium">Filtros Avançados</span>
+            {activeFiltersCount > 0 && (
+              <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                {activeFiltersCount}
+              </span>
+            )}
+          </div>
+          <ChevronDown
+            className={`w-4 h-4 text-muted-foreground transition-transform ${
+              filtersOpen ? "rotate-180" : ""
+            }`}
+          />
+        </button>
+
+        {filtersOpen && (
+          <div className="border-t px-5 py-4 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <Select
+                value={statusFiltro}
+                onValueChange={(value) =>
+                  setStatusFiltro(value as OrcamentoStatus | typeof ALL)
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>Todos os status</SelectItem>
+                  {statusOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={tipoFilter} onValueChange={setTipoFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>Todos os tipos</SelectItem>
+                  <SelectItem value="servico">Servico</SelectItem>
+                  <SelectItem value="pecas">Pecas</SelectItem>
+                  <SelectItem value="pecas_servicos">
+                    Pecas + Servicos
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+
+              <SearchableSelect
+                value={clienteFiltro === ALL ? "" : clienteFiltro}
+                onValueChange={(value) => setClienteFiltro(value || ALL)}
+                options={opts.clientes}
+                placeholder="Cliente (todos)"
+                emptyText="Nenhum cliente encontrado."
+              />
+
+              <SearchableSelect
+                value={formaPagamentoFiltro === ALL ? "" : formaPagamentoFiltro}
+                onValueChange={(value) => setFormaPagamentoFiltro(value || ALL)}
+                options={opts.formasPagamento}
+                placeholder="Forma de pagamento"
+                emptyText="Nenhuma forma encontrada."
+              />
+
+              <SearchableSelect
+                value={modoPagamentoFiltro === ALL ? "" : modoPagamentoFiltro}
+                onValueChange={(value) => setModoPagamentoFiltro(value || ALL)}
+                options={opts.modosPagamento}
+                placeholder="Modo de pagamento"
+                emptyText="Nenhum modo encontrado."
+              />
+
+              <SearchableSelect
+                value={freteFiltro === ALL ? "" : freteFiltro}
+                onValueChange={(value) => setFreteFiltro(value || ALL)}
+                options={opts.fretes}
+                placeholder="Frete (todos)"
+                emptyText="Nenhum frete encontrado."
+              />
+
+              <SearchableSelect
+                value={orcamentistaFiltro === ALL ? "" : orcamentistaFiltro}
+                onValueChange={(value) => setOrcamentistaFiltro(value || ALL)}
+                options={opts.orcamentistas}
+                placeholder="Orcamentista (todos)"
+                emptyText="Nenhum orcamentista encontrado."
+              />
+
+              <Select
+                value={origemFiltro}
+                onValueChange={(value) =>
+                  setOrigemFiltro(value as typeof ALL | "com_os" | "avulso")
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Origem" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>Todas as origens</SelectItem>
+                  <SelectItem value="com_os">Com OS vinculada</SelectItem>
+                  <SelectItem value="avulso">Avulso</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Input
+                type="date"
+                value={dataInicioFiltro}
+                onChange={(event) => setDataInicioFiltro(event.target.value)}
+                title="Data inicial"
+              />
+              <Input
+                type="date"
+                value={dataFimFiltro}
+                onChange={(event) => setDataFimFiltro(event.target.value)}
+                title="Data final"
+              />
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                placeholder="Valor minimo"
+                value={valorMinFiltro}
+                onChange={(event) => setValorMinFiltro(event.target.value)}
+              />
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                placeholder="Valor maximo"
+                value={valorMaxFiltro}
+                onChange={(event) => setValorMaxFiltro(event.target.value)}
+              />
+            </div>
+
+            <div className="flex justify-end">
+              <Button variant="outline" size="sm" onClick={limparFiltros}>
+                Limpar filtros
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="bg-card rounded-xl border">
         <div className="px-5 py-4 border-b space-y-3">
           <div className="flex flex-col gap-1">
@@ -352,40 +720,26 @@ const Orcamentos = () => {
               Orcamentos {activeTab?.label || ""}
             </h2>
             <p className="text-sm text-muted-foreground">
-              {filtered.length} registro(s) nesta aba.
+              {filtered.length} registro(s) encontrado(s).
             </p>
           </div>
 
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar numero, solicitante, OS, tipo ou status..."
-              className="pl-9"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-          </div>
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar numero, solicitante, OS, tipo ou status..."
+                className="pl-9"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+            </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <Select value={tipoFilter} onValueChange={setTipoFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Tipo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>Todos os tipos</SelectItem>
-                <SelectItem value="servico">Servico</SelectItem>
-                <SelectItem value="pecas">Pecas</SelectItem>
-                <SelectItem value="pecas_servicos">
-                  Pecas + Servicos
-                </SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Button variant="outline" onClick={() => refetch()}>
-              Atualizar
-            </Button>
-          </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button variant="outline" onClick={() => refetch()}>
+                Atualizar
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -418,40 +772,46 @@ const Orcamentos = () => {
               <thead>
                 <tr className="border-b bg-muted/50">
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Numero
+                    <SortableTableHeader label="Numero" sortField="numero" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Tipo
+                    <SortableTableHeader label="Tipo" sortField="tipo" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Origem
+                    <SortableTableHeader label="Origem" sortField="origem" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Status
+                    <SortableTableHeader label="Status" sortField="status" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Solicitante
+                    <SortableTableHeader label="Solicitante" sortField="cliente" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Identificacao
+                    <SortableTableHeader label="Identificacao" sortField="equipamento" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    OS
+                    <SortableTableHeader label="OS" sortField="os" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Pecas
+                    <SortableTableHeader label="Pecas" sortField="valor_pecas" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Servicos
+                    <SortableTableHeader label="Servicos" sortField="valor_servicos" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Total
+                    <SortableTableHeader label="Total" sortField="valor_total" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Data
+                    <SortableTableHeader label="Forma pgto." sortField="forma_pagamento" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Validade
+                    <SortableTableHeader label="Orcamentista" sortField="orcamentista" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
+                  </th>
+                  <th className="text-left px-5 py-3 font-medium text-muted-foreground">
+                    <SortableTableHeader label="Data" sortField="data" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
+                  </th>
+                  <th className="text-left px-5 py-3 font-medium text-muted-foreground">
+                    <SortableTableHeader label="Validade" sortField="validade" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-right px-5 py-3 font-medium text-muted-foreground">
                     Acoes
@@ -460,7 +820,7 @@ const Orcamentos = () => {
               </thead>
 
               <tbody>
-                {filtered.map((orcamento) => {
+                {sortedFiltered.map((orcamento) => {
                   const empresa = getEmpresaNome(orcamento);
                   const identificacao =
                     orcamento.identificador ||
@@ -564,6 +924,12 @@ const Orcamentos = () => {
                         {formatCurrency(orcamento.valor_total)}
                       </td>
                       <td className="px-5 py-3 text-muted-foreground">
+                        {orcamento.forma_pagamento || "-"}
+                      </td>
+                      <td className="px-5 py-3 text-muted-foreground">
+                        {orcamento.responsavel_orcamentista || "-"}
+                      </td>
+                      <td className="px-5 py-3 text-muted-foreground">
                         {formatDate(orcamento.data_orcamento)}
                       </td>
                       <td className="px-5 py-3 text-muted-foreground">
@@ -650,7 +1016,7 @@ const Orcamentos = () => {
                 {filtered.length === 0 && (
                   <tr>
                     <td
-                      colSpan={13}
+                      colSpan={15}
                       className="px-5 py-8 text-center text-sm text-muted-foreground"
                     >
                       Nenhum orcamento encontrado.

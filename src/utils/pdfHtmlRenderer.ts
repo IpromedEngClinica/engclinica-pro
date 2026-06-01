@@ -5,6 +5,7 @@ type RenderHtmlPdfOptions = {
   html: string;
   fileName: string;
   selector?: string;
+  save?: boolean;
 };
 
 const waitForAssets = async (root: HTMLElement) => {
@@ -37,6 +38,7 @@ export const renderHtmlToPdf = async ({
   html,
   fileName,
   selector = ".document",
+  save = true,
 }: RenderHtmlPdfOptions) => {
   const wrapper = document.createElement("div");
 
@@ -139,7 +141,19 @@ export const renderHtmlToPdf = async ({
       pageIndex += 1;
     }
 
-    pdf.save(fileName);
+    const totalPages = pdf.getNumberOfPages();
+    for (let index = 1; index <= totalPages; index += 1) {
+      pdf.setPage(index);
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(7);
+      pdf.setTextColor(120, 120, 120);
+      pdf.text(`Pagina ${index} de ${totalPages}`, pageWidthMm - marginMm, pageHeightMm - 3, {
+        align: "right",
+      });
+    }
+
+    if (save) pdf.save(fileName);
+    return pdf.output("blob");
   } finally {
     document.body.removeChild(wrapper);
   }

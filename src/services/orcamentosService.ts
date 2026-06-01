@@ -28,6 +28,13 @@ export type OrcamentoItemSupabase = {
   tipo_equipamento_id: string | null;
   peca_id: string | null;
   peca_nome: string | null;
+  peca_variacao_id: string | null;
+  peca_fabricante_id: string | null;
+  peca_modelo_id: string | null;
+  fabricante_texto: string | null;
+  modelo_texto: string | null;
+  mostrar_fabricante: boolean;
+  mostrar_modelo: boolean;
   ordem: number;
   created_at: string;
   tipo_servico?: {
@@ -39,6 +46,22 @@ export type OrcamentoItemSupabase = {
     nome: string;
   } | null;
   peca?: {
+    id: string;
+    nome: string;
+  } | null;
+  peca_variacao?: {
+    id: string;
+    peca_fabricante_id: string | null;
+    peca_modelo_id: string | null;
+    fabricante_texto: string | null;
+    modelo_texto: string | null;
+    preco_padrao: number | null;
+  } | null;
+  peca_fabricante?: {
+    id: string;
+    nome: string;
+  } | null;
+  peca_modelo?: {
     id: string;
     nome: string;
   } | null;
@@ -133,6 +156,13 @@ export type OrcamentoItemInput = {
   tipoEquipamentoId?: string;
   pecaId?: string;
   pecaNome?: string;
+  pecaVariacaoId?: string;
+  pecaFabricanteId?: string;
+  pecaModeloId?: string;
+  fabricanteTexto?: string;
+  modeloTexto?: string;
+  mostrarFabricante?: boolean;
+  mostrarModelo?: boolean;
 };
 
 export type OrcamentoFormInput = {
@@ -248,6 +278,13 @@ const selectOrcamentos = `
     tipo_equipamento_id,
     peca_id,
     peca_nome,
+    peca_variacao_id,
+    peca_fabricante_id,
+    peca_modelo_id,
+    fabricante_texto,
+    modelo_texto,
+    mostrar_fabricante,
+    mostrar_modelo,
     ordem,
     created_at,
     tipo_servico:tipos_os (
@@ -259,6 +296,22 @@ const selectOrcamentos = `
       nome
     ),
     peca:pecas (
+      id,
+      nome
+    ),
+    peca_variacao:peca_variacoes (
+      id,
+      peca_fabricante_id,
+      peca_modelo_id,
+      fabricante_texto,
+      modelo_texto,
+      preco_padrao
+    ),
+    peca_fabricante:peca_fabricantes (
+      id,
+      nome
+    ),
+    peca_modelo:peca_modelos (
       id,
       nome
     )
@@ -317,6 +370,13 @@ const normalizarItens = (itens?: OrcamentoItemInput[]) => {
         tipo_equipamento_id: item.tipoEquipamentoId || null,
         peca_id: item.pecaId || null,
         peca_nome: item.pecaNome?.trim() || null,
+        peca_variacao_id: item.pecaVariacaoId || null,
+        peca_fabricante_id: item.pecaFabricanteId || null,
+        peca_modelo_id: item.pecaModeloId || null,
+        fabricante_texto: item.fabricanteTexto?.trim() || null,
+        modelo_texto: item.modeloTexto?.trim() || null,
+        mostrar_fabricante: Boolean(item.mostrarFabricante),
+        mostrar_modelo: Boolean(item.mostrarModelo),
         ordem: index + 1,
       };
     })

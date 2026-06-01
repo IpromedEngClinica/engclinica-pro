@@ -13,6 +13,7 @@ import PageHeader from "@/components/PageHeader";
 import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
 import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import ProtocoloDetalhesDialog from "@/components/ProtocoloDetalhesDialog";
+import SortableTableHeader from "@/components/SortableTableHeader";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -27,10 +28,18 @@ import {
   protocolosService,
   TipoProtocoloOS,
 } from "@/services/protocolosService";
-import type { EmpresaSupabase } from "@/services/empresasService";
-import type { EquipamentoSupabase } from "@/services/equipamentosService";
+import {
+  empresasService,
+  type EmpresaSupabase,
+} from "@/services/empresasService";
+import {
+  equipamentosService,
+  type EquipamentoSupabase,
+} from "@/services/equipamentosService";
+import { toast } from "@/hooks/use-toast";
 import { getEquipamentoLabel } from "@/utils/equipamentoDisplay";
 import { gerarPdfProtocolo } from "@/utils/gerarPdfProtocolo";
+import { sortByValue, type SortDirection } from "@/utils/sortUtils";
 
 const getEmpresaNome = (p: ProtocoloOSSupabase) =>
   p.empresa?.nome_fantasia || p.empresa?.nome || "Não informado";
@@ -83,6 +92,8 @@ const Protocolos = () => {
     "todos"
   );
   const [search, setSearch] = useState("");
+  const [sortKey, setSortKey] = useState("data");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [detalhesOpen, setDetalhesOpen] = useState(false);
   const [protocoloDetalhes, setProtocoloDetalhes] =
     useState<ProtocoloOSSupabase | null>(null);
@@ -116,23 +127,74 @@ const Protocolos = () => {
     });
   }, [protocolos, search]);
 
+  const sortGetters: Record<string, (item: ProtocoloOSSupabase) => unknown> = {
+    numero: (p) => p.numero,
+    tipo: (p) => p.tipo,
+    data: getDataPrincipal,
+    cliente: getEmpresaNome,
+    equipamento: (p) => getEquipamentoLabel(p.equipamento),
+    os: (p) => p.ordem_servico?.numero,
+    responsavel: (p) => p.responsavel_nome,
+    status: (p) => p.status,
+  };
+
+  const sortedFiltered = useMemo(
+    () =>
+      sortByValue(
+        filtered,
+        sortGetters[sortKey] || sortGetters.data,
+        sortDirection
+      ),
+    [filtered, sortDirection, sortKey]
+  );
+
+  const handleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortKey(key);
+    setSortDirection("asc");
+  };
+
   const openDetalhes = (protocolo: ProtocoloOSSupabase) => {
     setProtocoloDetalhes(protocolo);
     setDetalhesOpen(true);
   };
 
-  const abrirEmpresa = (empresa: ProtocoloOSSupabase["empresa"]) => {
+  const abrirEmpresa = async (empresa: ProtocoloOSSupabase["empresa"]) => {
     if (!empresa) return;
-    setEmpresaSelecionada(empresa as unknown as EmpresaSupabase);
-    setEmpresaDialogOpen(true);
+    try {
+      const empresaCompleta = await empresasService.buscarPorId(empresa.id);
+      setEmpresaSelecionada(empresaCompleta);
+      setEmpresaDialogOpen(true);
+    } catch (error) {
+      toast({
+        title: "Erro ao abrir empresa",
+        description: error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const abrirEquipamento = (
+  const abrirEquipamento = async (
     equipamento: ProtocoloOSSupabase["equipamento"]
   ) => {
     if (!equipamento) return;
-    setEquipamentoSelecionado(equipamento as unknown as EquipamentoSupabase);
-    setEquipamentoDialogOpen(true);
+    try {
+      const equipamentoCompleto = await equipamentosService.buscarPorId(
+        equipamento.id
+      );
+      setEquipamentoSelecionado(equipamentoCompleto);
+      setEquipamentoDialogOpen(true);
+    } catch (error) {
+      toast({
+        title: "Erro ao abrir equipamento",
+        description: error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    }
   };
 
   const TipoIcon = ({ tipo }: { tipo: TipoProtocoloOS }) =>
@@ -252,28 +314,28 @@ const Protocolos = () => {
               <thead>
                 <tr className="border-b bg-muted/50">
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Número
+                    <SortableTableHeader label="Numero" sortField="numero" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Tipo
+                    <SortableTableHeader label="Tipo" sortField="tipo" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Empresa
+                    <SortableTableHeader label="Empresa" sortField="cliente" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Equipamento
+                    <SortableTableHeader label="Equipamento" sortField="equipamento" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    OS vinculada
+                    <SortableTableHeader label="OS vinculada" sortField="os" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Data
+                    <SortableTableHeader label="Data" sortField="data" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Responsável
+                    <SortableTableHeader label="Responsavel" sortField="responsavel" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Status
+                    <SortableTableHeader label="Status" sortField="status" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-right px-5 py-3 font-medium text-muted-foreground">
                     Ações
@@ -282,7 +344,7 @@ const Protocolos = () => {
               </thead>
 
               <tbody>
-                {filtered.map((protocolo) => (
+                {sortedFiltered.map((protocolo) => (
                   <tr
                     key={protocolo.id}
                     className="border-b last:border-0 hover:bg-muted/30 transition-colors"

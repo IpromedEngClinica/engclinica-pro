@@ -45,8 +45,63 @@ export type EmpresaFormInput = {
   observacoes?: string;
 };
 
+export type StatusEmpresaFiltro = "ativas" | "todas" | "inativas";
+
+export type ListarEmpresasFiltros = {
+  statusFiltro?: StatusEmpresaFiltro;
+};
+
 export const empresasService = {
-  async listar() {
+  async listar(filtros?: ListarEmpresasFiltros) {
+    const statusFiltro = filtros?.statusFiltro || "ativas";
+    let query = supabase
+      .from("empresas")
+      .select(
+        `
+        id,
+        organizacao_id,
+        nome,
+        nome_fantasia,
+        tipo_cliente,
+        tipo_relacao,
+        cpf_cnpj,
+        cep,
+        rua,
+        numero,
+        complemento,
+        bairro,
+        cidade,
+        estado,
+        contato,
+        email,
+        celular,
+        telefone,
+        observacoes,
+        ativo,
+        created_at,
+        updated_at
+      `
+      )
+      .order("nome", { ascending: true });
+
+    if (statusFiltro === "ativas") {
+      query = query.eq("ativo", true);
+    }
+
+    if (statusFiltro === "inativas") {
+      query = query.eq("ativo", false);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return data as EmpresaSupabase[];
+  },
+
+  async buscarPorId(id: string) {
     const { data, error } = await supabase
       .from("empresas")
       .select(
@@ -75,14 +130,14 @@ export const empresasService = {
         updated_at
       `
       )
-      .eq("ativo", true)
-      .order("nome", { ascending: true });
+      .eq("id", id)
+      .single();
 
     if (error) {
       throw new Error(error.message);
     }
 
-    return data as EmpresaSupabase[];
+    return data as EmpresaSupabase;
   },
 
   async criar(input: EmpresaFormInput) {

@@ -1,13 +1,17 @@
-import { Building2 } from "lucide-react";
+import { Building2, Pencil, Wrench } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import ModalActionsBar from "@/components/ModalActionsBar";
 import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
+import EmpresaFormDialog from "@/components/EmpresaFormDialog";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
@@ -19,7 +23,11 @@ import {
 } from "@/components/ui/select";
 import { useEquipamentos } from "@/hooks/useEquipamentos";
 import type { EmpresaSupabase } from "@/services/empresasService";
-import type { EquipamentoSupabase } from "@/services/equipamentosService";
+import {
+  equipamentosService,
+  type EquipamentoSupabase,
+} from "@/services/equipamentosService";
+import { toast } from "@/hooks/use-toast";
 import {
   getEquipamentoLabel,
   getStatusEquipamentoLabel,
@@ -29,6 +37,8 @@ interface EmpresaDetalhesDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   empresa: EmpresaSupabase | null;
+  onEditar?: (empresa: EmpresaSupabase) => void;
+  onCriarEquipamento?: (empresa: EmpresaSupabase) => void;
 }
 
 const Field = ({
@@ -68,6 +78,8 @@ const EmpresaDetalhesDialog = ({
   open,
   onOpenChange,
   empresa,
+  onEditar,
+  onCriarEquipamento,
 }: EmpresaDetalhesDialogProps) => {
   const [buscaEquipamento, setBuscaEquipamento] = useState("");
   const [limiteEquipamentos, setLimiteEquipamentos] = useState<
@@ -76,6 +88,7 @@ const EmpresaDetalhesDialog = ({
   const [equipamentoSelecionado, setEquipamentoSelecionado] =
     useState<EquipamentoSupabase | null>(null);
   const [equipamentoDialogOpen, setEquipamentoDialogOpen] = useState(false);
+  const [editarOpen, setEditarOpen] = useState(false);
 
   const { data: equipamentosEmpresa = [], isLoading: carregandoEquipamentos } =
     useEquipamentos({
@@ -109,9 +122,20 @@ const EmpresaDetalhesDialog = ({
       ? equipamentosFiltrados
       : equipamentosFiltrados.slice(0, limiteEquipamentos);
 
-  const abrirEquipamento = (equipamento: EquipamentoSupabase) => {
-    setEquipamentoSelecionado(equipamento);
-    setEquipamentoDialogOpen(true);
+  const abrirEquipamento = async (equipamento: EquipamentoSupabase) => {
+    try {
+      const equipamentoCompleto = await equipamentosService.buscarPorId(
+        equipamento.id
+      );
+      setEquipamentoSelecionado(equipamentoCompleto);
+      setEquipamentoDialogOpen(true);
+    } catch (error) {
+      toast({
+        title: "Erro ao abrir equipamento",
+        description: error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    }
   };
 
   if (!empresa) return null;
@@ -126,6 +150,28 @@ const EmpresaDetalhesDialog = ({
               {empresa.nome_fantasia || empresa.nome}
             </DialogTitle>
           </DialogHeader>
+
+          <ModalActionsBar>
+            {onCriarEquipamento && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onCriarEquipamento(empresa)}
+              >
+                <Wrench className="w-4 h-4 mr-2" />
+                Cadastrar Equipamento
+              </Button>
+            )}
+            <Button
+              size="sm"
+              onClick={() =>
+                onEditar ? onEditar(empresa) : setEditarOpen(true)
+              }
+            >
+              <Pencil className="w-4 h-4 mr-2" />
+              Editar
+            </Button>
+          </ModalActionsBar>
 
           <div className="space-y-4">
             <Section title="Dados Gerais">
@@ -293,8 +339,21 @@ const EmpresaDetalhesDialog = ({
               )}
             </section>
           </div>
-        </DialogContent>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Fechar
+            </Button>
+          </DialogFooter>
+          </DialogContent>
       </Dialog>
+
+      <EmpresaFormDialog
+        open={editarOpen}
+        onOpenChange={setEditarOpen}
+        mode="edit"
+        empresa={empresa}
+      />
 
       <EquipamentoDetalhesDialog
         open={equipamentoDialogOpen}

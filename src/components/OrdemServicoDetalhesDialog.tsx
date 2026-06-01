@@ -1,6 +1,7 @@
 import { ClipboardList, FileText, Pencil, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import ModalActionsBar from "@/components/ModalActionsBar";
 import {
   Dialog,
   DialogContent,
@@ -29,6 +30,8 @@ interface OrdemServicoDetalhesDialogProps {
   onDelete?: (os: OrdemServicoSupabase) => void;
   onOpenEmpresa?: (empresa: EmpresaSupabase) => void;
   onOpenEquipamento?: (equipamento: EquipamentoSupabase) => void;
+  onCriarOrcamento?: (os: OrdemServicoSupabase) => void;
+  onProtocoloEntrega?: (os: OrdemServicoSupabase) => void;
 }
 
 const getEmpresaNome = (os: OrdemServicoSupabase) =>
@@ -222,6 +225,8 @@ const OrdemServicoDetalhesDialog = ({
   onDelete,
   onOpenEmpresa,
   onOpenEquipamento,
+  onCriarOrcamento,
+  onProtocoloEntrega,
 }: OrdemServicoDetalhesDialogProps) => {
   if (!os) return null;
 
@@ -266,6 +271,41 @@ const OrdemServicoDetalhesDialog = ({
             </div>
           </div>
         </DialogHeader>
+
+        <ModalActionsBar>
+          {onEdit && (
+            <Button size="sm" onClick={() => onEdit(os)}>
+              <Pencil className="w-4 h-4 mr-2" />
+              Editar OS
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              await gerarPdfOrdemServico(os);
+            }}
+          >
+            <FileText className="w-4 h-4 mr-2" />
+            Gerar PDF
+          </Button>
+          {onCriarOrcamento && (
+            <Button variant="outline" size="sm" onClick={() => onCriarOrcamento(os)}>
+              Gerar Orçamento
+            </Button>
+          )}
+          {onProtocoloEntrega && (
+            <Button variant="outline" size="sm" onClick={() => onProtocoloEntrega(os)}>
+              Protocolo de Entrega
+            </Button>
+          )}
+          {onDelete && (
+            <Button variant="destructive" size="sm" onClick={() => onDelete(os)}>
+              <Trash2 className="w-4 h-4 mr-2" />
+              Excluir OS
+            </Button>
+          )}
+        </ModalActionsBar>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -484,30 +524,9 @@ const OrdemServicoDetalhesDialog = ({
         </div>
 
         <DialogFooter className="px-6 py-4 border-t">
-          <Button
-            variant="outline"
-            onClick={async () => {
-              await gerarPdfOrdemServico(os);
-            }}
-          >
-            <FileText className="w-4 h-4 mr-2" />
-            Gerar PDF
-          </Button>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Fechar
           </Button>
-          {onEdit && (
-            <Button onClick={() => onEdit(os)}>
-              <Pencil className="w-4 h-4 mr-2" />
-              Editar OS
-            </Button>
-          )}
-          {onDelete && (
-            <Button variant="destructive" onClick={() => onDelete(os)}>
-              <Trash2 className="w-4 h-4 mr-2" />
-              Excluir OS
-            </Button>
-          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

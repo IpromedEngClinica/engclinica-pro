@@ -1,6 +1,8 @@
-import { FileText } from "lucide-react";
+import { FileText, Pencil, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import ModalActionsBar from "@/components/ModalActionsBar";
+import ContratoFormDialog from "@/components/ContratoFormDialog";
 import {
   Dialog,
   DialogContent,
@@ -24,6 +26,9 @@ interface ContratoDetalhesDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   contrato: ContratoSupabase | null;
+  onEditar?: (contrato: ContratoSupabase) => void;
+  onDocumentos?: (contrato: ContratoSupabase) => void;
+  onDesativar?: (contrato: ContratoSupabase) => void;
 }
 
 const formatDate = (value?: string | null) => {
@@ -66,8 +71,12 @@ const ContratoDetalhesDialog = ({
   open,
   onOpenChange,
   contrato,
+  onEditar,
+  onDocumentos,
+  onDesativar,
 }: ContratoDetalhesDialogProps) => {
   const [documentosOpen, setDocumentosOpen] = useState(false);
+  const [editarOpen, setEditarOpen] = useState(false);
 
   if (!contrato) return null;
 
@@ -84,6 +93,37 @@ const ContratoDetalhesDialog = ({
               Contrato {contrato.numero_identificacao || ""}
             </DialogTitle>
           </DialogHeader>
+
+          <ModalActionsBar>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => (onEditar ? onEditar(contrato) : setEditarOpen(true))}
+            >
+              <Pencil className="w-4 h-4 mr-2" />
+              Editar
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                onDocumentos ? onDocumentos(contrato) : setDocumentosOpen(true)
+              }
+            >
+              <FileText className="w-4 h-4 mr-2" />
+              Documentos
+            </Button>
+            {onDesativar && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => onDesativar(contrato)}
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Desativar
+              </Button>
+            )}
+          </ModalActionsBar>
 
           <div className="space-y-4">
             <section className="rounded-lg border p-4 space-y-3">
@@ -147,17 +187,7 @@ const ContratoDetalhesDialog = ({
             </section>
 
             <section className="rounded-lg border p-4 space-y-3">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold">Documentos</h3>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setDocumentosOpen(true)}
-                >
-                  Gerenciar documentos
-                </Button>
-              </div>
+              <h3 className="text-sm font-semibold">Documentos</h3>
               <p className="text-sm text-muted-foreground">
                 {(contrato.documentos || []).length} documento(s) anexado(s).
               </p>
@@ -184,6 +214,12 @@ const ContratoDetalhesDialog = ({
       <ContratoDocumentosDialog
         open={documentosOpen}
         onOpenChange={setDocumentosOpen}
+        contrato={contrato}
+      />
+      <ContratoFormDialog
+        open={editarOpen}
+        onOpenChange={setEditarOpen}
+        mode="edit"
         contrato={contrato}
       />
     </>

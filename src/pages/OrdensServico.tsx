@@ -25,6 +25,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import SearchableSelect from "@/components/SearchableSelect";
+import SortableTableHeader from "@/components/SortableTableHeader";
 import PageHeader from "@/components/PageHeader";
 import { useMemo, useState } from "react";
 import {
@@ -37,8 +38,14 @@ import {
   OrdemServicoSupabase,
   ordensServicoService,
 } from "@/services/ordensServicoService";
-import type { EmpresaSupabase } from "@/services/empresasService";
-import type { EquipamentoSupabase } from "@/services/equipamentosService";
+import {
+  empresasService,
+  type EmpresaSupabase,
+} from "@/services/empresasService";
+import {
+  equipamentosService,
+  type EquipamentoSupabase,
+} from "@/services/equipamentosService";
 import { toast } from "@/hooks/use-toast";
 import OrdemServicoFormDialog, {
   DialogMode,
@@ -49,6 +56,7 @@ import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import ProtocoloEntregaDialog from "@/components/ProtocoloEntregaDialog";
 import OrcamentoFormDialog from "@/components/OrcamentoFormDialog";
 import { gerarPdfOrdemServico } from "@/utils/gerarPdfOrdemServico";
+import { sortByValue, type SortDirection } from "@/utils/sortUtils";
 
 const ALL = "__all__";
 
@@ -124,6 +132,8 @@ const statusColor = (status: string) => {
 
 const OrdensServico = () => {
   const [search, setSearch] = useState("");
+  const [sortKey, setSortKey] = useState("data");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<DialogMode>("create");
   const [selected, setSelected] = useState<OrdemServicoSupabase | null>(null);
@@ -225,6 +235,36 @@ const OrdensServico = () => {
     });
   }, [ordensServico, search, hideClosed, filters]);
 
+  const sortGetters: Record<string, (item: OrdemServicoSupabase) => unknown> = {
+    numero: (os) => os.numero,
+    data: (os) => os.data_abertura || os.created_at,
+    empresa: getEmpresaNome,
+    equipamento: getEquipamentoLabel,
+    estado: getEstado,
+    tipo_os: getTipoServico,
+    responsavel: getTecnico,
+  };
+
+  const sortedFiltered = useMemo(
+    () =>
+      sortByValue(
+        filtered,
+        sortGetters[sortKey] || sortGetters.data,
+        sortDirection
+      ),
+    [filtered, sortDirection, sortKey]
+  );
+
+  const handleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortKey(key);
+    setSortDirection("asc");
+  };
+
   const activeFiltersCount = useMemo(() => {
     let n = 0;
 
@@ -268,22 +308,42 @@ const OrdensServico = () => {
     setOrcamentoOpen(true);
   };
 
-  const openEmpresaDetalhes = (
+  const openEmpresaDetalhes = async (
     empresa: EmpresaSupabase | null | undefined
   ) => {
     if (!empresa) return;
 
-    setEmpresaSelecionada(empresa);
-    setEmpresaDetalhesOpen(true);
+    try {
+      const empresaCompleta = await empresasService.buscarPorId(empresa.id);
+      setEmpresaSelecionada(empresaCompleta);
+      setEmpresaDetalhesOpen(true);
+    } catch (error) {
+      toast({
+        title: "Erro ao abrir empresa",
+        description: error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const openEquipamentoDetalhes = (
+  const openEquipamentoDetalhes = async (
     equipamento: EquipamentoSupabase | null | undefined
   ) => {
     if (!equipamento) return;
 
-    setEquipamentoSelecionado(equipamento);
-    setEquipamentoDetalhesOpen(true);
+    try {
+      const equipamentoCompleto = await equipamentosService.buscarPorId(
+        equipamento.id
+      );
+      setEquipamentoSelecionado(equipamentoCompleto);
+      setEquipamentoDetalhesOpen(true);
+    } catch (error) {
+      toast({
+        title: "Erro ao abrir equipamento",
+        description: error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    }
   };
 
   const featurePending = (label: string) => {
@@ -411,6 +471,8 @@ const OrdensServico = () => {
         }}
         onOpenEmpresa={openEmpresaDetalhes}
         onOpenEquipamento={openEquipamentoDetalhes}
+        onCriarOrcamento={openOrcamento}
+        onProtocoloEntrega={openEntrega}
       />
 
       <EmpresaDetalhesDialog
@@ -597,25 +659,25 @@ const OrdensServico = () => {
               <thead>
                 <tr className="border-b bg-muted/50">
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Número
+                    <SortableTableHeader label="Numero" sortField="numero" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Estado
+                    <SortableTableHeader label="Estado" sortField="estado" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Solicitante
+                    <SortableTableHeader label="Solicitante" sortField="empresa" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Equipamento
+                    <SortableTableHeader label="Equipamento" sortField="equipamento" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Técnico Executor
+                    <SortableTableHeader label="Tecnico Executor" sortField="responsavel" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Tipo de Serviço
+                    <SortableTableHeader label="Tipo de Servico" sortField="tipo_os" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Data de Criação
+                    <SortableTableHeader label="Data de Criacao" sortField="data" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-right px-5 py-3 font-medium text-muted-foreground">
                     Ações
@@ -624,7 +686,7 @@ const OrdensServico = () => {
               </thead>
 
               <tbody>
-                {filtered.map((os) => {
+                {sortedFiltered.map((os) => {
                   const estado = getEstado(os);
                   const solicitante = getEmpresaNome(os);
                   const equipamento = getEquipamentoLabel(os);

@@ -9,6 +9,7 @@ import {
   FileBox,
   FileWarning,
   CalendarCheck,
+  Gauge,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -29,6 +30,7 @@ const menuItems = [
   { icon: FileBox, label: "Protocolos", path: "/protocolos" },
   { icon: FileWarning, label: "Laudos de Obsolescencia", path: "/laudos-obsolescencia" },
   { icon: CalendarCheck, label: "Procedimentos Preventivos", path: "/procedimentos" },
+  { icon: Gauge, label: "Calibração", path: "/calibracao" },
 ];
 
 const camposGerenciais = [

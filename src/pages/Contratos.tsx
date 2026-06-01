@@ -9,6 +9,7 @@ import {
   Plus,
   Search,
   SlidersHorizontal,
+  ChevronDown,
   Trash2,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -336,6 +337,30 @@ const Contratos = () => {
     [contratos]
   );
 
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (tipoFiltro !== ALL) count++;
+    if (empresaFiltro !== ALL) count++;
+    if (statusFiltro !== ALL) count++;
+    if (pastaFiltro !== ALL) count++;
+    if (periodicidadeFiltro !== ALL) count++;
+    if (vendedorFiltro !== ALL) count++;
+    if (documentosFiltro !== ALL) count++;
+    if (dataDe) count++;
+    if (dataAte) count++;
+    return count;
+  }, [
+    dataAte,
+    dataDe,
+    documentosFiltro,
+    empresaFiltro,
+    pastaFiltro,
+    periodicidadeFiltro,
+    statusFiltro,
+    tipoFiltro,
+    vendedorFiltro,
+  ]);
+
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
       setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
@@ -436,6 +461,12 @@ const Contratos = () => {
           if (!value) setSelected(null);
         }}
         contrato={selected}
+        onEditar={(contrato) => {
+          setDetailsOpen(false);
+          openEdit(contrato);
+        }}
+        onDocumentos={openDocumentos}
+        onDesativar={handleDesativar}
       />
 
       <ContratoDocumentosDialog
@@ -472,52 +503,31 @@ const Contratos = () => {
         </div>
       </div>
 
-      <div className="bg-card rounded-xl border">
-        <div className="px-5 py-4 border-b space-y-3">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar empresa, numero, vendedor, objeto..."
-                className="pl-9"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
-            </div>
-
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setFiltrosAbertos((current) => !current)}
-              >
-                <SlidersHorizontal className="w-4 h-4 mr-2" />
-                Filtros avancados
-              </Button>
-              <Button variant="outline" onClick={() => refetch()}>
-                Atualizar
-              </Button>
-            </div>
+      <div className="bg-card rounded-xl border mb-4">
+        <button
+          type="button"
+          onClick={() => setFiltrosAbertos((value) => !value)}
+          className="w-full flex items-center justify-between px-5 py-3 hover:bg-muted/30 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <SlidersHorizontal className="w-4 h-4 text-primary" />
+            <span className="text-sm font-medium">Filtros Avançados</span>
+            {activeFiltersCount > 0 && (
+              <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                {activeFiltersCount}
+              </span>
+            )}
           </div>
+          <ChevronDown
+            className={`w-4 h-4 text-muted-foreground transition-transform ${
+              filtrosAbertos ? "rotate-180" : ""
+            }`}
+          />
+        </button>
 
-          {filtrosAbertos && (
-            <div className="rounded-lg border bg-muted/20 p-4 space-y-4">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h3 className="text-sm font-semibold">
-                    Filtros avancados
-                  </h3>
-                  <p className="text-xs text-muted-foreground">
-                    Refine contratos por empresa, vencimento, documentos e
-                    responsaveis.
-                  </p>
-                </div>
-                <Button variant="outline" size="sm" onClick={limparFiltros}>
-                  Limpar filtros
-                </Button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-3">
+        {filtrosAbertos && (
+          <div className="border-t px-5 py-4 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 <Select
                   value={tipoFiltro}
                   onValueChange={(value) =>
@@ -639,12 +649,38 @@ const Contratos = () => {
                   title="Vencimento ate"
                 />
               </div>
-            </div>
-          )}
 
-          <p className="text-sm text-muted-foreground">
-            {filtered.length} contrato(s) encontrado(s).
-          </p>
+            <div className="flex justify-end">
+              <Button variant="outline" size="sm" onClick={limparFiltros}>
+                Limpar filtros
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="bg-card rounded-xl border">
+        <div className="px-5 py-4 border-b flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground">
+              {filtered.length} contrato(s) encontrado(s).
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative flex-1 sm:w-96">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar empresa, numero, vendedor, objeto..."
+                className="pl-9"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+            </div>
+
+            <Button variant="outline" size="sm" onClick={() => refetch()}>
+              Atualizar
+            </Button>
+          </div>
         </div>
 
         {isLoading && (

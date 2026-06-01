@@ -1,6 +1,7 @@
 import { FileText, FileWarning } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import ModalActionsBar from "@/components/ModalActionsBar";
 import {
   Dialog,
   DialogContent,
@@ -71,6 +72,37 @@ const LaudoObsolescenciaDetalhesDialog = ({
           </DialogTitle>
         </DialogHeader>
 
+        <ModalActionsBar>
+          {laudo.empresa && onOpenEmpresa && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onOpenEmpresa(laudo.empresa)}
+            >
+              Abrir empresa
+            </Button>
+          )}
+          {laudo.equipamento && onOpenEquipamento && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onOpenEquipamento(laudo.equipamento)}
+            >
+              Abrir equipamento
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              await gerarPdfLaudoObsolescencia(laudo);
+            }}
+          >
+            <FileText className="w-4 h-4 mr-2" />
+            Gerar PDF
+          </Button>
+        </ModalActionsBar>
+
         <div className="space-y-4">
           <section className="rounded-lg border p-4 space-y-3">
             <h3 className="text-sm font-semibold">Identificacao</h3>
@@ -135,14 +167,8 @@ const LaudoObsolescenciaDetalhesDialog = ({
         </div>
 
         <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={async () => {
-              await gerarPdfLaudoObsolescencia(laudo);
-            }}
-          >
-            <FileText className="w-4 h-4 mr-2" />
-            Gerar PDF
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Fechar
           </Button>
         </DialogFooter>
       </DialogContent>
