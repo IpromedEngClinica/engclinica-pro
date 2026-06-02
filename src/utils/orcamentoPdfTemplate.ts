@@ -3,6 +3,7 @@ import type {
   OrcamentoSupabase,
 } from "@/services/orcamentosService";
 import { getEquipamentoLabel } from "@/utils/equipamentoDisplay";
+import { formatDescricaoPecaOrcamento } from "@/utils/orcamentoItens";
 
 const EMPTY = "-";
 const FOOTER_TEXT =
@@ -131,7 +132,7 @@ const getItemServico = (item: OrcamentoItemSupabase) =>
   item.tipo_servico?.nome || item.descricao || formatLabel(item.tipo);
 
 const getItemPeca = (item: OrcamentoItemSupabase) =>
-  item.peca_nome || item.peca?.nome || item.descricao || "";
+  formatDescricaoPecaOrcamento(item);
 
 const getItensOrdenados = (orcamento: OrcamentoSupabase) =>
   [...(orcamento.itens || [])].sort((a, b) => Number(a.ordem || 0) - Number(b.ordem || 0));

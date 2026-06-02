@@ -9,6 +9,7 @@ import {
   FileBox,
   FileWarning,
   CalendarCheck,
+  Gauge,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -31,6 +32,13 @@ const menuItems = [
   { icon: CalendarCheck, label: "Procedimentos Preventivos", path: "/procedimentos" },
 ];
 
+const calibracaoItems = [
+  { icon: List, label: "Calibrações Executadas", path: "/calibracao/execucoes" },
+  { icon: List, label: "Padrões", path: "/calibracao/padroes" },
+  { icon: List, label: "Procedimentos", path: "/calibracao/procedimentos" },
+  { icon: List, label: "Configurações", path: "/calibracao/configuracoes" },
+];
+
 const camposGerenciais = [
   { icon: List, label: "Tipos de Equipamento", path: "/campos-gerenciais/tipos-equipamento" },
   { icon: List, label: "Tipos de OS", path: "/campos-gerenciais/tipos-os" },
@@ -44,6 +52,9 @@ const AppSidebar = () => {
   const [collapsed, setCollapsed] = useState(false);
   const [camposOpen, setCamposOpen] = useState(
     location.pathname.startsWith("/campos-gerenciais")
+  );
+  const [calibracaoOpen, setCalibracaoOpen] = useState(
+    location.pathname.startsWith("/calibracao")
   );
 
   return (
@@ -89,6 +100,43 @@ const AppSidebar = () => {
             </Link>
           );
         })}
+
+        <div className="pt-2">
+          <button
+            onClick={() => setCalibracaoOpen(!calibracaoOpen)}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            title={collapsed ? "Calibração" : undefined}
+          >
+            <Gauge className="h-5 w-5 shrink-0" />
+            {!collapsed && (
+              <>
+                <span className="flex-1 text-left">Calibração</span>
+                <ChevronDown className={`h-4 w-4 transition-transform ${calibracaoOpen ? "rotate-180" : ""}`} />
+              </>
+            )}
+          </button>
+          {calibracaoOpen && !collapsed && (
+            <div className="ml-4 mt-1 space-y-1">
+              {calibracaoItems.map((item) => {
+                const isActive = location.pathname === item.path;
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                      isActive
+                        ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                        : "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    }`}
+                  >
+                    <item.icon className="h-4 w-4 shrink-0" />
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
         {/* Campos Gerenciais */}
         <div className="pt-2">

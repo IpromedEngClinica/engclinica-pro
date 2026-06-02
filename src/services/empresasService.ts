@@ -20,6 +20,7 @@ export type EmpresaSupabase = {
   celular: string | null;
   telefone: string | null;
   observacoes: string | null;
+  incluir_criterio_aceitacao_calibracao: boolean;
   ativo: boolean;
   created_at: string;
   updated_at: string;
@@ -43,10 +44,67 @@ export type EmpresaFormInput = {
   celular?: string;
   telefone?: string;
   observacoes?: string;
+  incluirCriterioAceitacaoCalibracao?: boolean;
+};
+
+export type StatusEmpresaFiltro = "ativas" | "todas" | "inativas";
+
+export type ListarEmpresasFiltros = {
+  statusFiltro?: StatusEmpresaFiltro;
 };
 
 export const empresasService = {
-  async listar() {
+  async listar(filtros?: ListarEmpresasFiltros) {
+    const statusFiltro = filtros?.statusFiltro || "ativas";
+    let query = supabase
+      .from("empresas")
+      .select(
+        `
+        id,
+        organizacao_id,
+        nome,
+        nome_fantasia,
+        tipo_cliente,
+        tipo_relacao,
+        cpf_cnpj,
+        cep,
+        rua,
+        numero,
+        complemento,
+        bairro,
+        cidade,
+        estado,
+        contato,
+        email,
+        celular,
+        telefone,
+        observacoes,
+        incluir_criterio_aceitacao_calibracao,
+        ativo,
+        created_at,
+        updated_at
+      `
+      )
+      .order("nome", { ascending: true });
+
+    if (statusFiltro === "ativas") {
+      query = query.eq("ativo", true);
+    }
+
+    if (statusFiltro === "inativas") {
+      query = query.eq("ativo", false);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return data as EmpresaSupabase[];
+  },
+
+  async buscarPorId(id: string) {
     const { data, error } = await supabase
       .from("empresas")
       .select(
@@ -70,19 +128,20 @@ export const empresasService = {
         celular,
         telefone,
         observacoes,
+        incluir_criterio_aceitacao_calibracao,
         ativo,
         created_at,
         updated_at
       `
       )
-      .eq("ativo", true)
-      .order("nome", { ascending: true });
+      .eq("id", id)
+      .single();
 
     if (error) {
       throw new Error(error.message);
     }
 
-    return data as EmpresaSupabase[];
+    return data as EmpresaSupabase;
   },
 
   async criar(input: EmpresaFormInput) {
@@ -119,6 +178,8 @@ export const empresasService = {
         celular: input.celular || null,
         telefone: input.telefone || null,
         observacoes: input.observacoes || null,
+        incluir_criterio_aceitacao_calibracao:
+          input.incluirCriterioAceitacaoCalibracao ?? false,
       })
       .select()
       .single();
@@ -151,6 +212,8 @@ export const empresasService = {
         celular: input.celular || null,
         telefone: input.telefone || null,
         observacoes: input.observacoes || null,
+        incluir_criterio_aceitacao_calibracao:
+          input.incluirCriterioAceitacaoCalibracao ?? false,
       })
       .eq("id", id)
       .select()

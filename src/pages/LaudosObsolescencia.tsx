@@ -14,6 +14,7 @@ import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import LaudoObsolescenciaDetalhesDialog from "@/components/LaudoObsolescenciaDetalhesDialog";
 import LaudoObsolescenciaFormDialog from "@/components/LaudoObsolescenciaFormDialog";
 import PageHeader from "@/components/PageHeader";
+import SortableTableHeader from "@/components/SortableTableHeader";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -27,10 +28,18 @@ import {
   LaudoObsolescenciaSupabase,
   laudosObsolescenciaService,
 } from "@/services/laudosObsolescenciaService";
-import type { EmpresaSupabase } from "@/services/empresasService";
-import type { EquipamentoSupabase } from "@/services/equipamentosService";
+import {
+  empresasService,
+  type EmpresaSupabase,
+} from "@/services/empresasService";
+import {
+  equipamentosService,
+  type EquipamentoSupabase,
+} from "@/services/equipamentosService";
+import { toast } from "@/hooks/use-toast";
 import { getEquipamentoLabel } from "@/utils/equipamentoDisplay";
 import { gerarPdfLaudoObsolescencia } from "@/utils/gerarPdfLaudoObsolescencia";
+import { sortByValue, type SortDirection } from "@/utils/sortUtils";
 
 const getEmpresaNome = (laudo: LaudoObsolescenciaSupabase) =>
   laudo.empresa?.nome_fantasia || laudo.empresa?.nome || "Nao informado";
@@ -54,6 +63,8 @@ const getEquipamentoStatus = (laudo: LaudoObsolescenciaSupabase) =>
 
 const LaudosObsolescencia = () => {
   const [search, setSearch] = useState("");
+  const [sortKey, setSortKey] = useState("data");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [formOpen, setFormOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selected, setSelected] =
@@ -86,23 +97,76 @@ const LaudosObsolescencia = () => {
     });
   }, [laudos, search]);
 
+  const sortGetters: Record<
+    string,
+    (item: LaudoObsolescenciaSupabase) => unknown
+  > = {
+    numero: (l) => l.numero,
+    data: (l) => l.data_criacao || l.created_at,
+    empresa: getEmpresaNome,
+    equipamento: (l) => getEquipamentoLabel(l.equipamento),
+    motivo: (l) => l.motivo_texto,
+    status: getEquipamentoStatus,
+    responsavel: (l) => l.responsavel_nome,
+  };
+
+  const sortedFiltered = useMemo(
+    () =>
+      sortByValue(
+        filtered,
+        sortGetters[sortKey] || sortGetters.data,
+        sortDirection
+      ),
+    [filtered, sortDirection, sortKey]
+  );
+
+  const handleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortKey(key);
+    setSortDirection("asc");
+  };
+
   const openDetails = (laudo: LaudoObsolescenciaSupabase) => {
     setSelected(laudo);
     setDetailsOpen(true);
   };
 
-  const abrirEmpresa = (empresa: LaudoObsolescenciaSupabase["empresa"]) => {
+  const abrirEmpresa = async (empresa: LaudoObsolescenciaSupabase["empresa"]) => {
     if (!empresa) return;
-    setEmpresaSelecionada(empresa as unknown as EmpresaSupabase);
-    setEmpresaDialogOpen(true);
+    try {
+      const empresaCompleta = await empresasService.buscarPorId(empresa.id);
+      setEmpresaSelecionada(empresaCompleta);
+      setEmpresaDialogOpen(true);
+    } catch (error) {
+      toast({
+        title: "Erro ao abrir empresa",
+        description: error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const abrirEquipamento = (
+  const abrirEquipamento = async (
     equipamento: LaudoObsolescenciaSupabase["equipamento"]
   ) => {
     if (!equipamento) return;
-    setEquipamentoSelecionado(equipamento as unknown as EquipamentoSupabase);
-    setEquipamentoDialogOpen(true);
+    try {
+      const equipamentoCompleto = await equipamentosService.buscarPorId(
+        equipamento.id
+      );
+      setEquipamentoSelecionado(equipamentoCompleto);
+      setEquipamentoDialogOpen(true);
+    } catch (error) {
+      toast({
+        title: "Erro ao abrir equipamento",
+        description: error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -205,22 +269,25 @@ const LaudosObsolescencia = () => {
               <thead>
                 <tr className="border-b bg-muted/50">
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Numero
+                    <SortableTableHeader label="Numero" sortField="numero" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Data
+                    <SortableTableHeader label="Data" sortField="data" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Empresa
+                    <SortableTableHeader label="Empresa" sortField="empresa" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Equipamento
+                    <SortableTableHeader label="Equipamento" sortField="equipamento" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Motivo
+                    <SortableTableHeader label="Motivo" sortField="motivo" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Status do equipamento
+                    <SortableTableHeader label="Status do equipamento" sortField="status" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
+                  </th>
+                  <th className="text-left px-5 py-3 font-medium text-muted-foreground">
+                    <SortableTableHeader label="Responsavel" sortField="responsavel" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-right px-5 py-3 font-medium text-muted-foreground">
                     Acoes
@@ -229,7 +296,7 @@ const LaudosObsolescencia = () => {
               </thead>
 
               <tbody>
-                {filtered.map((laudo) => (
+                {sortedFiltered.map((laudo) => (
                   <tr
                     key={laudo.id}
                     className="border-b last:border-0 hover:bg-muted/30 transition-colors"
@@ -287,6 +354,10 @@ const LaudosObsolescencia = () => {
                       </span>
                     </td>
 
+                    <td className="px-5 py-3 text-muted-foreground">
+                      {laudo.responsavel_nome || "-"}
+                    </td>
+
                     <td className="px-5 py-3">
                       <div className="flex justify-end">
                         <DropdownMenu>
@@ -326,7 +397,7 @@ const LaudosObsolescencia = () => {
                 {filtered.length === 0 && (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={8}
                       className="px-5 py-8 text-center text-sm text-muted-foreground"
                     >
                       Nenhum laudo encontrado.

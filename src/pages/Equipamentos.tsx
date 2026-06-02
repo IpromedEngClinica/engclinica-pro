@@ -13,6 +13,7 @@ import {
   ChevronDown,
   AlertCircle,
   Loader2,
+  Ruler,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -32,21 +33,27 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import SearchableSelect from "@/components/SearchableSelect";
+import SortableTableHeader from "@/components/SortableTableHeader";
 import PageHeader from "@/components/PageHeader";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useEquipamentos } from "@/hooks/useEquipamentos";
 import {
   EquipamentoSupabase,
+  equipamentosService,
   StatusEquipamentoFiltro,
 } from "@/services/equipamentosService";
-import type { EmpresaSupabase } from "@/services/empresasService";
+import {
+  empresasService,
+  type EmpresaSupabase,
+} from "@/services/empresasService";
 import { toast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import EquipamentoFormDialog, {
   DialogMode,
 } from "@/components/EquipamentoFormDialog";
 import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
+import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import ProtocoloRecolhimentoDialog from "@/components/ProtocoloRecolhimentoDialog";
 import PreventivaChecklistDialog from "@/components/PreventivaChecklistDialog";
 import LaudoObsolescenciaFormDialog from "@/components/LaudoObsolescenciaFormDialog";
@@ -55,6 +62,9 @@ import type { ProcedimentoPreventiva } from "@/services/procedimentosPreventivaS
 import OrdemServicoFormDialog, {
   DialogMode as OrdemServicoDialogMode,
 } from "@/components/OrdemServicoFormDialog";
+import CalibracaoExecucaoFormDialog from "@/components/CalibracaoExecucaoFormDialog";
+import { sortByValue, type SortDirection } from "@/utils/sortUtils";
+import { getBloqueioCriacaoCalibracao } from "@/utils/equipamentoCalibracao";
 
 const ALL = "__all__";
 
@@ -106,9 +116,14 @@ const Equipamentos = () => {
   const [search, setSearch] = useState("");
   const [statusFiltro, setStatusFiltro] =
     useState<StatusEquipamentoFiltro>("ativos");
+  const [sortKey, setSortKey] = useState("tipo");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [detalhesOpen, setDetalhesOpen] = useState(false);
   const [mode, setMode] = useState<DialogMode>("create");
   const [selected, setSelected] = useState<EquipamentoSupabase | null>(null);
+  const [equipamentoDetalhes, setEquipamentoDetalhes] =
+    useState<EquipamentoSupabase | null>(null);
   const [recolhimentoOpen, setRecolhimentoOpen] = useState(false);
   const [equipamentoRecolhimento, setEquipamentoRecolhimento] =
     useState<EquipamentoSupabase | null>(null);
@@ -119,6 +134,8 @@ const Equipamentos = () => {
   const [empresaDetalhesOpen, setEmpresaDetalhesOpen] = useState(false);
   const [empresaSelecionada, setEmpresaSelecionada] =
     useState<EmpresaSupabase | null>(null);
+  const [empresaParaNovoEquipamento, setEmpresaParaNovoEquipamento] =
+    useState<EmpresaSupabase | null>(null);
   const [preventivaOpen, setPreventivaOpen] = useState(false);
   const [equipamentoPreventiva, setEquipamentoPreventiva] =
     useState<EquipamentoSupabase | null>(null);
@@ -126,6 +143,9 @@ const Equipamentos = () => {
     useState<ProcedimentoPreventiva | null>(null);
   const [laudoOpen, setLaudoOpen] = useState(false);
   const [equipamentoLaudo, setEquipamentoLaudo] =
+    useState<EquipamentoSupabase | null>(null);
+  const [calibracaoOpen, setCalibracaoOpen] = useState(false);
+  const [equipamentoCalibracao, setEquipamentoCalibracao] =
     useState<EquipamentoSupabase | null>(null);
 
   const { data: equipamentos = [], isLoading, isError, error, refetch } =
@@ -198,6 +218,43 @@ const Equipamentos = () => {
     });
   }, [equipamentos, filters, search]);
 
+  const sortGetters = useMemo<
+    Record<string, (item: EquipamentoSupabase) => unknown>
+  >(
+    () => ({
+      tipo: getTipoEquipamento,
+      status: getEquipamentoStatusLabel,
+      empresa: getEmpresaNome,
+      modelo: (e) => e.modelo,
+      fabricante: (e) => e.fabricante,
+      tag: (e) => e.tag,
+      numero_serie: (e) => e.numero_serie,
+      patrimonio: (e) => e.patrimonio,
+      setor: (e) => e.setor,
+    }),
+    []
+  );
+
+  const sortedFiltered = useMemo(
+    () =>
+      sortByValue(
+        filtered,
+        sortGetters[sortKey] || sortGetters.tipo,
+        sortDirection
+      ),
+    [filtered, sortDirection, sortGetters, sortKey]
+  );
+
+  const handleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortKey(key);
+    setSortDirection("asc");
+  };
+
   const activeFiltersCount = useMemo(() => {
     let n = 0;
 
@@ -217,14 +274,32 @@ const Equipamentos = () => {
 
   const openCreate = () => {
     setSelected(null);
+    setEmpresaParaNovoEquipamento(null);
     setMode("create");
     setDialogOpen(true);
   };
 
-  const openView = (equipamento: EquipamentoSupabase) => {
-    setSelected(equipamento);
-    setMode("view");
+  const openCreateForEmpresa = (empresa: EmpresaSupabase) => {
+    setSelected(null);
+    setEmpresaParaNovoEquipamento(empresa);
+    setMode("create");
     setDialogOpen(true);
+  };
+
+  const openView = async (equipamento: EquipamentoSupabase) => {
+    try {
+      const equipamentoCompleto = await equipamentosService.buscarPorId(
+        equipamento.id
+      );
+      setEquipamentoDetalhes(equipamentoCompleto);
+      setDetalhesOpen(true);
+    } catch (error) {
+      toast({
+        title: "Erro ao abrir equipamento",
+        description: error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    }
   };
 
   const openEdit = (equipamento: EquipamentoSupabase) => {
@@ -337,13 +412,39 @@ const Equipamentos = () => {
     setLaudoOpen(true);
   };
 
-  const openEmpresaDetalhes = (
+  const openCriarCalibracao = (equipamento: EquipamentoSupabase) => {
+    const bloqueio = getBloqueioCriacaoCalibracao(equipamento);
+    if (bloqueio) {
+      toast({
+        title: "Nao foi possivel criar calibracao",
+        description: bloqueio,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setDetalhesOpen(false);
+    setEquipamentoDetalhes(null);
+    setEquipamentoCalibracao(equipamento);
+    setCalibracaoOpen(true);
+  };
+
+  const openEmpresaDetalhes = async (
     empresa: EmpresaSupabase | null | undefined
   ) => {
     if (!empresa) return;
 
-    setEmpresaSelecionada(empresa);
-    setEmpresaDetalhesOpen(true);
+    try {
+      const empresaCompleta = await empresasService.buscarPorId(empresa.id);
+      setEmpresaSelecionada(empresaCompleta);
+      setEmpresaDetalhesOpen(true);
+    } catch (error) {
+      toast({
+        title: "Erro ao abrir empresa",
+        description: error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    }
   };
 
   const featurePending = (label: string) => {
@@ -366,10 +467,34 @@ const Equipamentos = () => {
 
       <EquipamentoFormDialog
         open={dialogOpen}
-        onOpenChange={setDialogOpen}
+        onOpenChange={(value) => {
+          setDialogOpen(value);
+          if (!value) setEmpresaParaNovoEquipamento(null);
+        }}
         mode={mode}
         equipamento={selected}
+        empresaInicialId={empresaParaNovoEquipamento?.id}
+        empresaInicial={empresaParaNovoEquipamento}
         onOpenEmpresa={openEmpresaDetalhes}
+      />
+
+      <EquipamentoDetalhesDialog
+        open={detalhesOpen}
+        onOpenChange={(value) => {
+          setDetalhesOpen(value);
+          if (!value) setEquipamentoDetalhes(null);
+        }}
+        equipamento={equipamentoDetalhes}
+        onEditar={(equipamento) => {
+          setDetalhesOpen(false);
+          setEquipamentoDetalhes(null);
+          openEdit(equipamento);
+        }}
+        onCriarOS={openCriarOS}
+        onCriarPreventiva={openCriarPreventiva}
+        onCriarProtocoloRecolhimento={openRecolhimento}
+        onCriarLaudo={openCriarLaudo}
+        onCriarCalibracao={openCriarCalibracao}
       />
 
       <EmpresaDetalhesDialog
@@ -379,6 +504,7 @@ const Equipamentos = () => {
           if (!value) setEmpresaSelecionada(null);
         }}
         empresa={empresaSelecionada}
+        onCriarEquipamento={openCreateForEmpresa}
       />
 
       <ProtocoloRecolhimentoDialog
@@ -428,6 +554,16 @@ const Equipamentos = () => {
         }}
         initialEmpresaId={equipamentoLaudo?.empresa_id}
         initialEquipamentoId={equipamentoLaudo?.id}
+      />
+
+      <CalibracaoExecucaoFormDialog
+        open={calibracaoOpen}
+        onOpenChange={(value) => {
+          setCalibracaoOpen(value);
+          if (!value) setEquipamentoCalibracao(null);
+        }}
+        empresaInicialId={equipamentoCalibracao?.empresa_id}
+        equipamentoInicialId={equipamentoCalibracao?.id}
       />
 
       <div className="bg-card rounded-xl border mb-4">
@@ -616,31 +752,31 @@ const Equipamentos = () => {
               <thead>
                 <tr className="border-b bg-muted/50">
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Tipo
+                    <SortableTableHeader label="Tipo" sortField="tipo" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Status
+                    <SortableTableHeader label="Status" sortField="status" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Proprietário
+                    <SortableTableHeader label="Proprietario" sortField="empresa" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Modelo
+                    <SortableTableHeader label="Modelo" sortField="modelo" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Fabricante
+                    <SortableTableHeader label="Fabricante" sortField="fabricante" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    TAG
+                    <SortableTableHeader label="TAG" sortField="tag" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Nº Série
+                    <SortableTableHeader label="N. Serie" sortField="numero_serie" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Patrimônio
+                    <SortableTableHeader label="Patrimonio" sortField="patrimonio" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Setor
+                    <SortableTableHeader label="Setor" sortField="setor" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-right px-5 py-3 font-medium text-muted-foreground">
                     Ações
@@ -649,7 +785,7 @@ const Equipamentos = () => {
               </thead>
 
               <tbody>
-                {filtered.map((e) => {
+                {sortedFiltered.map((e) => {
                   const tipo = getTipoEquipamento(e);
                   const empresa = getEmpresaNome(e);
                   const isAtivo = e.ativo !== false;
@@ -734,6 +870,13 @@ const Equipamentos = () => {
                               >
                                 <ClipboardList className="w-4 h-4 mr-2" /> Criar
                                 Ordem de Serviço
+                              </DropdownMenuItem>
+
+                              <DropdownMenuItem
+                                onClick={() => openCriarCalibracao(e)}
+                              >
+                                <Ruler className="w-4 h-4 mr-2" />
+                                {"Criar Calibra\u00e7\u00e3o"}
                               </DropdownMenuItem>
 
                               <DropdownMenuItem

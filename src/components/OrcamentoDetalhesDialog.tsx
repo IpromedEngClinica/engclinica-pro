@@ -1,6 +1,7 @@
-import { FileSignature, FileText } from "lucide-react";
+import { FileSignature, FileText, Pencil } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import ModalActionsBar from "@/components/ModalActionsBar";
 import {
   Dialog,
   DialogContent,
@@ -8,8 +9,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { OrcamentoSupabase } from "@/services/orcamentosService";
+import {
+  OrcamentoStatus,
+  OrcamentoSupabase,
+} from "@/services/orcamentosService";
 import { getEquipamentoLabel } from "@/utils/equipamentoDisplay";
+import { formatDescricaoPecaOrcamento } from "@/utils/orcamentoItens";
 import { gerarPdfOrcamento } from "@/utils/gerarPdfOrcamento";
 
 interface OrcamentoDetalhesDialogProps {
@@ -18,6 +23,11 @@ interface OrcamentoDetalhesDialogProps {
   orcamento: OrcamentoSupabase | null;
   onOpenEmpresa?: (empresa: OrcamentoSupabase["empresa"]) => void;
   onOpenEquipamento?: (equipamento: OrcamentoSupabase["equipamento"]) => void;
+  onEditar?: (orcamento: OrcamentoSupabase) => void;
+  onAlterarStatus?: (
+    orcamento: OrcamentoSupabase,
+    status: OrcamentoStatus
+  ) => void;
 }
 
 const formatCurrency = (value?: number | null) =>
@@ -85,6 +95,8 @@ const OrcamentoDetalhesDialog = ({
   orcamento,
   onOpenEmpresa,
   onOpenEquipamento,
+  onEditar,
+  onAlterarStatus,
 }: OrcamentoDetalhesDialogProps) => {
   if (!orcamento) return null;
 
@@ -99,6 +111,53 @@ const OrcamentoDetalhesDialog = ({
             Orcamento {orcamento.numero}
           </DialogTitle>
         </DialogHeader>
+
+        <ModalActionsBar>
+          {onEditar && (
+            <Button size="sm" onClick={() => onEditar(orcamento)}>
+              <Pencil className="w-4 h-4 mr-2" />
+              Editar
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              if (orcamento) await gerarPdfOrcamento(orcamento);
+            }}
+          >
+            <FileText className="w-4 h-4 mr-2" />
+            Gerar PDF
+          </Button>
+          {onAlterarStatus && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={orcamento.status === "aprovado"}
+                onClick={() => onAlterarStatus(orcamento, "aprovado")}
+              >
+                Aprovar
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={orcamento.status === "reprovado"}
+                onClick={() => onAlterarStatus(orcamento, "reprovado")}
+              >
+                Reprovar
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={orcamento.status === "faturado"}
+                onClick={() => onAlterarStatus(orcamento, "faturado")}
+              >
+                Faturar
+              </Button>
+            </>
+          )}
+        </ModalActionsBar>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
           <section className="rounded-lg border p-4 space-y-3">
@@ -219,7 +278,7 @@ const OrcamentoDetalhesDialog = ({
                     <div>
                       <p className="font-medium">
                         {item.tipo === "peca"
-                          ? item.peca_nome || item.descricao
+                          ? formatDescricaoPecaOrcamento(item)
                           : item.descricao}
                       </p>
                       <p className="text-xs text-muted-foreground">
@@ -259,15 +318,6 @@ const OrcamentoDetalhesDialog = ({
         </div>
 
         <DialogFooter className="px-6 py-4 border-t">
-          <Button
-            variant="outline"
-            onClick={async () => {
-              if (orcamento) await gerarPdfOrcamento(orcamento);
-            }}
-          >
-            <FileText className="w-4 h-4 mr-2" />
-            Gerar PDF
-          </Button>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Fechar
           </Button>
