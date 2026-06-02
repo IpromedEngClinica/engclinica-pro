@@ -77,6 +77,7 @@ export type OrdemServicoSupabase = {
   data_fechamento: string | null;
   problema_relatado: string | null;
   origem_problema: string | null;
+  origem_fluxo: "manual" | "protocolo" | "plano";
   descricao_servico: string | null;
   observacoes: string | null;
   prioridade: string;
@@ -132,6 +133,7 @@ const selectOrdensServico = `
   data_fechamento,
   problema_relatado,
   origem_problema,
+  origem_fluxo,
   descricao_servico,
   observacoes,
   prioridade,

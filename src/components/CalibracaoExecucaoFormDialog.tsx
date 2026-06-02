@@ -35,6 +35,12 @@ interface Props {
   execucao?: CalibracaoExecucao | null;
   empresaInicialId?: string | null;
   equipamentoInicialId?: string | null;
+  dataCalibracaoInicial?: string | null;
+  dataEmissaoInicial?: string | null;
+  origemFluxo?: "manual" | "plano";
+  planoId?: string | null;
+  planoExecucaoId?: string | null;
+  planoExecucaoItemId?: string | null;
   onSaved?: (execucao: CalibracaoExecucao) => void;
 }
 
@@ -65,6 +71,12 @@ const CalibracaoExecucaoFormDialog = ({
   execucao = null,
   empresaInicialId,
   equipamentoInicialId,
+  dataCalibracaoInicial,
+  dataEmissaoInicial,
+  origemFluxo,
+  planoId,
+  planoExecucaoId,
+  planoExecucaoItemId,
   onSaved,
 }: Props) => {
   const [form, setForm] = useState(vazio);
@@ -100,6 +112,8 @@ const CalibracaoExecucaoFormDialog = ({
         ...vazio(),
         empresaId: empresaInicialId || "",
         equipamentoId: equipamentoInicialId || "",
+        dataCalibracao: dataCalibracaoInicial || hoje(),
+        dataEmissao: dataEmissaoInicial || hoje(),
       });
       setTabelas([]);
       setActiveTabela("0");
@@ -119,7 +133,7 @@ const CalibracaoExecucaoFormDialog = ({
     });
     setTabelas(criarTabelasInputDaExecucao(execucao));
     setActiveTabela("0");
-  }, [empresaInicialId, equipamentoInicialId, execucao, open]);
+  }, [dataCalibracaoInicial, dataEmissaoInicial, empresaInicialId, equipamentoInicialId, execucao, open]);
 
   useEffect(() => {
     if (!open || execucao || !equipamentoInicialId) return;
@@ -217,6 +231,10 @@ const CalibracaoExecucaoFormDialog = ({
     tecnicoExecutorNome: form.tecnico, tecnicoExecutorRegistro: form.registroTecnico,
     responsavelTecnicoNome: RESPONSAVEL_TECNICO, responsavelTecnicoRegistro: REGISTRO_RESPONSAVEL,
     responsavelSolicitante: form.solicitante, criterioConformidadeAplicado: possuiCriterio,
+    origemFluxo: execucao?.origem_fluxo ?? origemFluxo ?? "manual",
+    planoId: execucao?.plano_id ?? planoId ?? null,
+    planoExecucaoId: execucao?.plano_execucao_id ?? planoExecucaoId ?? null,
+    planoExecucaoItemId: execucao?.plano_execucao_item_id ?? planoExecucaoItemId ?? null,
     tabelas,
   });
 

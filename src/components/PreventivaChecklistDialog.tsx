@@ -25,6 +25,10 @@ interface PreventivaChecklistDialogProps {
   onOpenChange: (open: boolean) => void;
   equipamento: EquipamentoSupabase | null;
   procedimento: ProcedimentoPreventiva | null;
+  dataAbertura?: string | null;
+  dataFechamento?: string | null;
+  ordemServicoId?: string | null;
+  onSaved?: (ordemServico: { id: string }) => void;
 }
 
 type RespostaItem = {
@@ -70,6 +74,10 @@ const PreventivaChecklistDialog = ({
   onOpenChange,
   equipamento,
   procedimento,
+  dataAbertura,
+  dataFechamento,
+  ordemServicoId,
+  onSaved,
 }: PreventivaChecklistDialogProps) => {
   const executarPreventiva = useExecutarPreventiva();
   const [respostas, setRespostas] = useState<Record<string, RespostaItem>>({});
@@ -155,7 +163,10 @@ const PreventivaChecklistDialog = ({
         equipamentoId: equipamento.id,
         empresaId: equipamento.empresa_id,
         procedimentoId: procedimento.id,
+        ordemServicoId,
         observacoes,
+        dataAbertura,
+        dataFechamento,
         respostas: itens.map((item, index) => ({
           procedimentoItemId: item.id,
           descricao: item.descricao,
@@ -167,9 +178,10 @@ const PreventivaChecklistDialog = ({
       });
 
       toast({
-        title: "OS de preventiva criada.",
-        description: `OS ${os.numero} criada e fechada.`,
+        title: ordemServicoId ? "Preventiva finalizada." : "OS de preventiva criada.",
+        description: `OS ${os.numero} fechada.`,
       });
+      onSaved?.(os);
       onOpenChange(false);
     } catch (error) {
       toast({

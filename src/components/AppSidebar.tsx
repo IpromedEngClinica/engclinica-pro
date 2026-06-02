@@ -16,6 +16,7 @@ import {
   Settings2,
   List,
   LogOut,
+  ClipboardCheck,
 } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -30,6 +31,7 @@ const menuItems = [
   { icon: FileBox, label: "Protocolos", path: "/protocolos" },
   { icon: FileWarning, label: "Laudos de Obsolescencia", path: "/laudos-obsolescencia" },
   { icon: CalendarCheck, label: "Procedimentos Preventivos", path: "/procedimentos" },
+  { icon: ClipboardCheck, label: "Planos", path: "/planos" },
 ];
 
 const calibracaoItems = [

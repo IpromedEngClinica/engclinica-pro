@@ -159,6 +159,10 @@ export type CalibracaoExecucao = {
   responsavel_tecnico_registro: string | null;
   responsavel_solicitante: string | null;
   status: CalibracaoExecucaoStatus;
+  origem_fluxo: "manual" | "plano";
+  plano_id: string | null;
+  plano_execucao_id: string | null;
+  plano_execucao_item_id: string | null;
   numero_revisao: number;
   atualizado_apos_finalizacao: boolean;
   criterio_conformidade_aplicado: boolean;
@@ -231,6 +235,10 @@ export type CalibracaoExecucaoFormInput = {
   responsavelTecnicoRegistro?: string | null;
   responsavelSolicitante?: string | null;
   criterioConformidadeAplicado: boolean;
+  origemFluxo?: "manual" | "plano";
+  planoId?: string | null;
+  planoExecucaoId?: string | null;
+  planoExecucaoItemId?: string | null;
   tabelas: CalibracaoExecucaoTabelaInput[];
 };
 
@@ -291,7 +299,8 @@ const selectExecucao = `
   incerteza_pressao, unidade_pressao, observacoes, data_calibracao, data_emissao,
   data_validade, validade_mes, validade_meses, tecnico_executor_nome, tecnico_executor_registro,
   responsavel_tecnico_nome, responsavel_tecnico_registro, responsavel_solicitante,
-  status, numero_revisao, atualizado_apos_finalizacao,
+  status, origem_fluxo, plano_id, plano_execucao_id, plano_execucao_item_id,
+  numero_revisao, atualizado_apos_finalizacao,
   criterio_conformidade_aplicado, regra_decisao, resultado_geral, os_id,
   pdf_storage_path, pdf_hash, fechado_em, ativo, created_at, updated_at,
   empresa:empresas (*),
@@ -386,6 +395,10 @@ const criarPayloadExecucao = (
   responsavel_solicitante: trimOrNull(input.responsavelSolicitante),
   criterio_conformidade_aplicado: possuiCriterioAceitacao(input),
   regra_decisao: obterRegraDecisaoGeral(input),
+  origem_fluxo: input.origemFluxo ?? "manual",
+  plano_id: input.planoId ?? null,
+  plano_execucao_id: input.planoExecucaoId ?? null,
+  plano_execucao_item_id: input.planoExecucaoItemId ?? null,
 });
 
 export const criarTabelasExecucaoDoProcedimento = (
@@ -508,6 +521,10 @@ const criarInputDaExecucao = (
   responsavelTecnicoRegistro: execucao.responsavel_tecnico_registro,
   responsavelSolicitante: execucao.responsavel_solicitante,
   criterioConformidadeAplicado: execucao.criterio_conformidade_aplicado,
+  origemFluxo: execucao.origem_fluxo,
+  planoId: execucao.plano_id,
+  planoExecucaoId: execucao.plano_execucao_id,
+  planoExecucaoItemId: execucao.plano_execucao_item_id,
   tabelas: criarTabelasInputDaExecucao(execucao),
 });
 
@@ -800,6 +817,112 @@ export const formatNomeArquivoCertificadoCalibracao = (
 };
 
 export const calibracaoExecucoesService = {
+  async abrirCalibracaoPlano(input: {
+    empresaId: string;
+    equipamentoId: string;
+    tipoEquipamentoId: string;
+    planoId: string;
+    planoExecucaoId: string;
+    planoExecucaoItemId: string;
+    dataCalibracao: string;
+    dataEmissao: string;
+    clienteUsaCriterio: boolean;
+  }) {
+    const organizacaoId = await buscarOrganizacaoAtual();
+    const procedimentos = await calibracaoProcedimentosService.listarProcedimentos();
+    const procedimento = procedimentos
+      .filter((item) => item.ativo && item.tipo_equipamento_id === input.tipoEquipamentoId)
+      .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))[0];
+    if (!procedimento) {
+      throw new Error("Procedimento de calibracao nao cadastrado para este tipo de equipamento.");
+    }
+    const { data, error } = await supabase
+      .from("calibracao_execucoes")
+      .insert({
+        organizacao_id: organizacaoId,
+        empresa_id: input.empresaId,
+        equipamento_id: input.equipamentoId,
+        procedimento_id: procedimento.id,
+        procedimento_nome_snapshot: procedimento.nome,
+        procedimento_versao_snapshot: procedimento.versao,
+        norma_utilizada_snapshot: trimOrNull(procedimento.metodo_referencia),
+        data_calibracao: input.dataCalibracao,
+        data_emissao: input.dataEmissao,
+        tecnico_executor_nome: "A definir",
+        responsavel_tecnico_nome: "A definir",
+        status: "rascunho",
+        origem_fluxo: "plano",
+        plano_id: input.planoId,
+        plano_execucao_id: input.planoExecucaoId,
+        plano_execucao_item_id: input.planoExecucaoItemId,
+      })
+      .select("id")
+      .single();
+    if (error) throw new Error(error.message);
+
+    for (const [ordemTabela, tabela] of (procedimento.tabelas || []).entries()) {
+      const incluirCriterio =
+        input.clienteUsaCriterio && tabela.incluir_criterio_aceitacao;
+      const { data: tabelaCriada, error: tabelaError } = await supabase
+        .from("calibracao_execucao_tabelas")
+        .insert({
+          organizacao_id: organizacaoId,
+          execucao_id: data.id,
+          procedimento_tabela_id: tabela.id,
+          nome_snapshot: tabela.nome,
+          grandeza_snapshot: tabela.grandeza,
+          unidade_snapshot: tabela.unidade,
+          quantidade_leituras_snapshot: tabela.quantidade_leituras,
+          padrao_id: tabela.padrao_id,
+          padrao_tabela_id: tabela.padrao_tabela_id,
+          resolucao_padrao_snapshot: tabela.resolucao_padrao_default,
+          resolucao_equipamento_snapshot: tabela.resolucao_equipamento_default,
+          resolucao_equipamento_texto_snapshot:
+            tabela.resolucao_equipamento_default == null
+              ? null
+              : formatDecimalPtBr(tabela.resolucao_equipamento_default),
+          fator_confiabilidade_modo_snapshot: tabela.fator_confiabilidade_modo,
+          fator_k_fixo_snapshot: tabela.fator_k_fixo,
+          incluir_criterio_aceitacao_snapshot: incluirCriterio,
+          criterio_aceitacao_tipo_snapshot: incluirCriterio
+            ? tabela.criterio_aceitacao_tipo
+            : null,
+          criterio_aceitacao_valor_maximo_snapshot: incluirCriterio
+            ? tabela.criterio_aceitacao_valor_maximo
+            : null,
+          criterio_aceitacao_valor_minimo_snapshot: incluirCriterio
+            ? tabela.criterio_aceitacao_valor_minimo
+            : null,
+          regra_decisao_snapshot: incluirCriterio
+            ? "considerando_incerteza"
+            : null,
+          corrigir_erro_sistematico_snapshot: tabela.corrigir_erro_sistematico,
+          ordem: ordemTabela,
+        })
+        .select("id")
+        .single();
+      if (tabelaError) throw new Error(tabelaError.message);
+      if (tabela.pontos?.length) {
+        const { error: pontosError } = await supabase
+          .from("calibracao_execucao_pontos")
+          .insert(
+            tabela.pontos.map((ponto, ordemPonto) => ({
+              organizacao_id: organizacaoId,
+              execucao_tabela_id: tabelaCriada.id,
+              procedimento_ponto_id: ponto.id,
+              ordem: ordemPonto,
+              valor_nominal: ponto.valor_nominal,
+              valor_nominal_texto_snapshot:
+                ponto.valor_nominal_texto || formatDecimalPtBr(ponto.valor_nominal),
+            }))
+          );
+        if (pontosError) throw new Error(pontosError.message);
+      }
+    }
+
+    return this.buscarExecucaoPorId(data.id);
+  },
+
   async listarExecucoes() {
     const { data, error } = await supabase
       .from("calibracao_execucoes")
@@ -951,11 +1074,16 @@ export const calibracaoExecucoesService = {
       .upload(path, pdf, { contentType: "application/pdf", upsert: true });
     if (uploadError) throw new Error(uploadError.message);
 
-    const { error } = await supabase.rpc("finalizar_calibracao_execucao", {
+    const { error } = await supabase.rpc(
+      execucao.origem_fluxo === "plano"
+        ? "finalizar_calibracao_execucao_plano"
+        : "finalizar_calibracao_execucao",
+      {
       p_execucao_id: id,
       p_pdf_storage_path: path,
       p_pdf_hash: hash,
-    });
+      }
+    );
     if (error) {
       await supabase.storage.from(CERTIFICADOS_BUCKET).remove([path]);
       throw new Error(error.message);
