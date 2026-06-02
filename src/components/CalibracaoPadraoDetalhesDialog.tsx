@@ -17,6 +17,7 @@ import {
   calibracaoPadroesService,
   getStatusValidadePadrao,
 } from "@/services/calibracaoPadroesService";
+import { formatarDataPadrao } from "@/utils/calibracaoValidade";
 import { formatDecimalPtBr } from "@/utils/numberUtils";
 
 interface Props {
@@ -149,7 +150,7 @@ const CalibracaoPadraoDetalhesDialog = ({
                 {formatDate(padrao.data_calibracao)}
               </Field>
               <Field label="Data de validade">
-                {formatDate(padrao.data_validade)}
+                {formatarDataPadrao(padrao.data_validade)}
               </Field>
             </div>
           </section>
@@ -229,10 +230,15 @@ const CalibracaoPadraoDetalhesDialog = ({
                         <tbody>
                           {(tabela.pontos || []).map((ponto) => (
                             <tr key={ponto.id} className="border-b last:border-0">
-                              <td className="px-3 py-2">{formatNumber(ponto.valor_nominal)}</td>
+                              <td className="px-3 py-2">
+                                {ponto.valor_nominal_texto || formatNumber(ponto.valor_nominal)}
+                              </td>
                               <td className="px-3 py-2">{formatNumber(ponto.media_valores_medidos)}</td>
                               <td className="px-3 py-2">{formatNumber(ponto.tendencia)}</td>
-                              <td className="px-3 py-2">{formatNumber(ponto.incerteza_expandida)}</td>
+                              <td className="px-3 py-2">
+                                {ponto.incerteza_expandida_texto ||
+                                  formatNumber(ponto.incerteza_expandida)}
+                              </td>
                               <td className="px-3 py-2">{formatNumber(ponto.fator_abrangencia_k)}</td>
                               <td className="px-3 py-2">
                                 {ponto.veff_infinito

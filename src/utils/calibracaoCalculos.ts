@@ -12,6 +12,25 @@ export type RegraDecisao =
   | "considerando_incerteza"
   | "personalizada";
 export type ResultadoConformidade = "conforme" | "nao_conforme" | "sem_criterio";
+export type ResultadoGeralCalibracao =
+  | "conforme"
+  | "nao_conforme"
+  | "sem_declaracao_conformidade";
+
+export const calcularResultadoGeralCalibracao = (
+  resultados: Array<ResultadoConformidade | null>
+): ResultadoGeralCalibracao | null => {
+  if (!resultados.length || resultados.some((resultado) => !resultado)) {
+    return null;
+  }
+  const resultadosComCriterio = resultados.filter(
+    (resultado) => resultado !== "sem_criterio"
+  );
+  if (!resultadosComCriterio.length) return "sem_declaracao_conformidade";
+  return resultadosComCriterio.some((resultado) => resultado === "nao_conforme")
+    ? "nao_conforme"
+    : "conforme";
+};
 
 export type ComponenteIncerteza = {
   nome: string;
@@ -28,8 +47,10 @@ export type ComponenteIncerteza = {
 
 export type PontoPadraoCalculo = {
   valorNominal: number;
+  valorNominalTexto?: string | null;
   tendencia?: number | null;
   incertezaExpandida?: number | null;
+  incertezaExpandidaTexto?: string | null;
   fatorAbrangenciaK?: number | null;
   grausLiberdade?: number | null;
   veffInfinito?: boolean;
@@ -74,6 +95,28 @@ export const calcularDesvioPadraoAmostral = (valores: number[]) => {
 export const calcularIncertezaTipoA = (valores: number[]) => {
   if (!valores.length) return null;
   return calcularDesvioPadraoAmostral(valores) / Math.sqrt(valores.length);
+};
+
+export const arredondarParaCasas = (valor: number, casas: number) => {
+  const fator = Math.pow(10, casas);
+  return Math.round((valor + Number.EPSILON) * fator) / fator;
+};
+
+export const obterCasasDecimaisIncerteza = (
+  valorTexto?: string | null,
+  valorFallback?: number | null
+) => {
+  const texto = valorTexto?.trim() || (
+    valorFallback == null
+      ? ""
+      : valorFallback.toLocaleString("en-US", {
+          maximumFractionDigits: 20,
+          useGrouping: false,
+        })
+  );
+  const mantissa = texto.replace(/\s/g, "").split(/[eE]/)[0];
+  const separador = Math.max(mantissa.lastIndexOf(","), mantissa.lastIndexOf("."));
+  return separador < 0 ? 0 : mantissa.length - separador - 1;
 };
 
 export const converterIncertezaExpandida = (
@@ -256,10 +299,18 @@ export const calcularPontoCalibracao = (input: CalcularPontoInput) => {
       ? calcularFatorStudentT95(veff)
       : input.fatorK;
   if (!fatorK || fatorK <= 0) throw new Error("Informe um fator k valido.");
-  const incertezaExpandida = uc * fatorK;
+  const incertezaExpandidaCalculada = uc * fatorK;
+  const casasDecimaisIncerteza = obterCasasDecimaisIncerteza(
+    input.pontoPadrao.incertezaExpandidaTexto,
+    input.pontoPadrao.incertezaExpandida
+  );
+  const incertezaExpandidaReportada = arredondarParaCasas(
+    incertezaExpandidaCalculada,
+    casasDecimaisIncerteza
+  );
   const conformidade = avaliarConformidade({
     criterio: input.criterio,
-    incertezaExpandida,
+    incertezaExpandida: incertezaExpandidaCalculada,
     tendenciaCorrigida,
     valorNominal: input.valorNominal,
   });
@@ -278,7 +329,10 @@ export const calcularPontoCalibracao = (input: CalcularPontoInput) => {
     veff,
     veffInfinito: !Number.isFinite(veff),
     fatorK,
-    incertezaExpandida,
+    incertezaExpandida: incertezaExpandidaCalculada,
+    incertezaExpandidaCalculada,
+    incertezaExpandidaReportada,
+    casasDecimaisIncerteza,
     criterioAceitacaoValor: conformidade.limite,
     resultadoConformidade: conformidade.resultado,
     componentes,

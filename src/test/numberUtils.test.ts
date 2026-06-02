@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  contarCasasDecimaisTexto,
   formatDecimalPtBr,
+  formatarNumeroComCasas,
   getVeffForCalculation,
   isInfiniteInput,
+  maiorQuantidadeCasas,
   normalizeDecimalInput,
+  obterCasasResolucaoEquipamento,
   parseVeffInput,
   requireDecimal,
 } from "@/utils/numberUtils";
@@ -36,7 +40,23 @@ describe("numberUtils", () => {
   it("formata valores para exibicao pt-BR", () => {
     expect(formatDecimalPtBr(1234.56)).toBe("1.234,56");
     expect(formatDecimalPtBr("20.95000000")).toBe("20,95");
+    expect(formatDecimalPtBr(0.2, 2, 2)).toBe("0,20");
     expect(formatDecimalPtBr(null)).toBe("");
+  });
+
+  it("preserva casas decimais textuais para relatorios metrologicos", () => {
+    expect(contarCasasDecimaisTexto("18,0")).toBe(1);
+    expect(contarCasasDecimaisTexto("20.00")).toBe(2);
+    expect(maiorQuantidadeCasas(["17,9", "17,90", "17,900"])).toBe(3);
+    expect(formatarNumeroComCasas(18, 2)).toBe("18,00");
+  });
+
+  it("obtem casas decimais da resolucao textual antes do fallback numerico", () => {
+    expect(obterCasasResolucaoEquipamento("0,10", 0.1)).toBe(2);
+    expect(obterCasasResolucaoEquipamento("0.001", 0.001)).toBe(3);
+    expect(obterCasasResolucaoEquipamento(null, 0.01)).toBe(2);
+    expect(obterCasasResolucaoEquipamento(null, 1e-8)).toBe(8);
+    expect(obterCasasResolucaoEquipamento(null, null)).toBe(0);
   });
 
   it.each(["inf", "INF", " infinito ", "Infinity", "∞"])(

@@ -15,6 +15,7 @@ import type {
   CalibracaoProcedimento,
   CalibracaoProcedimentoTabela,
 } from "@/services/calibracaoProcedimentosService";
+import { formatarDataPadrao } from "@/utils/calibracaoValidade";
 import { formatDecimalPtBr } from "@/utils/numberUtils";
 
 interface Props {
@@ -27,8 +28,6 @@ interface Props {
 }
 
 const formatNumber = (value?: number | null) => formatDecimalPtBr(value) || "-";
-const formatDate = (value?: string | null) =>
-  value ? new Date(`${value}T00:00:00`).toLocaleDateString("pt-BR") : "-";
 const Field = ({ label, children }: { label: string; children: ReactNode }) => <div className="text-sm"><span className="font-medium text-muted-foreground">{label}: </span><span>{children}</span></div>;
 
 const fatorLabel = (tabela: CalibracaoProcedimentoTabela) => {
@@ -87,14 +86,13 @@ const CalibracaoProcedimentoDetalhesDialog = ({
                     <Field label="Padrao utilizado">{tabela.padrao?.nome_padrao || "-"}</Field>
                     <Field label="Certificado">{tabela.padrao?.numero_certificado || "-"}</Field>
                     <Field label="Laboratorio">{tabela.padrao?.laboratorio_calibrador || "-"}</Field>
-                    <Field label="Validade">{formatDate(tabela.padrao?.data_validade)}</Field>
+                    <Field label="Validade">{formatarDataPadrao(tabela.padrao?.data_validade)}</Field>
                     <Field label="Tabela metrologica">{tabela.padrao_tabela?.nome || "-"}</Field>
                     <Field label="TAG / serie">{tabela.padrao?.tag || tabela.padrao?.numero_serie || "-"}</Field>
                   </div>
                   <div className="grid gap-3 rounded-lg border p-3 md:grid-cols-3">
                     <Field label="Grandeza">{tabela.grandeza}</Field>
                     <Field label="Unidade">{tabela.unidade}</Field>
-                    <Field label="Preenchimento">{tabela.modo_preenchimento}</Field>
                     <Field label="Leituras">{tabela.quantidade_leituras}</Field>
                     <Field label="Tipo de medida">{tabela.tipo_medida || "-"}</Field>
                     <Field label="Fator de confiabilidade">{fatorLabel(tabela)}</Field>

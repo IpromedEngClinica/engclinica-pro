@@ -20,6 +20,7 @@ export type EmpresaSupabase = {
   celular: string | null;
   telefone: string | null;
   observacoes: string | null;
+  incluir_criterio_aceitacao_calibracao: boolean;
   ativo: boolean;
   created_at: string;
   updated_at: string;
@@ -43,6 +44,7 @@ export type EmpresaFormInput = {
   celular?: string;
   telefone?: string;
   observacoes?: string;
+  incluirCriterioAceitacaoCalibracao?: boolean;
 };
 
 export type StatusEmpresaFiltro = "ativas" | "todas" | "inativas";
@@ -77,6 +79,7 @@ export const empresasService = {
         celular,
         telefone,
         observacoes,
+        incluir_criterio_aceitacao_calibracao,
         ativo,
         created_at,
         updated_at
@@ -125,6 +128,7 @@ export const empresasService = {
         celular,
         telefone,
         observacoes,
+        incluir_criterio_aceitacao_calibracao,
         ativo,
         created_at,
         updated_at
@@ -174,6 +178,8 @@ export const empresasService = {
         celular: input.celular || null,
         telefone: input.telefone || null,
         observacoes: input.observacoes || null,
+        incluir_criterio_aceitacao_calibracao:
+          input.incluirCriterioAceitacaoCalibracao ?? false,
       })
       .select()
       .single();
@@ -206,6 +212,8 @@ export const empresasService = {
         celular: input.celular || null,
         telefone: input.telefone || null,
         observacoes: input.observacoes || null,
+        incluir_criterio_aceitacao_calibracao:
+          input.incluirCriterioAceitacaoCalibracao ?? false,
       })
       .eq("id", id)
       .select()

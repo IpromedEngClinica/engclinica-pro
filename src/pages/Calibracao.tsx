@@ -27,7 +27,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   useCalibracaoPadroes,
   useDesativarCalibracaoPadrao,
@@ -39,6 +38,7 @@ import {
   calibracaoPadroesService,
   getStatusValidadePadrao,
 } from "@/services/calibracaoPadroesService";
+import { formatarDataPadrao } from "@/utils/calibracaoValidade";
 
 const statusLabels: Record<CalibracaoPadraoStatusValidade, string> = {
   vencido: "Vencido",
@@ -57,8 +57,9 @@ const statusClasses: Record<CalibracaoPadraoStatusValidade, string> = {
 const formatDate = (value: string) =>
   new Date(`${value}T00:00:00`).toLocaleDateString("pt-BR");
 
-const Calibracao = () => {
-  const [activeTab, setActiveTab] = useState("padroes");
+type CalibracaoSection = "execucoes" | "padroes" | "procedimentos" | "configuracoes";
+
+const Calibracao = ({ section }: { section: CalibracaoSection }) => {
   const [search, setSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -159,7 +160,7 @@ const Calibracao = () => {
         title="Calibração"
         description="Cadastre padrões internos, certificados e tabelas metrológicas."
       >
-        {activeTab === "padroes" && (
+        {section === "padroes" && (
         <Button onClick={openCreate}>
           <Plus className="w-4 h-4 mr-2" /> Novo Padrão
         </Button>
@@ -196,15 +197,7 @@ const Calibracao = () => {
         padrao={selected}
       />
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="padroes">Padrões</TabsTrigger>
-          <TabsTrigger value="procedimentos">Procedimentos</TabsTrigger>
-          <TabsTrigger value="executadas">Calibrações Executadas</TabsTrigger>
-          <TabsTrigger value="configuracoes">Configurações</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="padroes" className="space-y-4">
+      {section === "padroes" && <div className="space-y-4">
           <div className="grid gap-3 md:grid-cols-4">
             <Counter label="Vencidos" value={counters.vencido} className="text-red-700" />
             <Counter label="Até 30 dias" value={counters.ate_30_dias} className="text-orange-700" />
@@ -272,7 +265,7 @@ const Calibracao = () => {
                           <td className="px-4 py-3">{padrao.numero_serie || "-"}</td>
                           <td className="px-4 py-3">{padrao.laboratorio_calibrador}</td>
                           <td className="px-4 py-3">{formatDate(padrao.data_calibracao)}</td>
-                          <td className="px-4 py-3">{formatDate(padrao.data_validade)}</td>
+                          <td className="px-4 py-3">{formatarDataPadrao(padrao.data_validade)}</td>
                           <td className="px-4 py-3"><Badge variant="outline" className={statusClasses[status]}>{statusLabels[status]}</Badge></td>
                           <td className="px-4 py-3">{padrao.documentos?.length || 0}</td>
                           <td className="px-4 py-3">
@@ -301,12 +294,11 @@ const Calibracao = () => {
               </div>
             )}
           </div>
-        </TabsContent>
+        </div>}
 
-        <TabsContent value="procedimentos"><CalibracaoProcedimentosSection /></TabsContent>
-        <TabsContent value="executadas"><CalibracaoExecucoesSection /></TabsContent>
-        <TabsContent value="configuracoes"><Placeholder title="Configurações" /></TabsContent>
-      </Tabs>
+      {section === "procedimentos" && <CalibracaoProcedimentosSection />}
+      {section === "execucoes" && <CalibracaoExecucoesSection />}
+      {section === "configuracoes" && <Placeholder title="Configurações" />}
     </div>
   );
 };

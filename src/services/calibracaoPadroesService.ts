@@ -26,9 +26,11 @@ export type CalibracaoPadraoPonto = {
   tabela_id: string;
   ordem: number;
   valor_nominal: number;
+  valor_nominal_texto: string | null;
   media_valores_medidos: number | null;
   tendencia: number | null;
   incerteza_expandida: number | null;
+  incerteza_expandida_texto: string | null;
   fator_abrangencia_k: number | null;
   graus_liberdade_efetivos_veff: number | null;
   veff_infinito: boolean;
@@ -110,9 +112,11 @@ export type CalibracaoPadraoPontoInput = {
   id?: string;
   ordem?: number;
   valorNominal: number;
+  valorNominalTexto?: string | null;
   mediaValoresMedidos?: number | null;
   tendencia?: number | null;
   incertezaExpandida?: number | null;
+  incertezaExpandidaTexto?: string | null;
   fatorAbrangenciaK?: number | null;
   grausLiberdadeEfetivosVeff?: number | null;
   veffInfinito?: boolean;
@@ -151,9 +155,11 @@ const selectPonto = `
   tabela_id,
   ordem,
   valor_nominal,
+  valor_nominal_texto,
   media_valores_medidos,
   tendencia,
   incerteza_expandida,
+  incerteza_expandida_texto,
   fator_abrangencia_k,
   graus_liberdade_efetivos_veff,
   veff_infinito,
@@ -275,9 +281,11 @@ const toTabelaPayload = (input: CalibracaoPadraoTabelaInput) => ({
 const toPontoPayload = (input: CalibracaoPadraoPontoInput) => ({
   ordem: input.ordem ?? 0,
   valor_nominal: input.valorNominal,
+  valor_nominal_texto: trimOrNull(input.valorNominalTexto),
   media_valores_medidos: input.mediaValoresMedidos ?? null,
   tendencia: input.tendencia ?? null,
   incerteza_expandida: input.incertezaExpandida ?? null,
+  incerteza_expandida_texto: trimOrNull(input.incertezaExpandidaTexto),
   fator_abrangencia_k: input.fatorAbrangenciaK ?? null,
   graus_liberdade_efetivos_veff:
     input.grausLiberdadeEfetivosVeff ?? null,

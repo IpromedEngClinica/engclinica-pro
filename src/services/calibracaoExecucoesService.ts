@@ -5,12 +5,22 @@ import { calibracaoPadroesService } from "@/services/calibracaoPadroesService";
 import type { CalibracaoProcedimento } from "@/services/calibracaoProcedimentosService";
 import { calibracaoProcedimentosService } from "@/services/calibracaoProcedimentosService";
 import {
+  calcularResultadoGeralCalibracao,
   calcularPontoCalibracao,
   encontrarPontoPadraoExato,
   type ComponenteIncerteza,
   type RegraDecisao,
   type ResultadoConformidade,
 } from "@/utils/calibracaoCalculos";
+import {
+  fimDoMesValidade,
+  primeiroDiaMesValidade,
+} from "@/utils/calibracaoValidade";
+import {
+  contarCasasDecimaisTexto,
+  formatDecimalPtBr,
+  maiorQuantidadeCasas,
+} from "@/utils/numberUtils";
 
 const CERTIFICADOS_BUCKET = "calibracao-certificados";
 
@@ -29,6 +39,8 @@ export type CalibracaoExecucaoLeitura = {
   execucao_ponto_id: string;
   ordem: number;
   valor_medido: number;
+  valor_medido_texto: string | null;
+  casas_decimais: number | null;
 };
 
 export type CalibracaoExecucaoComponente = {
@@ -53,6 +65,8 @@ export type CalibracaoExecucaoPonto = {
   procedimento_ponto_id: string | null;
   ordem: number;
   valor_nominal: number;
+  valor_nominal_texto_snapshot: string | null;
+  casas_decimais_valor_medido: number | null;
   media_valores_medidos: number | null;
   desvio_padrao_amostral: number | null;
   incerteza_tipo_a: number | null;
@@ -60,6 +74,7 @@ export type CalibracaoExecucaoPonto = {
   correcao_padrao: number | null;
   tendencia_corrigida: number | null;
   incerteza_padrao_certificado: number | null;
+  incerteza_padrao_certificado_texto: string | null;
   incerteza_padrao_convertida: number | null;
   incerteza_resolucao_equipamento: number | null;
   incerteza_resolucao_padrao: number | null;
@@ -68,6 +83,9 @@ export type CalibracaoExecucaoPonto = {
   veff_infinito: boolean;
   fator_abrangencia_k: number | null;
   incerteza_expandida: number | null;
+  incerteza_expandida_calculada: number | null;
+  incerteza_expandida_reportada: number | null;
+  casas_decimais_incerteza: number | null;
   criterio_aceitacao_valor: number | null;
   resultado_conformidade: ResultadoConformidade | null;
   observacoes: string | null;
@@ -93,6 +111,7 @@ export type CalibracaoExecucaoTabela = {
   padrao_laboratorio_snapshot: string | null;
   resolucao_padrao_snapshot: number | null;
   resolucao_equipamento_snapshot: number | null;
+  resolucao_equipamento_texto_snapshot: string | null;
   fator_confiabilidade_modo_snapshot:
     | "calcular_95"
     | "k_fixo"
@@ -102,6 +121,7 @@ export type CalibracaoExecucaoTabela = {
   criterio_aceitacao_tipo_snapshot: "absoluto" | "percentual" | "faixa" | null;
   criterio_aceitacao_valor_maximo_snapshot: number | null;
   criterio_aceitacao_valor_minimo_snapshot: number | null;
+  regra_decisao_snapshot: RegraDecisao | null;
   corrigir_erro_sistematico_snapshot: boolean;
   ordem: number;
   pontos?: CalibracaoExecucaoPonto[];
@@ -131,12 +151,16 @@ export type CalibracaoExecucao = {
   data_calibracao: string;
   data_emissao: string;
   data_validade: string | null;
+  validade_mes: string | null;
+  validade_meses: number;
   tecnico_executor_nome: string;
   tecnico_executor_registro: string | null;
   responsavel_tecnico_nome: string;
   responsavel_tecnico_registro: string | null;
   responsavel_solicitante: string | null;
   status: CalibracaoExecucaoStatus;
+  numero_revisao: number;
+  atualizado_apos_finalizacao: boolean;
   criterio_conformidade_aplicado: boolean;
   regra_decisao: RegraDecisao | null;
   resultado_geral: CalibracaoExecucaoResultado | null;
@@ -155,7 +179,11 @@ export type CalibracaoExecucao = {
 export type CalibracaoExecucaoPontoInput = {
   procedimentoPontoId?: string | null;
   valorNominal: number;
-  leituras: Array<number | null>;
+  valorNominalTexto?: string | null;
+  leituras: Array<{
+    valor: number | null;
+    valorTexto: string;
+  }>;
   observacoes?: string | null;
   outrasComponentes?: ComponenteIncerteza[];
 };
@@ -170,12 +198,14 @@ export type CalibracaoExecucaoTabelaInput = {
   padraoTabelaId: string;
   resolucaoPadrao?: number | null;
   resolucaoEquipamento?: number | null;
+  resolucaoEquipamentoTexto?: string | null;
   fatorModo: "calcular_95" | "k_fixo" | "manual_execucao";
   fatorK?: number | null;
   incluirCriterio: boolean;
   criterioTipo?: "absoluto" | "percentual" | "faixa" | null;
   criterioValorMaximo?: number | null;
   criterioValorMinimo?: number | null;
+  regraDecisao?: RegraDecisao | null;
   corrigirErroSistematico: boolean;
   pontos: CalibracaoExecucaoPontoInput[];
 };
@@ -194,18 +224,32 @@ export type CalibracaoExecucaoFormInput = {
   observacoes?: string | null;
   dataCalibracao: string;
   dataEmissao: string;
-  dataValidade?: string | null;
+  validadeMes: string;
   tecnicoExecutorNome: string;
   tecnicoExecutorRegistro?: string | null;
   responsavelTecnicoNome: string;
   responsavelTecnicoRegistro?: string | null;
   responsavelSolicitante?: string | null;
   criterioConformidadeAplicado: boolean;
-  regraDecisao?: RegraDecisao | null;
   tabelas: CalibracaoExecucaoTabelaInput[];
 };
 
-const selectLeitura = `id, execucao_ponto_id, ordem, valor_medido`;
+export type CalibracaoExecucaoRevisao = {
+  id: string;
+  organizacao_id: string;
+  execucao_id: string;
+  numero_revisao: number;
+  motivo: string | null;
+  snapshot_json: Record<string, unknown>;
+  created_at: string;
+  created_by: string | null;
+};
+
+type GerarPdfCalibracao = (execucao: CalibracaoExecucao) => Promise<Blob>;
+
+const selectLeitura = `
+  id, execucao_ponto_id, ordem, valor_medido, valor_medido_texto, casas_decimais
+`;
 const selectComponente = `
   id, execucao_ponto_id, nome, categoria, distribuicao, valor_origem, divisor,
   coeficiente_sensibilidade, incerteza_padrao, graus_liberdade,
@@ -213,12 +257,15 @@ const selectComponente = `
 `;
 const selectPonto = `
   id, execucao_tabela_id, procedimento_ponto_id, ordem, valor_nominal,
+  valor_nominal_texto_snapshot, casas_decimais_valor_medido,
   media_valores_medidos, desvio_padrao_amostral, incerteza_tipo_a,
   tendencia_bruta, correcao_padrao, tendencia_corrigida,
-  incerteza_padrao_certificado, incerteza_padrao_convertida,
+  incerteza_padrao_certificado, incerteza_padrao_certificado_texto,
+  incerteza_padrao_convertida,
   incerteza_resolucao_equipamento, incerteza_resolucao_padrao,
   incerteza_combinada, graus_liberdade_efetivos_veff, veff_infinito,
-  fator_abrangencia_k, incerteza_expandida, criterio_aceitacao_valor,
+  fator_abrangencia_k, incerteza_expandida, incerteza_expandida_calculada,
+  incerteza_expandida_reportada, casas_decimais_incerteza, criterio_aceitacao_valor,
   resultado_conformidade, observacoes, calculado_em,
   leituras:calibracao_execucao_leituras (${selectLeitura}),
   componentes:calibracao_execucao_componentes_incerteza (${selectComponente})
@@ -228,10 +275,12 @@ const selectTabela = `
   unidade_snapshot, quantidade_leituras_snapshot, padrao_id, padrao_tabela_id,
   padrao_nome_snapshot, padrao_numero_certificado_snapshot, padrao_validade_snapshot,
   padrao_identificacao_snapshot, padrao_laboratorio_snapshot, resolucao_padrao_snapshot,
-  resolucao_equipamento_snapshot, fator_confiabilidade_modo_snapshot,
+  resolucao_equipamento_snapshot, resolucao_equipamento_texto_snapshot,
+  fator_confiabilidade_modo_snapshot,
   fator_k_fixo_snapshot, incluir_criterio_aceitacao_snapshot,
   criterio_aceitacao_tipo_snapshot, criterio_aceitacao_valor_maximo_snapshot,
-  criterio_aceitacao_valor_minimo_snapshot, corrigir_erro_sistematico_snapshot,
+  criterio_aceitacao_valor_minimo_snapshot, regra_decisao_snapshot,
+  corrigir_erro_sistematico_snapshot,
   ordem, pontos:calibracao_execucao_pontos (${selectPonto})
 `;
 const selectExecucao = `
@@ -240,9 +289,10 @@ const selectExecucao = `
   local_calibracao, temperatura_ambiente, incerteza_temperatura, unidade_temperatura,
   umidade_relativa, incerteza_umidade, unidade_umidade, pressao_atmosferica,
   incerteza_pressao, unidade_pressao, observacoes, data_calibracao, data_emissao,
-  data_validade, tecnico_executor_nome, tecnico_executor_registro,
+  data_validade, validade_mes, validade_meses, tecnico_executor_nome, tecnico_executor_registro,
   responsavel_tecnico_nome, responsavel_tecnico_registro, responsavel_solicitante,
-  status, criterio_conformidade_aplicado, regra_decisao, resultado_geral, os_id,
+  status, numero_revisao, atualizado_apos_finalizacao,
+  criterio_conformidade_aplicado, regra_decisao, resultado_geral, os_id,
   pdf_storage_path, pdf_hash, fechado_em, ativo, created_at, updated_at,
   empresa:empresas (*),
   equipamento:equipamentos (*, tipo_equipamento:tipos_equipamento (id, nome)),
@@ -280,15 +330,21 @@ const validarCabecalho = (input: CalibracaoExecucaoFormInput) => {
   if (!input.procedimentoId) throw new Error("Selecione o procedimento.");
   if (!input.dataCalibracao) throw new Error("Informe a data da calibracao.");
   if (!input.dataEmissao) throw new Error("Informe a data de emissao.");
+  if (!input.validadeMes) throw new Error("Informe a validade.");
   if (!input.tecnicoExecutorNome.trim()) throw new Error("Informe o tecnico executor.");
   if (!input.responsavelTecnicoNome.trim()) throw new Error("Informe o responsavel tecnico.");
-  if (input.dataValidade && input.dataValidade < input.dataCalibracao) {
+  if ((fimDoMesValidade(input.validadeMes) || "") < input.dataCalibracao) {
     throw new Error("A validade nao pode ser anterior a data da calibracao.");
   }
-  if (input.criterioConformidadeAplicado && !input.regraDecisao) {
-    throw new Error("Informe a regra de decisao.");
-  }
   if (!input.tabelas.length) throw new Error("Adicione ao menos uma tabela.");
+};
+
+const possuiCriterioAceitacao = (input: CalibracaoExecucaoFormInput) =>
+  input.tabelas.some((tabela) => tabela.incluirCriterio);
+
+const obterRegraDecisaoGeral = (input: CalibracaoExecucaoFormInput) => {
+  if (!possuiCriterioAceitacao(input)) return null;
+  return input.tabelas.find((tabela) => tabela.incluirCriterio)?.regraDecisao ?? null;
 };
 
 const getPadraoIdentificacao = (padrao: {
@@ -320,18 +376,21 @@ const criarPayloadExecucao = (
   observacoes: trimOrNull(input.observacoes),
   data_calibracao: input.dataCalibracao,
   data_emissao: input.dataEmissao,
-  data_validade: input.dataValidade || null,
+  data_validade: fimDoMesValidade(input.validadeMes),
+  validade_mes: primeiroDiaMesValidade(input.validadeMes),
+  validade_meses: 12,
   tecnico_executor_nome: input.tecnicoExecutorNome.trim(),
   tecnico_executor_registro: trimOrNull(input.tecnicoExecutorRegistro),
   responsavel_tecnico_nome: input.responsavelTecnicoNome.trim(),
   responsavel_tecnico_registro: trimOrNull(input.responsavelTecnicoRegistro),
   responsavel_solicitante: trimOrNull(input.responsavelSolicitante),
-  criterio_conformidade_aplicado: input.criterioConformidadeAplicado,
-  regra_decisao: input.criterioConformidadeAplicado ? input.regraDecisao ?? null : null,
+  criterio_conformidade_aplicado: possuiCriterioAceitacao(input),
+  regra_decisao: obterRegraDecisaoGeral(input),
 });
 
 export const criarTabelasExecucaoDoProcedimento = (
-  procedimento: CalibracaoProcedimento
+  procedimento: CalibracaoProcedimento,
+  clienteUsaCriterio: boolean
 ): CalibracaoExecucaoTabelaInput[] =>
   (procedimento.tabelas || []).map((tabela) => ({
     procedimentoTabelaId: tabela.id,
@@ -343,17 +402,28 @@ export const criarTabelasExecucaoDoProcedimento = (
     padraoTabelaId: tabela.padrao_tabela_id || "",
     resolucaoPadrao: tabela.resolucao_padrao_default,
     resolucaoEquipamento: tabela.resolucao_equipamento_default,
+    resolucaoEquipamentoTexto:
+      tabela.resolucao_equipamento_default == null
+        ? null
+        : formatDecimalPtBr(tabela.resolucao_equipamento_default),
     fatorModo: tabela.fator_confiabilidade_modo,
     fatorK: tabela.fator_k_fixo,
-    incluirCriterio: tabela.incluir_criterio_aceitacao,
+    incluirCriterio:
+      clienteUsaCriterio && tabela.incluir_criterio_aceitacao,
     criterioTipo: tabela.criterio_aceitacao_tipo,
     criterioValorMaximo: tabela.criterio_aceitacao_valor_maximo,
     criterioValorMinimo: tabela.criterio_aceitacao_valor_minimo,
+    regraDecisao: "considerando_incerteza",
     corrigirErroSistematico: tabela.corrigir_erro_sistematico,
     pontos: (tabela.pontos || []).map((ponto) => ({
       procedimentoPontoId: ponto.id,
       valorNominal: ponto.valor_nominal,
-      leituras: Array.from({ length: tabela.quantidade_leituras }, () => null),
+      valorNominalTexto:
+        ponto.valor_nominal_texto || formatDecimalPtBr(ponto.valor_nominal),
+      leituras: Array.from({ length: tabela.quantidade_leituras }, () => ({
+        valor: null,
+        valorTexto: "",
+      })),
     })),
   }));
 
@@ -370,18 +440,32 @@ export const criarTabelasInputDaExecucao = (
     padraoTabelaId: tabela.padrao_tabela_id || "",
     resolucaoPadrao: tabela.resolucao_padrao_snapshot,
     resolucaoEquipamento: tabela.resolucao_equipamento_snapshot,
+    resolucaoEquipamentoTexto:
+      tabela.resolucao_equipamento_texto_snapshot ||
+      (tabela.resolucao_equipamento_snapshot == null
+        ? null
+        : formatDecimalPtBr(tabela.resolucao_equipamento_snapshot)),
     fatorModo: tabela.fator_confiabilidade_modo_snapshot,
     fatorK: tabela.fator_k_fixo_snapshot,
     incluirCriterio: tabela.incluir_criterio_aceitacao_snapshot,
     criterioTipo: tabela.criterio_aceitacao_tipo_snapshot,
     criterioValorMaximo: tabela.criterio_aceitacao_valor_maximo_snapshot,
     criterioValorMinimo: tabela.criterio_aceitacao_valor_minimo_snapshot,
+    regraDecisao: tabela.regra_decisao_snapshot || "considerando_incerteza",
     corrigirErroSistematico: tabela.corrigir_erro_sistematico_snapshot,
     pontos: (tabela.pontos || []).map((ponto) => ({
       procedimentoPontoId: ponto.procedimento_ponto_id,
       valorNominal: ponto.valor_nominal,
+      valorNominalTexto:
+        ponto.valor_nominal_texto_snapshot || formatDecimalPtBr(ponto.valor_nominal),
       leituras: Array.from({ length: tabela.quantidade_leituras_snapshot }, (_, index) => {
-        return ponto.leituras?.find((leitura) => leitura.ordem === index + 1)?.valor_medido ?? null;
+        const leitura = ponto.leituras?.find((item) => item.ordem === index + 1);
+        return {
+          valor: leitura?.valor_medido ?? null,
+          valorTexto:
+            leitura?.valor_medido_texto ??
+            formatDecimalPtBr(leitura?.valor_medido),
+        };
       }),
       observacoes: ponto.observacoes,
       outrasComponentes: (ponto.componentes || [])
@@ -417,27 +501,15 @@ const criarInputDaExecucao = (
   observacoes: execucao.observacoes,
   dataCalibracao: execucao.data_calibracao,
   dataEmissao: execucao.data_emissao,
-  dataValidade: execucao.data_validade,
+  validadeMes: (execucao.validade_mes || execucao.data_validade || "").slice(0, 7),
   tecnicoExecutorNome: execucao.tecnico_executor_nome,
   tecnicoExecutorRegistro: execucao.tecnico_executor_registro,
   responsavelTecnicoNome: execucao.responsavel_tecnico_nome,
   responsavelTecnicoRegistro: execucao.responsavel_tecnico_registro,
   responsavelSolicitante: execucao.responsavel_solicitante,
   criterioConformidadeAplicado: execucao.criterio_conformidade_aplicado,
-  regraDecisao: execucao.regra_decisao,
   tabelas: criarTabelasInputDaExecucao(execucao),
 });
-
-const calcularResultadoGeral = (
-  aplicarCriterio: boolean,
-  resultados: Array<ResultadoConformidade | null>
-): CalibracaoExecucaoResultado | null => {
-  if (!resultados.length || resultados.some((resultado) => !resultado)) return null;
-  if (!aplicarCriterio) return "sem_declaracao_conformidade";
-  return resultados.some((resultado) => resultado === "nao_conforme")
-    ? "nao_conforme"
-    : "conforme";
-};
 
 const montarSnapshot = async (
   input: CalibracaoExecucaoFormInput,
@@ -448,8 +520,21 @@ const montarSnapshot = async (
   const resultados: Array<ResultadoConformidade | null> = [];
 
   for (const [tabelaIndex, tabela] of input.tabelas.entries()) {
-    if (input.criterioConformidadeAplicado && !tabela.incluirCriterio) {
-      throw new Error(`Configure o criterio de aceitacao da tabela "${tabela.nome}" antes de emitir a declaracao de conformidade.`);
+    if (tabela.incluirCriterio && !tabela.criterioTipo) {
+      throw new Error(`Selecione o tipo de criterio da tabela "${tabela.nome}".`);
+    }
+    if (tabela.incluirCriterio && tabela.criterioValorMaximo == null) {
+      throw new Error(`Informe o valor maximo do criterio da tabela "${tabela.nome}".`);
+    }
+    if (
+      tabela.incluirCriterio &&
+      tabela.criterioTipo === "faixa" &&
+      tabela.criterioValorMinimo == null
+    ) {
+      throw new Error(`Informe o valor minimo do criterio da tabela "${tabela.nome}".`);
+    }
+    if (tabela.incluirCriterio && !tabela.regraDecisao) {
+      throw new Error(`Selecione a regra de decisao da tabela "${tabela.nome}".`);
     }
     if (!tabela.padraoId || !tabela.padraoTabelaId) {
       throw new Error(`Selecione o padrao utilizado na tabela "${tabela.nome}".`);
@@ -471,8 +556,10 @@ const montarSnapshot = async (
         ponto.valorNominal,
         (tabelaPadrao.pontos || []).map((item) => ({
           valorNominal: item.valor_nominal,
+          valorNominalTexto: item.valor_nominal_texto,
           tendencia: item.tendencia,
           incertezaExpandida: item.incerteza_expandida,
+          incertezaExpandidaTexto: item.incerteza_expandida_texto,
           fatorAbrangenciaK: item.fator_abrangencia_k,
           grausLiberdade: item.graus_liberdade_efetivos_veff,
           veffInfinito: item.veff_infinito,
@@ -482,8 +569,8 @@ const montarSnapshot = async (
         throw new Error(`Nao foi encontrado ponto correspondente no padrao para ${ponto.valorNominal} ${tabela.unidade}.`);
       }
 
-      const leiturasPreenchidas = ponto.leituras.filter(
-        (leitura): leitura is number => leitura !== null
+      const leiturasPreenchidas = ponto.leituras.flatMap((leitura) =>
+        leitura.valor === null ? [] : [leitura.valor]
       );
       const completo =
         ponto.leituras.length === tabela.quantidadeLeituras &&
@@ -499,11 +586,11 @@ const montarSnapshot = async (
             fatorModo: tabela.fatorModo,
             fatorK: tabela.fatorK,
             criterio: {
-              aplicar: input.criterioConformidadeAplicado && tabela.incluirCriterio,
+              aplicar: tabela.incluirCriterio,
               tipo: tabela.criterioTipo,
               valorMaximo: tabela.criterioValorMaximo,
               valorMinimo: tabela.criterioValorMinimo,
-              regraDecisao: input.regraDecisao,
+              regraDecisao: tabela.regraDecisao,
             },
             outrasComponentes: ponto.outrasComponentes,
           })
@@ -515,6 +602,13 @@ const montarSnapshot = async (
         procedimento_ponto_id: ponto.procedimentoPontoId || null,
         ordem: pontoIndex,
         valor_nominal: ponto.valorNominal,
+        valor_nominal_texto_snapshot:
+          ponto.valorNominalTexto ??
+          pontoPadrao.valorNominalTexto ??
+          formatDecimalPtBr(pontoPadrao.valorNominal),
+        casas_decimais_valor_medido: maiorQuantidadeCasas(
+          ponto.leituras.map((leitura) => leitura.valorTexto)
+        ),
         media_valores_medidos: calculo?.media ?? null,
         desvio_padrao_amostral: calculo?.desvioPadrao ?? null,
         incerteza_tipo_a: calculo?.uTipoA ?? null,
@@ -522,6 +616,7 @@ const montarSnapshot = async (
         correcao_padrao: calculo?.correcaoPadrao ?? null,
         tendencia_corrigida: calculo?.tendenciaCorrigida ?? null,
         incerteza_padrao_certificado: pontoPadrao.incertezaExpandida ?? null,
+        incerteza_padrao_certificado_texto: pontoPadrao.incertezaExpandidaTexto ?? null,
         incerteza_padrao_convertida: calculo?.uPadrao ?? null,
         incerteza_resolucao_equipamento: calculo?.uResolucaoEquipamento ?? null,
         incerteza_resolucao_padrao: calculo?.uResolucaoPadrao ?? null,
@@ -529,15 +624,24 @@ const montarSnapshot = async (
         graus_liberdade_efetivos_veff: calculo?.veffInfinito ? null : calculo?.veff ?? null,
         veff_infinito: calculo?.veffInfinito ?? false,
         fator_abrangencia_k: calculo?.fatorK ?? null,
-        incerteza_expandida: calculo?.incertezaExpandida ?? null,
+        incerteza_expandida: calculo?.incertezaExpandidaReportada ?? null,
+        incerteza_expandida_calculada: calculo?.incertezaExpandidaCalculada ?? null,
+        incerteza_expandida_reportada: calculo?.incertezaExpandidaReportada ?? null,
+        casas_decimais_incerteza: calculo?.casasDecimaisIncerteza ?? null,
         criterio_aceitacao_valor: calculo?.criterioAceitacaoValor ?? null,
         resultado_conformidade: calculo?.resultadoConformidade ?? null,
         observacoes: trimOrNull(ponto.observacoes),
         calculado_em: calculo ? new Date().toISOString() : null,
-        leituras: ponto.leituras.flatMap((valor_medido, index) =>
-          valor_medido === null
+        leituras: ponto.leituras.flatMap((leitura, index) =>
+          leitura.valor === null
             ? []
-            : [{ organizacao_id: organizacaoId, ordem: index + 1, valor_medido }]
+            : [{
+                organizacao_id: organizacaoId,
+                ordem: index + 1,
+                valor_medido: leitura.valor,
+                valor_medido_texto: leitura.valorTexto.trim(),
+                casas_decimais: contarCasasDecimaisTexto(leitura.valorTexto),
+              }]
         ),
         componentes: (calculo?.componentes || ponto.outrasComponentes || []).map((componente, index) => ({
           organizacao_id: organizacaoId,
@@ -572,19 +676,25 @@ const montarSnapshot = async (
       padrao_laboratorio_snapshot: padrao.laboratorio_calibrador,
       resolucao_padrao_snapshot: tabela.resolucaoPadrao ?? null,
       resolucao_equipamento_snapshot: tabela.resolucaoEquipamento ?? null,
+      resolucao_equipamento_texto_snapshot:
+        trimOrNull(tabela.resolucaoEquipamentoTexto) ??
+        (tabela.resolucaoEquipamento == null
+          ? null
+          : formatDecimalPtBr(tabela.resolucaoEquipamento)),
       fator_confiabilidade_modo_snapshot: tabela.fatorModo,
       fator_k_fixo_snapshot: tabela.fatorK ?? null,
       incluir_criterio_aceitacao_snapshot: tabela.incluirCriterio,
-      criterio_aceitacao_tipo_snapshot: tabela.criterioTipo ?? null,
-      criterio_aceitacao_valor_maximo_snapshot: tabela.criterioValorMaximo ?? null,
-      criterio_aceitacao_valor_minimo_snapshot: tabela.criterioValorMinimo ?? null,
+      criterio_aceitacao_tipo_snapshot: tabela.incluirCriterio ? tabela.criterioTipo ?? null : null,
+      criterio_aceitacao_valor_maximo_snapshot: tabela.incluirCriterio ? tabela.criterioValorMaximo ?? null : null,
+      criterio_aceitacao_valor_minimo_snapshot: tabela.incluirCriterio ? tabela.criterioValorMinimo ?? null : null,
+      regra_decisao_snapshot: tabela.incluirCriterio ? tabela.regraDecisao ?? null : null,
       corrigir_erro_sistematico_snapshot: tabela.corrigirErroSistematico,
       ordem: tabelaIndex,
       pontos,
     });
   }
 
-  return { tabelas, resultadoGeral: calcularResultadoGeral(input.criterioConformidadeAplicado, resultados) };
+  return { tabelas, resultadoGeral: calcularResultadoGeralCalibracao(resultados) };
 };
 
 const salvarSnapshot = async (
@@ -649,12 +759,28 @@ const validarFechamento = (execucao: CalibracaoExecucao) => {
       throw new Error(`O padrao da tabela "${tabela.nome_snapshot}" nao estava valido na data da calibracao.`);
     }
     if (!tabela.pontos?.length) throw new Error(`A tabela "${tabela.nome_snapshot}" nao possui pontos.`);
+    if (
+      tabela.incluir_criterio_aceitacao_snapshot &&
+      (!tabela.criterio_aceitacao_tipo_snapshot ||
+        tabela.criterio_aceitacao_valor_maximo_snapshot == null ||
+        !tabela.regra_decisao_snapshot ||
+        (tabela.criterio_aceitacao_tipo_snapshot === "faixa" &&
+          tabela.criterio_aceitacao_valor_minimo_snapshot == null))
+    ) {
+      throw new Error(`Complete o criterio de aceitacao da tabela "${tabela.nome_snapshot}".`);
+    }
     for (const ponto of tabela.pontos) {
       if ((ponto.leituras || []).length !== tabela.quantidade_leituras_snapshot) {
         throw new Error(`Preencha todas as leituras do ponto ${ponto.valor_nominal} ${tabela.unidade_snapshot}.`);
       }
       if (ponto.incerteza_expandida == null || ponto.fator_abrangencia_k == null) {
         throw new Error(`Calcule o ponto ${ponto.valor_nominal} ${tabela.unidade_snapshot}.`);
+      }
+      if (
+        tabela.incluir_criterio_aceitacao_snapshot &&
+        !["conforme", "nao_conforme"].includes(ponto.resultado_conformidade || "")
+      ) {
+        throw new Error(`Avalie a conformidade do ponto ${ponto.valor_nominal} ${tabela.unidade_snapshot}.`);
       }
     }
   }
@@ -663,6 +789,15 @@ const validarFechamento = (execucao: CalibracaoExecucao) => {
 
 export const formatNumeroCertificadoCalibracao = (numero?: number | null) =>
   numero ? `CAL-${String(numero).padStart(6, "0")}` : "CAL-PENDENTE";
+
+export const formatNomeArquivoCertificadoCalibracao = (
+  execucao: Pick<CalibracaoExecucao, "numero_certificado" | "numero_revisao">
+) => {
+  const revisao = execucao.numero_revisao > 0
+    ? `-R${String(execucao.numero_revisao).padStart(3, "0")}`
+    : "";
+  return `${formatNumeroCertificadoCalibracao(execucao.numero_certificado)}${revisao}.pdf`;
+};
 
 export const calibracaoExecucoesService = {
   async listarExecucoes() {
@@ -707,8 +842,11 @@ export const calibracaoExecucoesService = {
   async atualizarExecucao(id: string, input: CalibracaoExecucaoFormInput) {
     validarCabecalho(input);
     const atual = await this.buscarExecucaoPorId(id);
-    if (["fechada", "cancelada"].includes(atual.status)) {
-      throw new Error("Execucoes fechadas ou canceladas nao podem ser editadas.");
+    if (atual.status === "cancelada") {
+      throw new Error("Execucoes canceladas nao podem ser editadas.");
+    }
+    if (atual.status === "fechada") {
+      throw new Error("Inicie uma revisao antes de editar a calibracao finalizada.");
     }
     const procedimento = await calibracaoProcedimentosService.buscarProcedimentoPorId(input.procedimentoId);
     const snapshot = await montarSnapshot(input, atual.organizacao_id);
@@ -754,14 +892,63 @@ export const calibracaoExecucoesService = {
     return this.buscarExecucaoPorId(id);
   },
 
+  async criarSnapshotRevisao(execucaoId: string, motivo?: string | null) {
+    const { data, error } = await supabase.rpc(
+      "iniciar_revisao_calibracao_execucao",
+      {
+        p_execucao_id: execucaoId,
+        p_motivo: trimOrNull(motivo),
+      }
+    );
+    if (error) throw new Error(error.message);
+    return data as number;
+  },
+
+  async listarRevisoes(execucaoId: string) {
+    const { data, error } = await supabase
+      .from("calibracao_execucao_revisoes")
+      .select("*")
+      .eq("execucao_id", execucaoId)
+      .order("numero_revisao", { ascending: false });
+    if (error) throw new Error(error.message);
+    return data as CalibracaoExecucaoRevisao[];
+  },
+
+  async salvarCalibracaoFinalizada(
+    input: CalibracaoExecucaoFormInput,
+    gerarPdf: GerarPdfCalibracao
+  ) {
+    const criada = await this.criarExecucao(input);
+    const pdf = await gerarPdf(criada);
+    return this.finalizarExecucao(criada.id, pdf);
+  },
+
+  async editarCalibracaoFinalizada(
+    id: string,
+    input: CalibracaoExecucaoFormInput,
+    gerarPdf: GerarPdfCalibracao,
+    motivo?: string | null
+  ) {
+    const atual = await this.buscarExecucaoPorId(id);
+    if (atual.status === "cancelada") {
+      throw new Error("Execucoes canceladas nao podem ser editadas.");
+    }
+    if (atual.status === "fechada") {
+      await this.criarSnapshotRevisao(id, motivo);
+    }
+    const atualizada = await this.atualizarExecucao(id, input);
+    const pdf = await gerarPdf(atualizada);
+    return this.finalizarExecucao(id, pdf);
+  },
+
   async finalizarExecucao(id: string, pdf: Blob) {
     const execucao = await this.buscarExecucaoPorId(id);
     validarFechamento(execucao);
-    const path = `${execucao.organizacao_id}/${execucao.id}/${formatNumeroCertificadoCalibracao(execucao.numero_certificado)}.pdf`;
+    const path = `${execucao.organizacao_id}/${execucao.id}/${formatNomeArquivoCertificadoCalibracao(execucao)}`;
     const hash = await gerarHashSha256(pdf);
     const { error: uploadError } = await supabase.storage
       .from(CERTIFICADOS_BUCKET)
-      .upload(path, pdf, { contentType: "application/pdf", upsert: false });
+      .upload(path, pdf, { contentType: "application/pdf", upsert: true });
     if (uploadError) throw new Error(uploadError.message);
 
     const { error } = await supabase.rpc("finalizar_calibracao_execucao", {
@@ -776,12 +963,22 @@ export const calibracaoExecucoesService = {
     return this.buscarExecucaoPorId(id);
   },
 
+  async buscarOrcamentoIncertezaInterno(execucaoPontoId: string) {
+    const { data, error } = await supabase
+      .from("calibracao_execucao_componentes_incerteza")
+      .select(selectComponente)
+      .eq("execucao_ponto_id", execucaoPontoId)
+      .order("ordem", { ascending: true });
+    if (error) throw new Error(error.message);
+    return data as unknown as CalibracaoExecucaoComponente[];
+  },
+
   async criarUrlPdf(execucao: CalibracaoExecucao, download = false) {
     if (!execucao.pdf_storage_path) throw new Error("Certificado PDF nao gerado.");
     const { data, error } = await supabase.storage
       .from(CERTIFICADOS_BUCKET)
       .createSignedUrl(execucao.pdf_storage_path, 60 * 5, {
-        download: download ? `${formatNumeroCertificadoCalibracao(execucao.numero_certificado)}.pdf` : false,
+        download: download ? formatNomeArquivoCertificadoCalibracao(execucao) : false,
       });
     if (error) throw new Error(error.message);
     return data.signedUrl;

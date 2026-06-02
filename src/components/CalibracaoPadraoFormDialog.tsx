@@ -156,11 +156,15 @@ const CalibracaoPadraoFormDialog = ({
       pontos: (tabela.pontos || []).map((ponto) => ({
         key: ponto.id,
         id: ponto.id,
-        valorNominal: formatDecimalPtBr(ponto.valor_nominal),
+        valorNominal:
+          ponto.valor_nominal_texto ||
+          formatDecimalPtBr(ponto.valor_nominal),
         mediaValoresMedidos: formatDecimalPtBr(ponto.media_valores_medidos),
         tendencia: formatDecimalPtBr(ponto.tendencia),
         tendenciaManual: false,
-        incertezaExpandida: formatDecimalPtBr(ponto.incerteza_expandida),
+        incertezaExpandida:
+          ponto.incerteza_expandida_texto ||
+          formatDecimalPtBr(ponto.incerteza_expandida),
         fatorAbrangenciaK: formatDecimalPtBr(ponto.fator_abrangencia_k),
         grausLiberdadeEfetivosVeff: ponto.veff_infinito
           ? "INF"
@@ -355,9 +359,11 @@ const CalibracaoPadraoFormDialog = ({
           id: ponto.id,
           ordem: pontoOrdem,
           valorNominal: requireDecimal(ponto.valorNominal, '"Valor nominal"'),
+          valorNominalTexto: ponto.valorNominal.trim() || null,
           mediaValoresMedidos: normalizeDecimalInput(ponto.mediaValoresMedidos),
           tendencia: normalizeDecimalInput(ponto.tendencia),
           incertezaExpandida: normalizeDecimalInput(ponto.incertezaExpandida),
+          incertezaExpandidaTexto: ponto.incertezaExpandida.trim() || null,
           fatorAbrangenciaK: normalizeDecimalInput(ponto.fatorAbrangenciaK),
           grausLiberdadeEfetivosVeff: veff.value,
           veffInfinito: veff.infinito,

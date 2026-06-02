@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   avaliarConformidade,
+  arredondarParaCasas,
+  calcularResultadoGeralCalibracao,
   calcularDesvioPadraoAmostral,
   calcularIncertezaResolucao,
   calcularIncertezaTipoA,
@@ -8,6 +10,7 @@ import {
   calcularPontoCalibracao,
   converterIncertezaExpandida,
   encontrarPontoPadraoExato,
+  obterCasasDecimaisIncerteza,
 } from "@/utils/calibracaoCalculos";
 import { calcularFatorStudentT95 } from "@/utils/studentT";
 
@@ -92,5 +95,44 @@ describe("calibracaoCalculos", () => {
     const pontos = [{ valorNominal: 23 }, { valorNominal: 25 }];
     expect(encontrarPontoPadraoExato(23, pontos)?.valorNominal).toBe(23);
     expect(encontrarPontoPadraoExato(24, pontos)).toBeUndefined();
+  });
+
+  it("reporta incerteza com as casas decimais textuais do padrao", () => {
+    expect(obterCasasDecimaisIncerteza("0,20", 0.2)).toBe(2);
+    expect(obterCasasDecimaisIncerteza("1", 1)).toBe(0);
+    expect(arredondarParaCasas(0.183746, 1)).toBe(0.2);
+    expect(arredondarParaCasas(0.04731, 2)).toBe(0.05);
+
+    const resultado = calcularPontoCalibracao({
+      valorNominal: 10,
+      leituras: [10],
+      pontoPadrao: {
+        valorNominal: 10,
+        incertezaExpandida: 0.2,
+        incertezaExpandidaTexto: "0,20",
+        fatorAbrangenciaK: 2,
+      },
+      fatorModo: "k_fixo",
+      fatorK: 1.83746,
+    });
+
+    expect(resultado.incertezaExpandidaCalculada).toBeCloseTo(0.183746);
+    expect(resultado.incertezaExpandidaReportada).toBe(0.18);
+    expect(resultado.casasDecimaisIncerteza).toBe(2);
+  });
+
+  it("gera resultado geral sem declaracao quando nenhuma tabela possui criterio", () => {
+    expect(
+      calcularResultadoGeralCalibracao(["sem_criterio", "sem_criterio"])
+    ).toBe("sem_declaracao_conformidade");
+  });
+
+  it("avalia somente tabelas com criterio no resultado geral", () => {
+    expect(
+      calcularResultadoGeralCalibracao(["sem_criterio", "conforme"])
+    ).toBe("conforme");
+    expect(
+      calcularResultadoGeralCalibracao(["sem_criterio", "nao_conforme"])
+    ).toBe("nao_conforme");
   });
 });

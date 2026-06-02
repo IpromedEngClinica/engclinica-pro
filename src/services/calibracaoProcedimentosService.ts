@@ -20,6 +20,7 @@ export type CalibracaoProcedimentoPonto = {
   tabela_id: string;
   ordem: number;
   valor_nominal: number;
+  valor_nominal_texto: string | null;
   descricao: string | null;
   ativo: boolean;
 };
@@ -108,6 +109,7 @@ export type CalibracaoProcedimentoPontoInput = {
   id?: string;
   ordem?: number;
   valorNominal: number;
+  valorNominalTexto?: string | null;
   descricao?: string | null;
 };
 
@@ -160,6 +162,7 @@ const selectPonto = `
   tabela_id,
   ordem,
   valor_nominal,
+  valor_nominal_texto,
   descricao,
   ativo
 `;
@@ -173,6 +176,7 @@ const selectPadraoPonto = `
   media_valores_medidos,
   tendencia,
   incerteza_expandida,
+  incerteza_expandida_texto,
   fator_abrangencia_k,
   graus_liberdade_efetivos_veff,
   veff_infinito,
@@ -350,7 +354,7 @@ const toTabelaPayload = (input: CalibracaoProcedimentoTabelaInput) => ({
   grandeza: input.grandeza.trim(),
   unidade: input.unidade.trim(),
   ordem: input.ordem ?? 0,
-  modo_preenchimento: input.modoPreenchimento,
+  modo_preenchimento: "manual",
   quantidade_leituras: input.quantidadeLeituras,
   tipo_medida: trimOrNull(input.tipoMedida),
   resolucao_padrao_default: input.resolucaoPadraoDefault ?? null,
@@ -377,6 +381,7 @@ const toTabelaPayload = (input: CalibracaoProcedimentoTabelaInput) => ({
 const toPontoPayload = (input: CalibracaoProcedimentoPontoInput) => ({
   ordem: input.ordem ?? 0,
   valor_nominal: input.valorNominal,
+  valor_nominal_texto: trimOrNull(input.valorNominalTexto),
   descricao: trimOrNull(input.descricao),
   ativo: true,
 });
@@ -595,7 +600,7 @@ export const calibracaoProcedimentosService = {
         nome: tabela.nome,
         grandeza: tabela.grandeza,
         unidade: tabela.unidade,
-        modoPreenchimento: tabela.modo_preenchimento,
+        modoPreenchimento: "manual",
         quantidadeLeituras: tabela.quantidade_leituras,
         tipoMedida: tabela.tipo_medida,
         resolucaoPadraoDefault: tabela.resolucao_padrao_default,
@@ -615,6 +620,7 @@ export const calibracaoProcedimentosService = {
         padraoTabelaId: tabela.padrao_tabela_id || "",
         pontos: (tabela.pontos || []).map((ponto) => ({
           valorNominal: ponto.valor_nominal,
+          valorNominalTexto: ponto.valor_nominal_texto,
         })),
       }))
     );

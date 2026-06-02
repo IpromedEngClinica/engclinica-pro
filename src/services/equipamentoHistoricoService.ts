@@ -153,6 +153,8 @@ const selectCalibracoesHistorico = `
   data_calibracao,
   data_emissao,
   data_validade,
+  validade_mes,
+  validade_meses,
   status,
   resultado_geral,
   pdf_storage_path,

@@ -180,6 +180,14 @@ const EmpresaDetalhesDialog = ({
               <Field label="Tipo de Cliente" value={empresa.tipo_cliente} />
               <Field label="Relacao" value={empresa.tipo_relacao} />
               <Field label="CPF/CNPJ" value={empresa.cpf_cnpj} />
+              <Field
+                label="Critério de aceitação em calibrações"
+                value={
+                  empresa.incluir_criterio_aceitacao_calibracao
+                    ? "Habilitado"
+                    : "Desabilitado"
+                }
+              />
               <Field label="Status" value={empresa.ativo} />
             </Section>
 

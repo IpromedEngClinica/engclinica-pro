@@ -47,16 +47,76 @@ export const requireDecimal = (
 
 export const formatDecimalPtBr = (
   value: number | string | null | undefined,
-  maximumFractionDigits = 8
+  maximumFractionDigits = 8,
+  minimumFractionDigits = 0
 ) => {
   const parsed = normalizeDecimalInput(value);
 
   if (parsed === null) return "";
 
   return new Intl.NumberFormat("pt-BR", {
-    maximumFractionDigits,
+    maximumFractionDigits: Math.max(maximumFractionDigits, minimumFractionDigits),
+    minimumFractionDigits,
   }).format(parsed);
 };
+
+export const contarCasasDecimaisTexto = (
+  value: string | number | null | undefined
+) => {
+  if (value === null || value === undefined) return 0;
+
+  const raw = String(value).trim();
+  if (!raw) return 0;
+
+  const cleaned = raw.replace(/\s/g, "");
+  const lastComma = cleaned.lastIndexOf(",");
+  const lastDot = cleaned.lastIndexOf(".");
+  const index = Math.max(lastComma, lastDot);
+
+  return index < 0 ? 0 : cleaned.slice(index + 1).length;
+};
+
+export const obterCasasResolucaoEquipamento = (
+  resolucaoTexto?: string | null,
+  resolucaoNumerica?: number | null
+) => {
+  if (resolucaoTexto?.trim()) {
+    return contarCasasDecimaisTexto(resolucaoTexto);
+  }
+
+  if (resolucaoNumerica === null || resolucaoNumerica === undefined) {
+    return 0;
+  }
+
+  const [coeficiente, expoenteTexto] = String(resolucaoNumerica)
+    .toLowerCase()
+    .split("e");
+  const expoente = Number(expoenteTexto || 0);
+
+  return Math.max(0, contarCasasDecimaisTexto(coeficiente) - expoente);
+};
+
+export const formatarNumeroComCasas = (
+  value: number | null | undefined,
+  casas: number
+) => {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return "-";
+  }
+
+  return new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: casas,
+    maximumFractionDigits: casas,
+  }).format(value);
+};
+
+export const maiorQuantidadeCasas = (
+  valores: Array<string | number | null | undefined>
+) =>
+  valores.reduce(
+    (maior, valor) => Math.max(maior, contarCasasDecimaisTexto(valor)),
+    0
+  );
 
 export const isInfiniteInput = (
   value: string | number | null | undefined

@@ -4,6 +4,8 @@ import {
   type CalibracaoExecucaoFormInput,
 } from "@/services/calibracaoExecucoesService";
 import { EQUIPAMENTO_HISTORICO_QUERY_KEY } from "@/hooks/useEquipamentoHistorico";
+import { EQUIPAMENTOS_QUERY_KEY } from "@/hooks/useEquipamentos";
+import { gerarPdfCalibracaoCertificado } from "@/utils/gerarPdfCalibracaoCertificado";
 
 export const CALIBRACAO_EXECUCOES_QUERY_KEY = ["calibracao-execucoes"];
 export const CALIBRACAO_EXECUCAO_QUERY_KEY = ["calibracao-execucao"];
@@ -12,6 +14,7 @@ const invalidateExecucoes = (queryClient: ReturnType<typeof useQueryClient>) => 
   queryClient.invalidateQueries({ queryKey: CALIBRACAO_EXECUCOES_QUERY_KEY });
   queryClient.invalidateQueries({ queryKey: CALIBRACAO_EXECUCAO_QUERY_KEY });
   queryClient.invalidateQueries({ queryKey: EQUIPAMENTO_HISTORICO_QUERY_KEY });
+  queryClient.invalidateQueries({ queryKey: EQUIPAMENTOS_QUERY_KEY });
 };
 
 export const useCalibracaoExecucoes = () =>
@@ -32,7 +35,7 @@ export const useCriarCalibracaoExecucao = () => {
   return useMutation({
     mutationFn: (input: CalibracaoExecucaoFormInput) =>
       calibracaoExecucoesService.criarExecucao(input),
-    onSuccess: () => invalidateExecucoes(queryClient),
+    onSettled: () => invalidateExecucoes(queryClient),
   });
 };
 
@@ -41,7 +44,41 @@ export const useAtualizarCalibracaoExecucao = () => {
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: CalibracaoExecucaoFormInput }) =>
       calibracaoExecucoesService.atualizarExecucao(id, input),
-    onSuccess: () => invalidateExecucoes(queryClient),
+    onSettled: () => invalidateExecucoes(queryClient),
+  });
+};
+
+export const useSalvarCalibracaoFinalizada = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CalibracaoExecucaoFormInput) =>
+      calibracaoExecucoesService.salvarCalibracaoFinalizada(
+        input,
+        (execucao) => gerarPdfCalibracaoCertificado(execucao, false)
+      ),
+    onSettled: () => invalidateExecucoes(queryClient),
+  });
+};
+
+export const useEditarCalibracaoFinalizada = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      input,
+      motivo,
+    }: {
+      id: string;
+      input: CalibracaoExecucaoFormInput;
+      motivo?: string | null;
+    }) =>
+      calibracaoExecucoesService.editarCalibracaoFinalizada(
+        id,
+        input,
+        (execucao) => gerarPdfCalibracaoCertificado(execucao, false),
+        motivo
+      ),
+    onSettled: () => invalidateExecucoes(queryClient),
   });
 };
 

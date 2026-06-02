@@ -5,9 +5,11 @@ import {
   FileWarning,
   PackageCheck,
   Pencil,
+  Ruler,
 } from "lucide-react";
 import { useState } from "react";
 import type { ReactNode } from "react";
+import CalibracaoExecucaoFormDialog from "@/components/CalibracaoExecucaoFormDialog";
 import {
   Dialog,
   DialogContent,
@@ -29,6 +31,7 @@ import {
   type ProcedimentoPreventiva,
 } from "@/services/procedimentosPreventivaService";
 import type { EquipamentoSupabase } from "@/services/equipamentosService";
+import { getBloqueioCriacaoCalibracao } from "@/utils/equipamentoCalibracao";
 
 interface EquipamentoDetalhesDialogProps {
   open: boolean;
@@ -39,6 +42,7 @@ interface EquipamentoDetalhesDialogProps {
   onCriarPreventiva?: (equipamento: EquipamentoSupabase) => void;
   onCriarProtocoloRecolhimento?: (equipamento: EquipamentoSupabase) => void;
   onCriarLaudo?: (equipamento: EquipamentoSupabase) => void;
+  onCriarCalibracao?: (equipamento: EquipamentoSupabase) => void;
 }
 
 const getTipoEquipamento = (equipamento: EquipamentoSupabase) =>
@@ -111,6 +115,7 @@ const EquipamentoDetalhesDialog = ({
   onCriarPreventiva,
   onCriarProtocoloRecolhimento,
   onCriarLaudo,
+  onCriarCalibracao,
 }: EquipamentoDetalhesDialogProps) => {
   const [editarOpen, setEditarOpen] = useState(false);
   const [osOpen, setOsOpen] = useState(false);
@@ -119,6 +124,7 @@ const EquipamentoDetalhesDialog = ({
   const [procedimentoPreventiva, setProcedimentoPreventiva] =
     useState<ProcedimentoPreventiva | null>(null);
   const [laudoOpen, setLaudoOpen] = useState(false);
+  const [calibracaoOpen, setCalibracaoOpen] = useState(false);
 
   if (!equipamento) return null;
 
@@ -202,6 +208,25 @@ const EquipamentoDetalhesDialog = ({
     setLaudoOpen(true);
   };
 
+  const handleCriarCalibracao = () => {
+    const bloqueio = getBloqueioCriacaoCalibracao(equipamento);
+    if (bloqueio) {
+      toast({
+        title: "Nao foi possivel criar calibracao",
+        description: bloqueio,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (onCriarCalibracao) {
+      onCriarCalibracao(equipamento);
+      return;
+    }
+
+    setCalibracaoOpen(true);
+  };
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -217,6 +242,10 @@ const EquipamentoDetalhesDialog = ({
             <Button variant="outline" size="sm" onClick={handleEditar}>
               <Pencil className="w-4 h-4 mr-2" />
               Editar
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleCriarCalibracao}>
+              <Ruler className="w-4 h-4 mr-2" />
+              {"Criar Calibra\u00e7\u00e3o"}
             </Button>
             {isAtivo && (
               <>
@@ -332,6 +361,13 @@ const EquipamentoDetalhesDialog = ({
         onOpenChange={setLaudoOpen}
         initialEmpresaId={equipamento.empresa_id}
         initialEquipamentoId={equipamento.id}
+      />
+
+      <CalibracaoExecucaoFormDialog
+        open={calibracaoOpen}
+        onOpenChange={setCalibracaoOpen}
+        empresaInicialId={equipamento.empresa_id}
+        equipamentoInicialId={equipamento.id}
       />
     </>
   );

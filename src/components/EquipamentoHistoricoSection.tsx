@@ -30,6 +30,7 @@ import {
   calibracaoExecucoesService,
   formatNumeroCertificadoCalibracao,
 } from "@/services/calibracaoExecucoesService";
+import { formatarMesAno } from "@/utils/calibracaoValidade";
 
 interface EquipamentoHistoricoSectionProps {
   equipamentoId?: string;
@@ -524,7 +525,7 @@ const EquipamentoHistoricoSection = ({
                       </HistoricoLink>
                     </td>
                     <td className="px-3 py-2">{formatDate(calibracao.data_calibracao)}</td>
-                    <td className="px-3 py-2">{formatDate(calibracao.data_validade)}</td>
+                    <td className="px-3 py-2">{formatarMesAno(calibracao.validade_mes || calibracao.data_validade)}</td>
                     <td className="px-3 py-2">{calibracao.resultado_geral?.replaceAll("_", " ") || "-"}</td>
                     <td className="px-3 py-2">
                       {calibracao.pdf_storage_path ? (
@@ -590,8 +591,6 @@ const EquipamentoHistoricoSection = ({
           if (!value) setCalibracaoSelecionada(null);
         }}
         execucao={calibracaoSelecionada}
-        onEditar={() => undefined}
-        onCancelar={() => undefined}
       />
     </div>
   );

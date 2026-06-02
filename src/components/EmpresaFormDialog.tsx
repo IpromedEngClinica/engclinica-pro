@@ -11,6 +11,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { EmpresaFormInput, EmpresaSupabase } from "@/services/empresasService";
 import { useAtualizarEmpresa, useCriarEmpresa } from "@/hooks/useEmpresas";
@@ -54,6 +56,7 @@ const emptyForm: EmpresaFormInput = {
   celular: "",
   telefone: "",
   observacoes: "",
+  incluirCriterioAceitacaoCalibracao: false,
 };
 
 const empresaToForm = (empresa: EmpresaSupabase): EmpresaFormInput => ({
@@ -74,6 +77,8 @@ const empresaToForm = (empresa: EmpresaSupabase): EmpresaFormInput => ({
   celular: empresa.celular ?? "",
   telefone: empresa.telefone ?? "",
   observacoes: empresa.observacoes ?? "",
+  incluirCriterioAceitacaoCalibracao:
+    empresa.incluir_criterio_aceitacao_calibracao ?? false,
 });
 
 const formatCpfCnpj = (value: string) => {
@@ -325,6 +330,28 @@ const EmpresaFormDialog = ({
               />
             </div>
           </div>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox
+                  checked={form.incluirCriterioAceitacaoCalibracao ?? false}
+                  onCheckedChange={(value) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      incluirCriterioAceitacaoCalibracao: Boolean(value),
+                    }))
+                  }
+                  disabled={readOnly || saving}
+                />
+                Incluir critério de aceitação nas calibrações deste cliente?
+              </label>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-sm">
+              Quando habilitado, novas calibrações deste cliente utilizarão
+              critério de aceitação e poderão emitir declaração de conformidade.
+            </TooltipContent>
+          </Tooltip>
         </div>
 
         <div className="rounded-lg border p-4 space-y-4">

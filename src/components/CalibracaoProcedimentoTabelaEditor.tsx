@@ -17,6 +17,7 @@ import type {
   CalibracaoProcedimentoModoPreenchimento,
   CalibracaoProcedimentoPadraoSelecionavel,
 } from "@/services/calibracaoProcedimentosService";
+import { formatarDataPadrao } from "@/utils/calibracaoValidade";
 
 export type CalibracaoProcedimentoPontoDraft = {
   key: string;
@@ -71,8 +72,6 @@ interface Props {
     patch: Partial<CalibracaoProcedimentoPontoDraft>
   ) => void;
 }
-
-const formatDate = (value: string) => value.split("-").reverse().join("/");
 
 const CalibracaoProcedimentoTabelaEditor = ({
   tabela,
@@ -141,21 +140,6 @@ const CalibracaoProcedimentoTabelaEditor = ({
             disabled={disabled}
             onChange={(tipoMedida) => onAtualizar(tabela.key, { tipoMedida })}
           />
-          <SelectField
-            label="Preenchimento"
-            value={tabela.modoPreenchimento}
-            disabled={disabled}
-            onChange={(value) =>
-              onAtualizar(tabela.key, {
-                modoPreenchimento:
-                  value as CalibracaoProcedimentoModoPreenchimento,
-              })
-            }
-            options={[
-              ["manual", "Manual"],
-              ["automatico", "Automatico"],
-            ]}
-          />
           <div className="space-y-2">
             <Label>Quantidade de leituras *</Label>
             <Input
@@ -207,7 +191,7 @@ const CalibracaoProcedimentoTabelaEditor = ({
           <p className="mt-3 text-xs text-muted-foreground">
             Certificado {padrao.numero_certificado} | Laboratorio{" "}
             {padrao.laboratorio_calibrador} | Validade{" "}
-            {formatDate(padrao.data_validade)}
+            {formatarDataPadrao(padrao.data_validade)}
           </p>
         )}
       </Section>

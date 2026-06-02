@@ -136,7 +136,7 @@ const CalibracaoProcedimentoFormDialog = ({
       unidade: tabela.unidade,
       padraoId: tabela.padrao_id || "",
       padraoTabelaId: tabela.padrao_tabela_id || "",
-      modoPreenchimento: tabela.modo_preenchimento,
+      modoPreenchimento: "manual",
       quantidadeLeituras: tabela.quantidade_leituras,
       tipoMedida: tabela.tipo_medida || "",
       resolucaoPadraoDefault: formatDecimalPtBr(tabela.resolucao_padrao_default),
@@ -161,7 +161,8 @@ const CalibracaoProcedimentoFormDialog = ({
       pontos: (tabela.pontos || []).map((ponto) => ({
         key: ponto.id,
         id: ponto.id,
-        valorNominal: formatDecimalPtBr(ponto.valor_nominal),
+        valorNominal:
+          ponto.valor_nominal_texto || formatDecimalPtBr(ponto.valor_nominal),
       })),
     }));
 
@@ -224,7 +225,8 @@ const CalibracaoProcedimentoFormDialog = ({
         ? {
             pontos: tabelaPadrao?.pontos?.map((ponto) => ({
               key: makeKey(),
-              valorNominal: formatDecimalPtBr(ponto.valor_nominal),
+              valorNominal:
+                ponto.valor_nominal_texto || formatDecimalPtBr(ponto.valor_nominal),
             })),
           }
         : {}),
@@ -248,7 +250,8 @@ const CalibracaoProcedimentoFormDialog = ({
     atualizarTabela(key, {
       pontos: tabelaPadrao.pontos.map((ponto) => ({
         key: makeKey(),
-        valorNominal: formatDecimalPtBr(ponto.valor_nominal),
+        valorNominal:
+          ponto.valor_nominal_texto || formatDecimalPtBr(ponto.valor_nominal),
       })),
     });
   };
@@ -273,7 +276,7 @@ const CalibracaoProcedimentoFormDialog = ({
       padraoId: tabela.padraoId,
       padraoTabelaId: tabela.padraoTabelaId,
       ordem,
-      modoPreenchimento: tabela.modoPreenchimento,
+      modoPreenchimento: "manual",
       quantidadeLeituras: tabela.quantidadeLeituras,
       tipoMedida: tabela.tipoMedida,
       resolucaoPadraoDefault: parseOpcional(
@@ -330,6 +333,7 @@ const CalibracaoProcedimentoFormDialog = ({
           ponto.valorNominal,
           `"VN/VR" da tabela "${tabela.nome}", linha ${pontoOrdem + 1}`
         ),
+        valorNominalTexto: ponto.valorNominal.trim() || null,
       })),
     }));
 

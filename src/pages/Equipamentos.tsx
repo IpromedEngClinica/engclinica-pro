@@ -13,6 +13,7 @@ import {
   ChevronDown,
   AlertCircle,
   Loader2,
+  Ruler,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -61,7 +62,9 @@ import type { ProcedimentoPreventiva } from "@/services/procedimentosPreventivaS
 import OrdemServicoFormDialog, {
   DialogMode as OrdemServicoDialogMode,
 } from "@/components/OrdemServicoFormDialog";
+import CalibracaoExecucaoFormDialog from "@/components/CalibracaoExecucaoFormDialog";
 import { sortByValue, type SortDirection } from "@/utils/sortUtils";
+import { getBloqueioCriacaoCalibracao } from "@/utils/equipamentoCalibracao";
 
 const ALL = "__all__";
 
@@ -141,6 +144,9 @@ const Equipamentos = () => {
   const [laudoOpen, setLaudoOpen] = useState(false);
   const [equipamentoLaudo, setEquipamentoLaudo] =
     useState<EquipamentoSupabase | null>(null);
+  const [calibracaoOpen, setCalibracaoOpen] = useState(false);
+  const [equipamentoCalibracao, setEquipamentoCalibracao] =
+    useState<EquipamentoSupabase | null>(null);
 
   const { data: equipamentos = [], isLoading, isError, error, refetch } =
     useEquipamentos({ statusFiltro });
@@ -212,17 +218,22 @@ const Equipamentos = () => {
     });
   }, [equipamentos, filters, search]);
 
-  const sortGetters: Record<string, (item: EquipamentoSupabase) => unknown> = {
-    tipo: getTipoEquipamento,
-    status: getEquipamentoStatusLabel,
-    empresa: getEmpresaNome,
-    modelo: (e) => e.modelo,
-    fabricante: (e) => e.fabricante,
-    tag: (e) => e.tag,
-    numero_serie: (e) => e.numero_serie,
-    patrimonio: (e) => e.patrimonio,
-    setor: (e) => e.setor,
-  };
+  const sortGetters = useMemo<
+    Record<string, (item: EquipamentoSupabase) => unknown>
+  >(
+    () => ({
+      tipo: getTipoEquipamento,
+      status: getEquipamentoStatusLabel,
+      empresa: getEmpresaNome,
+      modelo: (e) => e.modelo,
+      fabricante: (e) => e.fabricante,
+      tag: (e) => e.tag,
+      numero_serie: (e) => e.numero_serie,
+      patrimonio: (e) => e.patrimonio,
+      setor: (e) => e.setor,
+    }),
+    []
+  );
 
   const sortedFiltered = useMemo(
     () =>
@@ -231,7 +242,7 @@ const Equipamentos = () => {
         sortGetters[sortKey] || sortGetters.tipo,
         sortDirection
       ),
-    [filtered, sortDirection, sortKey]
+    [filtered, sortDirection, sortGetters, sortKey]
   );
 
   const handleSort = (key: string) => {
@@ -401,6 +412,23 @@ const Equipamentos = () => {
     setLaudoOpen(true);
   };
 
+  const openCriarCalibracao = (equipamento: EquipamentoSupabase) => {
+    const bloqueio = getBloqueioCriacaoCalibracao(equipamento);
+    if (bloqueio) {
+      toast({
+        title: "Nao foi possivel criar calibracao",
+        description: bloqueio,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setDetalhesOpen(false);
+    setEquipamentoDetalhes(null);
+    setEquipamentoCalibracao(equipamento);
+    setCalibracaoOpen(true);
+  };
+
   const openEmpresaDetalhes = async (
     empresa: EmpresaSupabase | null | undefined
   ) => {
@@ -466,6 +494,7 @@ const Equipamentos = () => {
         onCriarPreventiva={openCriarPreventiva}
         onCriarProtocoloRecolhimento={openRecolhimento}
         onCriarLaudo={openCriarLaudo}
+        onCriarCalibracao={openCriarCalibracao}
       />
 
       <EmpresaDetalhesDialog
@@ -525,6 +554,16 @@ const Equipamentos = () => {
         }}
         initialEmpresaId={equipamentoLaudo?.empresa_id}
         initialEquipamentoId={equipamentoLaudo?.id}
+      />
+
+      <CalibracaoExecucaoFormDialog
+        open={calibracaoOpen}
+        onOpenChange={(value) => {
+          setCalibracaoOpen(value);
+          if (!value) setEquipamentoCalibracao(null);
+        }}
+        empresaInicialId={equipamentoCalibracao?.empresa_id}
+        equipamentoInicialId={equipamentoCalibracao?.id}
       />
 
       <div className="bg-card rounded-xl border mb-4">
@@ -831,6 +870,13 @@ const Equipamentos = () => {
                               >
                                 <ClipboardList className="w-4 h-4 mr-2" /> Criar
                                 Ordem de Serviço
+                              </DropdownMenuItem>
+
+                              <DropdownMenuItem
+                                onClick={() => openCriarCalibracao(e)}
+                              >
+                                <Ruler className="w-4 h-4 mr-2" />
+                                {"Criar Calibra\u00e7\u00e3o"}
                               </DropdownMenuItem>
 
                               <DropdownMenuItem
