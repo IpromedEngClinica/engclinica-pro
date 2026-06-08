@@ -81,6 +81,7 @@ export type OrdemServicoSupabase = {
   observacoes: string | null;
   prioridade: string;
   status_sistema: string;
+  plano_ciclo_id?: string | null;
   ativo: boolean;
   created_at: string;
   updated_at: string;
@@ -136,6 +137,7 @@ const selectOrdensServico = `
   observacoes,
   prioridade,
   status_sistema,
+  plano_ciclo_id,
   ativo,
   created_at,
   updated_at,

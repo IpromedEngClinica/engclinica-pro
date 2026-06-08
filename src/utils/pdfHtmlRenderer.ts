@@ -6,6 +6,7 @@ type RenderHtmlPdfOptions = {
   fileName: string;
   selector?: string;
   save?: boolean;
+  orientation?: "p" | "l";
 };
 
 const waitForAssets = async (root: HTMLElement) => {
@@ -39,6 +40,7 @@ export const renderHtmlToPdf = async ({
   fileName,
   selector = ".document",
   save = true,
+  orientation = "p",
 }: RenderHtmlPdfOptions) => {
   const wrapper = document.createElement("div");
 
@@ -79,9 +81,9 @@ export const renderHtmlToPdf = async ({
       scrollY: 0,
     });
 
-    const pdf = new jsPDF("p", "mm", "a4");
-    const pageWidthMm = 210;
-    const pageHeightMm = 297;
+    const pdf = new jsPDF(orientation, "mm", "a4");
+    const pageWidthMm = orientation === "l" ? 297 : 210;
+    const pageHeightMm = orientation === "l" ? 210 : 297;
     const marginMm = 8;
     const contentWidthMm = pageWidthMm - marginMm * 2;
     const contentHeightMm = pageHeightMm - marginMm * 2;

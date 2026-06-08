@@ -11,6 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  useAtualizarCalibracaoExecucao,
+  useCriarCalibracaoExecucao,
   useEditarCalibracaoFinalizada,
   useSalvarCalibracaoFinalizada,
 } from "@/hooks/useCalibracaoExecucoes";
@@ -35,7 +37,12 @@ interface Props {
   execucao?: CalibracaoExecucao | null;
   empresaInicialId?: string | null;
   equipamentoInicialId?: string | null;
+  procedimentoInicialId?: string | null;
+  dataRealizacaoInicial?: string | null;
+  dataEmissaoInicial?: string | null;
+  planoCicloItemId?: string | null;
   onSaved?: (execucao: CalibracaoExecucao) => void;
+  onFinalizada?: (execucao: CalibracaoExecucao) => void | Promise<void>;
 }
 
 const RESPONSAVEL_TECNICO = "Ícaro Heitor Piris Rezende";
@@ -65,7 +72,12 @@ const CalibracaoExecucaoFormDialog = ({
   execucao = null,
   empresaInicialId,
   equipamentoInicialId,
+  procedimentoInicialId,
+  dataRealizacaoInicial,
+  dataEmissaoInicial,
+  planoCicloItemId,
   onSaved,
+  onFinalizada,
 }: Props) => {
   const [form, setForm] = useState(vazio);
   const [tabelas, setTabelas] = useState<CalibracaoExecucaoTabelaInput[]>([]);
@@ -76,7 +88,9 @@ const CalibracaoExecucaoFormDialog = ({
   const { data: padroes = [] } = useCalibracaoPadroesValidos(form.dataCalibracao);
   const criar = useSalvarCalibracaoFinalizada();
   const atualizar = useEditarCalibracaoFinalizada();
-  const saving = criar.isPending || atualizar.isPending;
+  const criarRascunho = useCriarCalibracaoExecucao();
+  const atualizarRascunho = useAtualizarCalibracaoExecucao();
+  const saving = criar.isPending || atualizar.isPending || criarRascunho.isPending || atualizarRascunho.isPending;
   const navigate = useNavigate();
   const equipamento = equipamentos.find((item) => item.id === form.equipamentoId);
   const empresa = empresas.find((item) => item.id === form.empresaId);
@@ -96,12 +110,18 @@ const CalibracaoExecucaoFormDialog = ({
   useEffect(() => {
     if (!open) return;
     if (!execucao) {
+      const procedimentoInicial = procedimentoInicialId
+        ? procedimentos.find((item) => item.id === procedimentoInicialId)
+        : null;
       setForm({
         ...vazio(),
         empresaId: empresaInicialId || "",
         equipamentoId: equipamentoInicialId || "",
+        procedimentoId: procedimentoInicial?.id || "",
+        dataCalibracao: dataRealizacaoInicial || hoje(),
+        dataEmissao: dataEmissaoInicial || dataRealizacaoInicial || hoje(),
       });
-      setTabelas([]);
+      setTabelas(procedimentoInicial ? criarTabelasExecucaoDoProcedimento(procedimentoInicial, false) : []);
       setActiveTabela("0");
       return;
     }
@@ -119,7 +139,7 @@ const CalibracaoExecucaoFormDialog = ({
     });
     setTabelas(criarTabelasInputDaExecucao(execucao));
     setActiveTabela("0");
-  }, [empresaInicialId, equipamentoInicialId, execucao, open]);
+  }, [dataEmissaoInicial, dataRealizacaoInicial, empresaInicialId, equipamentoInicialId, execucao, open, procedimentoInicialId, procedimentos]);
 
   useEffect(() => {
     if (!open || execucao || !equipamentoInicialId) return;
@@ -260,9 +280,28 @@ const CalibracaoExecucaoFormDialog = ({
             }
       );
       onSaved?.(salva);
+      await onFinalizada?.(salva);
       onOpenChange(false);
     } catch (error) {
       toast({ title: "Erro ao salvar calibracao", description: error instanceof Error ? error.message : "Erro inesperado.", variant: "destructive" });
+    }
+  };
+
+  const salvarRascunho = async () => {
+    try {
+      const input = buildInput();
+      const salva = execucao
+        ? await atualizarRascunho.mutateAsync({ id: execucao.id, input })
+        : await criarRascunho.mutateAsync(input);
+      toast({
+        title: planoCicloItemId
+          ? "Rascunho de calibracao salvo. O item permanece em aberto."
+          : "Rascunho de calibracao salvo.",
+      });
+      onSaved?.(salva);
+      onOpenChange(false);
+    } catch (error) {
+      toast({ title: "Erro ao salvar rascunho", description: error instanceof Error ? error.message : "Erro inesperado.", variant: "destructive" });
     }
   };
 
@@ -301,7 +340,11 @@ const CalibracaoExecucaoFormDialog = ({
           </Tabs>}
         </CardContent></Card>
       </div>
-      <DialogFooter className="sticky bottom-0 border-t bg-background/95 px-5 py-3"><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><Button disabled={saving} onClick={salvar}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />} Salvar calibracao</Button></DialogFooter>
+      <DialogFooter className="sticky bottom-0 border-t bg-background/95 px-5 py-3">
+        <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+        <Button variant="outline" disabled={saving} onClick={salvarRascunho}>Salvar rascunho</Button>
+        <Button disabled={saving} onClick={salvar}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />} Salvar calibracao</Button>
+      </DialogFooter>
     </DialogContent>
   </Dialog>;
 };

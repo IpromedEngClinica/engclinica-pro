@@ -4,12 +4,16 @@ import { imageToDataUrl } from "@/utils/pdfImageUtils";
 import { renderHtmlToPdf } from "@/utils/pdfHtmlRenderer";
 import { buildOrdemServicoHtml } from "@/utils/osPdfTemplate";
 
-export const gerarPdfOrdemServico = async (os: OrdemServicoSupabase) => {
+export const gerarPdfOrdemServico = async (
+  os: OrdemServicoSupabase,
+  save = true
+) => {
   const logoBase64 = await imageToDataUrl(aciLogo);
   const html = buildOrdemServicoHtml(os, logoBase64);
 
-  await renderHtmlToPdf({
+  return renderHtmlToPdf({
     html,
     fileName: `OS-${os.numero || "sem-numero"}.pdf`,
+    save,
   });
 };

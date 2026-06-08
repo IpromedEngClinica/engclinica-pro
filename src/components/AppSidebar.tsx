@@ -4,6 +4,7 @@ import {
   Building2,
   Cpu,
   FileText,
+  CalendarDays,
   ClipboardList,
   FileSignature,
   FileBox,
@@ -24,11 +25,15 @@ const menuItems = [
   { icon: LayoutDashboard, label: "Painel", path: "/" },
   { icon: Building2, label: "Empresas", path: "/empresas" },
   { icon: Cpu, label: "Equipamentos", path: "/equipamentos" },
-  { icon: FileText, label: "Contratos", path: "/contratos" },
   { icon: ClipboardList, label: "Ordens de Serviço", path: "/ordens-servico" },
   { icon: FileSignature, label: "Orçamentos", path: "/orcamentos" },
+];
+
+const menuItemsAfterCalibracao = [
+  { icon: CalendarDays, label: "Planos", path: "/planos" },
+  { icon: FileText, label: "Contratos", path: "/contratos" },
   { icon: FileBox, label: "Protocolos", path: "/protocolos" },
-  { icon: FileWarning, label: "Laudos de Obsolescencia", path: "/laudos-obsolescencia" },
+  { icon: FileWarning, label: "Laudo de Obsolescência", path: "/laudos-obsolescencia" },
   { icon: CalendarCheck, label: "Procedimentos Preventivos", path: "/procedimentos" },
 ];
 
@@ -137,6 +142,27 @@ const AppSidebar = () => {
             </div>
           )}
         </div>
+
+        {menuItemsAfterCalibracao.map((item) => {
+          const isActive =
+            location.pathname === item.path ||
+            (item.path !== "/" && location.pathname.startsWith(item.path));
+          return (
+            <Link
+              key={item.path}
+              to={item.path}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                isActive
+                  ? "bg-sidebar-primary text-sidebar-primary-foreground"
+                  : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              }`}
+              title={collapsed ? item.label : undefined}
+            >
+              <item.icon className="w-5 h-5 shrink-0" />
+              {!collapsed && <span>{item.label}</span>}
+            </Link>
+          );
+        })}
 
         {/* Campos Gerenciais */}
         <div className="pt-2">

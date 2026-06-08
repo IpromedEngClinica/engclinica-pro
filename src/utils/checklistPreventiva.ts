@@ -63,3 +63,16 @@ export const formatResultadoGeralChecklist = (resultado?: string | null) => {
 
   return map[resposta] || "-";
 };
+
+export const marcarChecklistCompletoComoConforme = <
+  T extends { tipoResposta?: string; tipo_resposta?: string; resposta?: string }
+>(
+  respostas: T[]
+): T[] =>
+  respostas.map((item) => ({
+    ...item,
+    resposta:
+      (item.tipoResposta || item.tipo_resposta) === "aprovacao_uso"
+        ? "aprovado"
+        : "conforme",
+  }));

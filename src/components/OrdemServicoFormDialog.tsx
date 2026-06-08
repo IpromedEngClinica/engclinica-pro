@@ -24,7 +24,7 @@ import {
 import { useEmpresas } from "@/hooks/useEmpresas";
 import { useEquipamentos } from "@/hooks/useEquipamentos";
 import { useEstadosOS, useTiposOS } from "@/hooks/useCamposOS";
-import PreventivaChecklistEditDialog from "@/components/PreventivaChecklistEditDialog";
+import PreventivaChecklistDialog from "@/components/PreventivaChecklistDialog";
 
 export type DialogMode = "create" | "edit" | "view";
 
@@ -151,6 +151,11 @@ const OrdemServicoFormDialog = ({
     Array.isArray(os?.checklist_preventiva)
       ? os?.checklist_preventiva?.length
       : os?.checklist_preventiva
+  );
+  const isPreventiva = Boolean(
+    os?.tipo_os?.nome?.toLowerCase().includes("preventiva") ||
+    os?.descricao_servico?.toLowerCase().includes("preventiva") ||
+    hasChecklistPreventiva
   );
 
   const empresaOptions = useMemo(
@@ -636,14 +641,14 @@ const OrdemServicoFormDialog = ({
         </div>
 
         <DialogFooter className="px-6 pb-6 pt-2 border-t">
-          {mode === "edit" && hasChecklistPreventiva && (
+          {(mode === "edit" || mode === "view") && isPreventiva && (
             <Button
               type="button"
               variant="outline"
               onClick={() => setChecklistEditOpen(true)}
               disabled={saving}
             >
-              Editar checklist
+              {hasChecklistPreventiva ? "Editar checklist" : "Acessar checklist"}
             </Button>
           )}
 
@@ -663,10 +668,11 @@ const OrdemServicoFormDialog = ({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-    <PreventivaChecklistEditDialog
+    <PreventivaChecklistDialog
       open={checklistEditOpen}
       onOpenChange={setChecklistEditOpen}
-      ordemServico={os}
+      osExistenteId={os?.id || null}
+      modo="usar_os_existente"
     />
     </>
   );

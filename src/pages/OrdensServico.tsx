@@ -51,6 +51,7 @@ import OrdemServicoFormDialog, {
   DialogMode,
 } from "@/components/OrdemServicoFormDialog";
 import OrdemServicoDetalhesDialog from "@/components/OrdemServicoDetalhesDialog";
+import PreventivaChecklistDialog from "@/components/PreventivaChecklistDialog";
 import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
 import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import ProtocoloEntregaDialog from "@/components/ProtocoloEntregaDialog";
@@ -85,6 +86,17 @@ const getEquipamentoLabel = (os: OrdemServicoSupabase) => {
 const getTipoServico = (os: OrdemServicoSupabase) => {
   return os.tipo_os?.nome || "Não informado";
 };
+
+const getChecklistPreventiva = (os: OrdemServicoSupabase) => {
+  const checklist = os.checklist_preventiva;
+  if (Array.isArray(checklist)) return checklist[0] || null;
+  return checklist || null;
+};
+
+const isOSPreventiva = (os: OrdemServicoSupabase) =>
+  getTipoServico(os).toLowerCase().includes("preventiva") ||
+  (os.descricao_servico || "").toLowerCase().includes("preventiva") ||
+  Boolean(getChecklistPreventiva(os));
 
 const getEstado = (os: OrdemServicoSupabase) => {
   return os.estado_os?.nome || os.status_sistema || "Não informado";
@@ -154,6 +166,8 @@ const OrdensServico = () => {
   const [equipamentoSelecionado, setEquipamentoSelecionado] =
     useState<EquipamentoSupabase | null>(null);
   const [editingEstadoId, setEditingEstadoId] = useState<string | null>(null);
+  const [checklistOpen, setChecklistOpen] = useState(false);
+  const [osChecklist, setOsChecklist] = useState<OrdemServicoSupabase | null>(null);
 
   const [hideClosed, setHideClosed] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -306,6 +320,11 @@ const OrdensServico = () => {
   const openOrcamento = (os: OrdemServicoSupabase) => {
     setOsOrcamento(os);
     setOrcamentoOpen(true);
+  };
+
+  const openChecklist = (os: OrdemServicoSupabase) => {
+    setOsChecklist(os);
+    setChecklistOpen(true);
   };
 
   const openEmpresaDetalhes = async (
@@ -512,6 +531,16 @@ const OrdensServico = () => {
         fromOS={osOrcamento}
       />
 
+      <PreventivaChecklistDialog
+        open={checklistOpen}
+        onOpenChange={(value) => {
+          setChecklistOpen(value);
+          if (!value) setOsChecklist(null);
+        }}
+        osExistenteId={osChecklist?.id || null}
+        modo="usar_os_existente"
+      />
+
       <div className="bg-card rounded-xl border mb-4">
         <button
           type="button"
@@ -692,6 +721,8 @@ const OrdensServico = () => {
                   const equipamento = getEquipamentoLabel(os);
                   const tecnico = getTecnico(os);
                   const tipoServico = getTipoServico(os);
+                  const preventiva = isOSPreventiva(os);
+                  const checklist = getChecklistPreventiva(os);
 
                   return (
                     <tr
@@ -797,6 +828,13 @@ const OrdensServico = () => {
                               <DropdownMenuItem onClick={() => openEdit(os)}>
                                 <Pencil className="w-4 h-4 mr-2" /> Editar
                               </DropdownMenuItem>
+
+                              {preventiva && (
+                                <DropdownMenuItem onClick={() => openChecklist(os)}>
+                                  <ClipboardList className="w-4 h-4 mr-2" />
+                                  {checklist ? "Editar checklist" : "Acessar checklist"}
+                                </DropdownMenuItem>
+                              )}
 
                               <DropdownMenuSeparator />
 

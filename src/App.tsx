@@ -8,6 +8,8 @@ import Dashboard from "./pages/Dashboard";
 import Empresas from "./pages/Empresas";
 import Equipamentos from "./pages/Equipamentos";
 import Contratos from "./pages/Contratos";
+import Planos from "./pages/Planos";
+import PlanoDetalhes from "./pages/PlanoDetalhes";
 import OrdensServico from "./pages/OrdensServico";
 import Orcamentos from "./pages/Orcamentos";
 import TiposEquipamento from "./pages/TiposEquipamento";
@@ -45,6 +47,8 @@ const App = () => (
                   <Route path="/empresas" element={<Empresas />} />
                   <Route path="/equipamentos" element={<Equipamentos />} />
                   <Route path="/contratos" element={<Contratos />} />
+                  <Route path="/planos" element={<Planos />} />
+                  <Route path="/planos/:planoId" element={<PlanoDetalhes />} />
                   <Route path="/ordens-servico" element={<OrdensServico />} />
                   <Route path="/orcamentos" element={<Orcamentos />} />
                   <Route path="/protocolos" element={<Protocolos />} />

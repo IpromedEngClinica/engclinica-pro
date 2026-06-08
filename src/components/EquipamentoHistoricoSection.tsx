@@ -31,6 +31,7 @@ import {
   formatNumeroCertificadoCalibracao,
 } from "@/services/calibracaoExecucoesService";
 import { formatarMesAno } from "@/utils/calibracaoValidade";
+import { formatarTipoHistorico } from "@/utils/historicoLabels";
 
 interface EquipamentoHistoricoSectionProps {
   equipamentoId?: string;
@@ -526,7 +527,7 @@ const EquipamentoHistoricoSection = ({
                     </td>
                     <td className="px-3 py-2">{formatDate(calibracao.data_calibracao)}</td>
                     <td className="px-3 py-2">{formatarMesAno(calibracao.validade_mes || calibracao.data_validade)}</td>
-                    <td className="px-3 py-2">{calibracao.resultado_geral?.replaceAll("_", " ") || "-"}</td>
+                    <td className="px-3 py-2">{calibracao.resultado_geral ? formatarTipoHistorico(calibracao.resultado_geral) : "-"}</td>
                     <td className="px-3 py-2">
                       {calibracao.pdf_storage_path ? (
                         <button type="button" className="flex items-center gap-1 text-primary hover:underline" onClick={() => handleAbrirPdfCalibracao(calibracao)}>

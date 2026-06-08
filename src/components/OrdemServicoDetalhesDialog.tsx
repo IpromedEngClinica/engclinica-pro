@@ -1,7 +1,9 @@
 import { ClipboardList, FileText, Pencil, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import ModalActionsBar from "@/components/ModalActionsBar";
+import PreventivaChecklistDialog from "@/components/PreventivaChecklistDialog";
 import {
   Dialog,
   DialogContent,
@@ -21,6 +23,7 @@ import {
   formatRespostaChecklist,
   getChecklistMarks,
 } from "@/utils/checklistPreventiva";
+import { formatarTipoHistorico } from "@/utils/historicoLabels";
 
 interface OrdemServicoDetalhesDialogProps {
   open: boolean;
@@ -148,7 +151,7 @@ const formatAcao = (acao: string) => {
     orcamento_pendente: "Orçamento pendente",
   };
 
-  return map[acao] || acao;
+  return map[acao] || formatarTipoHistorico(acao);
 };
 
 const formatDate = (iso?: string | null) => {
@@ -228,6 +231,8 @@ const OrdemServicoDetalhesDialog = ({
   onCriarOrcamento,
   onProtocoloEntrega,
 }: OrdemServicoDetalhesDialogProps) => {
+  const [checklistOpen, setChecklistOpen] = useState(false);
+
   if (!os) return null;
 
   const estado = getEstado(os);
@@ -244,6 +249,7 @@ const OrdemServicoDetalhesDialog = ({
   });
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-hidden flex flex-col p-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b">
@@ -277,6 +283,11 @@ const OrdemServicoDetalhesDialog = ({
             <Button size="sm" onClick={() => onEdit(os)}>
               <Pencil className="w-4 h-4 mr-2" />
               Editar OS
+            </Button>
+          )}
+          {preventiva && (
+            <Button variant="outline" size="sm" onClick={() => setChecklistOpen(true)}>
+              {checklistPreventiva ? "Editar checklist" : "Acessar checklist"}
             </Button>
           )}
           <Button
@@ -530,6 +541,13 @@ const OrdemServicoDetalhesDialog = ({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <PreventivaChecklistDialog
+      open={checklistOpen}
+      onOpenChange={setChecklistOpen}
+      osExistenteId={os.id}
+      modo="usar_os_existente"
+    />
+    </>
   );
 };
 
