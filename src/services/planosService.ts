@@ -296,6 +296,7 @@ export type PlanoRelatorioAnual = {
 
 export type PlanoRelatorioAnualInput = {
   planoId: string;
+  cicloId?: string | null;
   modoPeriodo: PlanoRelatorioAnualModoPeriodo;
   dataInicio: string;
   dataFim: string;
@@ -556,13 +557,13 @@ const endOfMonthDateOnly = (dateIso: string) => {
   return new Date(date.getFullYear(), date.getMonth() + 1, 0).toISOString().slice(0, 10);
 };
 
-const montarMesesPeriodo = (dataInicio: string) =>
-  Array.from({ length: 12 }, (_, index) => {
+const montarMesesPeriodo = (dataInicio: string, quantidadeMeses = 13) =>
+  Array.from({ length: quantidadeMeses }, (_, index) => {
     const inicio = addMonthsDateOnly(dataInicio, index);
     const date = new Date(`${inicio}T00:00:00`);
     return {
       key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`,
-      label: date.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "").toUpperCase(),
+      label: `${date.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "").toUpperCase()}/${String(date.getFullYear()).slice(-2)}`,
       inicio,
       fim: endOfMonthDateOnly(inicio),
     };
@@ -1358,6 +1359,7 @@ export const planosService = {
 
   async buscarDadosRelatorioAnualPlano({
     planoId,
+    cicloId,
     dataInicio,
     dataFim,
     setoresIds,
@@ -1367,6 +1369,7 @@ export const planosService = {
     incluirInativos,
   }: {
     planoId: string;
+    cicloId?: string | null;
     dataInicio: string;
     dataFim: string;
     setoresIds?: string[];
@@ -1377,16 +1380,24 @@ export const planosService = {
   }) {
     const plano = await this.buscarPlanoPorId(planoId);
     const ciclos = (await this.listarCiclosPlano(planoId)).filter((ciclo) =>
-      ciclo.data_prevista >= dataInicio && ciclo.data_prevista <= dataFim
+      (!cicloId || ciclo.id === cicloId) &&
+      ciclo.data_prevista >= dataInicio &&
+      ciclo.data_prevista <= dataFim
     );
     const detalhesCiclos = await Promise.all(ciclos.map((ciclo) => this.buscarDetalhesCicloPlano(ciclo.id)));
+    const equipamentosDosCiclos = cicloId
+      ? new Set(detalhesCiclos.flatMap((detalhes) =>
+          (detalhes.ciclo.itens || []).map((item) => item.equipamento_id)
+        ))
+      : null;
     const servicoAtivo = (equipamento: PlanoEquipamento) =>
       (incluirPreventiva && equipamento.executar_preventiva) ||
       (incluirCalibracao && equipamento.executar_calibracao) ||
       (incluirSegurancaEletrica && equipamento.executar_seguranca_eletrica);
     const equipamentos = (plano.equipamentos || [])
-      .filter((item) => incluirInativos || item.ativo)
+      .filter((item) => cicloId || incluirInativos || item.ativo)
       .filter(servicoAtivo)
+      .filter((item) => !equipamentosDosCiclos || equipamentosDosCiclos.has(item.equipamento_id))
       .filter((item) => !setoresIds?.length || (item.setor_id && setoresIds.includes(item.setor_id)));
     const revisao = await this.calcularProximaRevisaoRelatorioAnual({ planoId, dataInicio, dataFim });
 
@@ -1475,15 +1486,19 @@ export const planosService = {
 
   async listarDocumentosDosCiclosNoPeriodo({
     planoId,
+    cicloId,
     dataInicio,
     dataFim,
   }: {
     planoId: string;
+    cicloId?: string | null;
     dataInicio: string;
     dataFim: string;
   }) {
     const ciclos = (await this.listarCiclosPlano(planoId)).filter((ciclo) =>
-      ciclo.data_prevista >= dataInicio && ciclo.data_prevista <= dataFim
+      (!cicloId || ciclo.id === cicloId) &&
+      ciclo.data_prevista >= dataInicio &&
+      ciclo.data_prevista <= dataFim
     );
     return Promise.all(ciclos.map((ciclo) => this.buscarDetalhesCicloPlano(ciclo.id)));
   },

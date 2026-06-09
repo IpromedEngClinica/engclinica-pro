@@ -21,6 +21,9 @@ import OrcamentoFormDialog, {
 } from "@/components/OrcamentoFormDialog";
 import SearchableSelect from "@/components/SearchableSelect";
 import SortableTableHeader from "@/components/SortableTableHeader";
+import ListLimitSelect, {
+  DEFAULT_LIST_LIMIT,
+} from "@/components/ListLimitSelect";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -141,9 +144,10 @@ const Orcamentos = () => {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState("data");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [listLimit, setListLimit] = useState(DEFAULT_LIST_LIMIT);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [statusFiltro, setStatusFiltro] =
-    useState<OrcamentoStatus | typeof ALL>(ALL);
+    useState<OrcamentoStatus | typeof ALL>("pendente");
   const [tipoFilter, setTipoFilter] = useState(ALL);
   const [clienteFiltro, setClienteFiltro] = useState(ALL);
   const [formaPagamentoFiltro, setFormaPagamentoFiltro] = useState(ALL);
@@ -299,6 +303,11 @@ const Orcamentos = () => {
         sortDirection
       ),
     [filtered, sortDirection, sortKey]
+  );
+
+  const visibleOrcamentos = useMemo(
+    () => sortedFiltered.slice(0, listLimit),
+    [listLimit, sortedFiltered]
   );
 
   const handleSort = (key: string) => {
@@ -719,9 +728,6 @@ const Orcamentos = () => {
             <h2 className="text-base font-semibold">
               Orcamentos {activeTab?.label || ""}
             </h2>
-            <p className="text-sm text-muted-foreground">
-              {filtered.length} registro(s) encontrado(s).
-            </p>
           </div>
 
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -735,7 +741,12 @@ const Orcamentos = () => {
               />
             </div>
 
-            <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <ListLimitSelect
+                value={listLimit}
+                onChange={setListLimit}
+                total={sortedFiltered.length}
+              />
               <Button variant="outline" onClick={() => refetch()}>
                 Atualizar
               </Button>
@@ -820,7 +831,7 @@ const Orcamentos = () => {
               </thead>
 
               <tbody>
-                {sortedFiltered.map((orcamento) => {
+                {visibleOrcamentos.map((orcamento) => {
                   const empresa = getEmpresaNome(orcamento);
                   const identificacao =
                     orcamento.identificador ||

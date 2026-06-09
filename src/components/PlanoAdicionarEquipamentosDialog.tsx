@@ -115,29 +115,9 @@ const PlanoAdicionarEquipamentosDialog = ({ open, onOpenChange, plano }: Props) 
       },
     }));
   };
-  const aplicarAosSelecionados = (patch: Partial<EquipamentoSelecionadoPlano>) => {
-    setSelecionados((current) => Object.fromEntries(
-      Object.entries(current).map(([id, item]) => [id, { ...item, ...patch, equipamentoId: id }])
-    ));
-  };
-  const limparServicos = () => {
-    aplicarAosSelecionados({ preventiva: false, calibracao: false, segurancaEletrica: false });
-  };
-  const setarServico = (servico: "preventiva" | "calibracao" | "segurancaEletrica", checked: boolean) => {
-    aplicarAosSelecionados({ [servico]: checked });
-  };
   const itemSelecionado = (equipamentoId: string) => selecionados[equipamentoId] || criarSelecao(equipamentoId);
 
   const salvar = async () => {
-    if (selecionadosArray.some((item) => !item.preventiva && !item.calibracao && !item.segurancaEletrica)) {
-      toast({
-        title: "Servicos obrigatorios",
-        description: "Selecione ao menos um servico para cada equipamento incluido no plano.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     try {
       await adicionar.mutateAsync({
         planoId: plano.id,
@@ -185,7 +165,7 @@ const PlanoAdicionarEquipamentosDialog = ({ open, onOpenChange, plano }: Props) 
           <Input placeholder="Patrimonio" value={patrimonio} onChange={(event) => setPatrimonio(event.target.value)} />
           <Input placeholder="TAG" value={tag} onChange={(event) => setTag(event.target.value)} />
         </div>
-        <div className="grid gap-3 rounded-lg border p-3 md:grid-cols-[1fr_auto]">
+        <div className="grid gap-3 rounded-lg border p-3">
           <div className="space-y-1.5">
             <Label>Setor padrao ao selecionar</Label>
             <Select value={setorPlano} onValueChange={setSetorPlano}>
@@ -195,12 +175,6 @@ const PlanoAdicionarEquipamentosDialog = ({ open, onOpenChange, plano }: Props) 
                 {(plano.setores || []).map((setor) => <SelectItem key={setor.id} value={setor.id}>{setor.nome}</SelectItem>)}
               </SelectContent>
             </Select>
-          </div>
-          <div className="flex flex-wrap items-end gap-2">
-            <Button type="button" size="sm" variant="outline" disabled={!selecionadosArray.length} onClick={() => setarServico("preventiva", true)}>Marcar P</Button>
-            <Button type="button" size="sm" variant="outline" disabled={!selecionadosArray.length} onClick={() => setarServico("calibracao", true)}>Marcar C</Button>
-            <Button type="button" size="sm" variant="outline" disabled={!selecionadosArray.length} onClick={() => setarServico("segurancaEletrica", true)}>Marcar E</Button>
-            <Button type="button" size="sm" variant="outline" disabled={!selecionadosArray.length} onClick={limparServicos}>Limpar servicos</Button>
           </div>
         </div>
         <div className="overflow-x-auto rounded-lg border">
@@ -216,9 +190,6 @@ const PlanoAdicionarEquipamentosDialog = ({ open, onOpenChange, plano }: Props) 
                 <Th>NS</Th>
                 <Th>Patrimonio</Th>
                 <Th>TAG</Th>
-                <Th>P</Th>
-                <Th>C</Th>
-                <Th>E</Th>
               </tr>
             </thead>
             <tbody>
@@ -246,9 +217,6 @@ const PlanoAdicionarEquipamentosDialog = ({ open, onOpenChange, plano }: Props) 
                   <Td>{item.numero_serie || "-"}</Td>
                   <Td>{item.patrimonio || "-"}</Td>
                   <Td>{item.tag || "-"}</Td>
-                  <Td><Checkbox disabled={!selecionadosIds.has(item.id)} checked={Boolean(selecionados[item.id]?.preventiva)} onCheckedChange={(value) => atualizarItem(item.id, { preventiva: Boolean(value) })} /></Td>
-                  <Td><Checkbox disabled={!selecionadosIds.has(item.id)} checked={Boolean(selecionados[item.id]?.calibracao)} onCheckedChange={(value) => atualizarItem(item.id, { calibracao: Boolean(value) })} /></Td>
-                  <Td><Checkbox disabled={!selecionadosIds.has(item.id)} checked={Boolean(selecionados[item.id]?.segurancaEletrica)} onCheckedChange={(value) => atualizarItem(item.id, { segurancaEletrica: Boolean(value) })} /></Td>
                 </tr>
               ))}
               {!isLoading && !filtrados.length && <tr><Td>Nenhum equipamento disponivel.</Td></tr>}

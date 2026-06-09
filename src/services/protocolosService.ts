@@ -104,6 +104,7 @@ export type ProtocoloEntregaInput = {
   ordemServicoId: string;
   empresaId: string;
   equipamentoId: string;
+  estadoDestinoOs?: "fechada" | "liberado_entrega";
   dataEntrega?: string;
   responsavelNome?: string;
   responsavelDocumento?: string;
@@ -417,6 +418,29 @@ const buscarEstadoFechamentoOS = async () => {
   }
 
   return data || null;
+};
+
+const buscarEstadoLiberadoEntregaOS = async () => {
+  const nomes = ["Liberado para Entrega", "Liberado para entrega"];
+
+  for (const nome of nomes) {
+    const { data, error } = await supabase
+      .from("estados_os")
+      .select("id, nome, finaliza_os")
+      .ilike("nome", nome)
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    if (data?.id) return data;
+  }
+
+  throw new Error(
+    'Cadastre um estado de OS chamado "Liberado para Entrega" antes de usar esta opção.'
+  );
 };
 
 export const protocolosService = {
@@ -736,14 +760,18 @@ export const protocolosService = {
       }
     }
 
-    const estadoFechamento = await buscarEstadoFechamentoOS();
+    const estadoDestinoOs = input.estadoDestinoOs || "fechada";
+    const finalizarOS = estadoDestinoOs === "fechada";
+    const estadoDestino = finalizarOS
+      ? await buscarEstadoFechamentoOS()
+      : await buscarEstadoLiberadoEntregaOS();
 
     const { error: osUpdateError } = await supabase
       .from("ordens_servico")
       .update({
-        estado_os_id: estadoFechamento?.id || osAtual.estado_os_id,
-        status_sistema: "fechada",
-        data_fechamento: dataEntrega,
+        estado_os_id: estadoDestino?.id || osAtual.estado_os_id,
+        status_sistema: finalizarOS ? "fechada" : "aberta",
+        data_fechamento: finalizarOS ? dataEntrega : null,
       })
       .eq("id", input.ordemServicoId);
 
@@ -758,15 +786,17 @@ export const protocolosService = {
     await registrarHistoricoOS({
       ordemServicoId: input.ordemServicoId,
       acao: "protocolo_entrega",
-      observacao: `Protocolo de entrega nº ${protocoloCriado.numero} criado. Entrega realizada em ${dataEntregaFormatada}. Ordem de Serviço fechada automaticamente.`,
+      observacao: `Protocolo de entrega nº ${protocoloCriado.numero} criado. Entrega realizada em ${dataEntregaFormatada}. Ordem de Serviço ${finalizarOS ? "fechada" : "liberada para entrega"} automaticamente.`,
       estadoAnteriorId: osAtual.estado_os_id,
-      estadoNovoId: estadoFechamento?.id || osAtual.estado_os_id,
+      estadoNovoId: estadoDestino?.id || osAtual.estado_os_id,
     });
 
-    await atualizarEquipamentoParaAtivoSeSemOSAberta(
-      input.equipamentoId,
-      input.ordemServicoId
-    );
+    if (finalizarOS) {
+      await atualizarEquipamentoParaAtivoSeSemOSAberta(
+        input.equipamentoId,
+        input.ordemServicoId
+      );
+    }
 
     return protocolosService.buscarPorId(protocoloCriado.id);
   },

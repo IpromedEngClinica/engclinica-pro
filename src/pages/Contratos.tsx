@@ -18,6 +18,9 @@ import ContratoDocumentosDialog from "@/components/ContratoDocumentosDialog";
 import ContratoFormDialog, {
   ContratoDialogMode,
 } from "@/components/ContratoFormDialog";
+import ListLimitSelect, {
+  DEFAULT_LIST_LIMIT,
+} from "@/components/ListLimitSelect";
 import PageHeader from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -190,6 +193,7 @@ const Contratos = () => {
   const [dataAte, setDataAte] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("proxima");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [listLimit, setListLimit] = useState(DEFAULT_LIST_LIMIT);
   const [formOpen, setFormOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [documentosOpen, setDocumentosOpen] = useState(false);
@@ -335,6 +339,11 @@ const Contratos = () => {
       total: contratos.length,
     }),
     [contratos]
+  );
+
+  const visibleContratos = useMemo(
+    () => filtered.slice(0, listLimit),
+    [filtered, listLimit]
   );
 
   const activeFiltersCount = useMemo(() => {
@@ -660,12 +669,7 @@ const Contratos = () => {
       </div>
 
       <div className="bg-card rounded-xl border">
-        <div className="px-5 py-4 border-b flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm text-muted-foreground">
-              {filtered.length} contrato(s) encontrado(s).
-            </p>
-          </div>
+        <div className="px-5 py-4 border-b flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-start">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="relative flex-1 sm:w-96">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -677,6 +681,11 @@ const Contratos = () => {
               />
             </div>
 
+            <ListLimitSelect
+              value={listLimit}
+              onChange={setListLimit}
+              total={filtered.length}
+            />
             <Button variant="outline" size="sm" onClick={() => refetch()}>
               Atualizar
             </Button>
@@ -746,7 +755,7 @@ const Contratos = () => {
               </thead>
 
               <tbody>
-                {filtered.map((contrato) => {
+                {visibleContratos.map((contrato) => {
                   const status = getStatusVencimentoContrato(
                     contrato.data_proxima_renovacao
                   );

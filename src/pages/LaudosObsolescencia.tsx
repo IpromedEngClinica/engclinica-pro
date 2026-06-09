@@ -13,6 +13,9 @@ import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
 import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import LaudoObsolescenciaDetalhesDialog from "@/components/LaudoObsolescenciaDetalhesDialog";
 import LaudoObsolescenciaFormDialog from "@/components/LaudoObsolescenciaFormDialog";
+import ListLimitSelect, {
+  DEFAULT_LIST_LIMIT,
+} from "@/components/ListLimitSelect";
 import PageHeader from "@/components/PageHeader";
 import SortableTableHeader from "@/components/SortableTableHeader";
 import { Button } from "@/components/ui/button";
@@ -65,6 +68,7 @@ const LaudosObsolescencia = () => {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState("data");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [listLimit, setListLimit] = useState(DEFAULT_LIST_LIMIT);
   const [formOpen, setFormOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selected, setSelected] =
@@ -118,6 +122,11 @@ const LaudosObsolescencia = () => {
         sortDirection
       ),
     [filtered, sortDirection, sortKey]
+  );
+
+  const visibleLaudos = useMemo(
+    () => sortedFiltered.slice(0, listLimit),
+    [listLimit, sortedFiltered]
   );
 
   const handleSort = (key: string) => {
@@ -217,12 +226,7 @@ const LaudosObsolescencia = () => {
       />
 
       <div className="bg-card rounded-xl border">
-        <div className="px-5 py-4 border-b flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <FileWarning className="w-4 h-4 text-primary" />
-            {filtered.length} laudo(s) encontrado(s)
-          </div>
-
+        <div className="px-5 py-4 border-b flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-start">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="relative w-full sm:w-80">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -234,6 +238,11 @@ const LaudosObsolescencia = () => {
               />
             </div>
 
+            <ListLimitSelect
+              value={listLimit}
+              onChange={setListLimit}
+              total={sortedFiltered.length}
+            />
             <Button variant="outline" size="sm" onClick={() => refetch()}>
               Atualizar
             </Button>
@@ -296,7 +305,7 @@ const LaudosObsolescencia = () => {
               </thead>
 
               <tbody>
-                {sortedFiltered.map((laudo) => (
+                {visibleLaudos.map((laudo) => (
                   <tr
                     key={laudo.id}
                     className="border-b last:border-0 hover:bg-muted/30 transition-colors"

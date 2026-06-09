@@ -20,6 +20,7 @@ import Protocolos from "./pages/Protocolos";
 import Procedimentos from "./pages/Procedimentos";
 import LaudosObsolescencia from "./pages/LaudosObsolescencia";
 import Calibracao from "./pages/Calibracao";
+import SegurancaEletrica from "./pages/SegurancaEletrica";
 import NotFound from "./pages/NotFound";
 import { DataProvider } from "./contexts/DataContext";
 import SupabaseTest from "./pages/SupabaseTest";
@@ -62,6 +63,7 @@ const App = () => (
                   <Route path="/calibracao/padroes" element={<Calibracao section="padroes" />} />
                   <Route path="/calibracao/procedimentos" element={<Calibracao section="procedimentos" />} />
                   <Route path="/calibracao/configuracoes" element={<Calibracao section="configuracoes" />} />
+                  <Route path="/seguranca-eletrica" element={<SegurancaEletrica />} />
                   <Route
                     path="/procedimentos-preventiva"
                     element={<Procedimentos />}

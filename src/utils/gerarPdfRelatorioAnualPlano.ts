@@ -172,13 +172,14 @@ export const gerarPdfRelatorioAnualPlano = async (
         * { box-sizing: border-box; }
         .document { width: 1588px; background: #fff; padding: 34px 38px 44px; color: #252525; font-family: Arial, sans-serif; }
         .topbar { height: 7px; background: #b91c1c; margin: -34px -38px 22px; }
-        .header { display: grid; grid-template-columns: 210px 1fr; align-items: center; gap: 24px; }
-        .logo { width: 178px; }
+        .header { display: grid; grid-template-columns: 240px 1fr; align-items: center; gap: 24px; }
+        .logo { width: 210px; }
         .title { text-align: right; }
         .title h1 { margin: 0; font-size: 24px; color: #1f2937; }
         .title p { margin: 5px 0 0; color: #555; font-size: 13px; }
         .meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 14px 0 16px; }
         .meta div { border: 1px solid #e5e7eb; border-radius: 7px; padding: 8px 10px; background: #fafafa; }
+        .meta div.validity { background: #fff1f2; border-color: #fecdd3; }
         .label { display: block; color: #6b7280; font-size: 10px; text-transform: uppercase; }
         .value { display: block; margin-top: 2px; font-size: 12px; font-weight: 700; }
         h2 { margin: 18px 0 8px; font-size: 15px; page-break-after: avoid; }
@@ -190,8 +191,8 @@ export const gerarPdfRelatorioAnualPlano = async (
         th:nth-child(3), td:nth-child(3), th:nth-child(4), td:nth-child(4) { width: 70px; }
         th:nth-child(5), td:nth-child(5), th:nth-child(6), td:nth-child(6) { width: 74px; }
         th:nth-child(7), td:nth-child(7) { width: 56px; }
-        th:nth-child(8), td:nth-child(8) { width: 72px; }
-        .month { text-align: center; width: 54px; }
+        th:nth-child(8), td:nth-child(8) { width: 68px; }
+        .month { text-align: center; width: 48px; }
         .month-cell { text-align: center; min-height: 24px; }
         .chip, .svc { display: inline-block; margin: 1px; padding: 2px 3px; border-radius: 4px; font-size: 7.5px; font-weight: 700; white-space: nowrap; }
         .svc { background: #eef2ff; color: #3730a3; }
@@ -219,7 +220,7 @@ export const gerarPdfRelatorioAnualPlano = async (
         <div><span class="label">Quantidade</span><span class="value">${dados.equipamentos.length}</span></div>
         <div><span class="label">Revisao</span><span class="value">Revisao ${dados.revisao}</span></div>
         <div><span class="label">Data de emissao</span><span class="value">${formatDate(opcoes.emitidoEm)}</span></div>
-        <div><span class="label">Validade ate</span><span class="value">${formatDate(opcoes.validadeAte)}</span></div>
+        <div class="validity"><span class="label">Validade ate</span><span class="value">${formatDate(opcoes.validadeAte)}</span></div>
         <div><span class="label">Frequencia</span><span class="value">${escapeHtml(getPlanoFrequenciaLabel(dados.plano.frequencia))}</span></div>
       </section>
       ${grupos.map((grupo) => `

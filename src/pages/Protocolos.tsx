@@ -13,6 +13,9 @@ import PageHeader from "@/components/PageHeader";
 import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
 import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import ProtocoloDetalhesDialog from "@/components/ProtocoloDetalhesDialog";
+import ListLimitSelect, {
+  DEFAULT_LIST_LIMIT,
+} from "@/components/ListLimitSelect";
 import SortableTableHeader from "@/components/SortableTableHeader";
 import { Button } from "@/components/ui/button";
 import {
@@ -94,6 +97,7 @@ const Protocolos = () => {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState("data");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [listLimit, setListLimit] = useState(DEFAULT_LIST_LIMIT);
   const [detalhesOpen, setDetalhesOpen] = useState(false);
   const [protocoloDetalhes, setProtocoloDetalhes] =
     useState<ProtocoloOSSupabase | null>(null);
@@ -146,6 +150,11 @@ const Protocolos = () => {
         sortDirection
       ),
     [filtered, sortDirection, sortKey]
+  );
+
+  const visibleProtocolos = useMemo(
+    () => sortedFiltered.slice(0, listLimit),
+    [listLimit, sortedFiltered]
   );
 
   const handleSort = (key: string) => {
@@ -241,7 +250,7 @@ const Protocolos = () => {
       />
 
       <div className="bg-card rounded-xl border">
-        <div className="px-5 py-4 border-b flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="px-5 py-4 border-b flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-start">
           <div className="flex flex-wrap gap-2">
             <Button
               variant={tipoFiltro === "todos" ? "default" : "outline"}
@@ -279,6 +288,11 @@ const Protocolos = () => {
               />
             </div>
 
+            <ListLimitSelect
+              value={listLimit}
+              onChange={setListLimit}
+              total={sortedFiltered.length}
+            />
             <Button variant="outline" size="sm" onClick={() => refetch()}>
               Atualizar
             </Button>
@@ -344,7 +358,7 @@ const Protocolos = () => {
               </thead>
 
               <tbody>
-                {sortedFiltered.map((protocolo) => (
+                {visibleProtocolos.map((protocolo) => (
                   <tr
                     key={protocolo.id}
                     className="border-b last:border-0 hover:bg-muted/30 transition-colors"

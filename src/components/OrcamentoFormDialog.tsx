@@ -95,6 +95,17 @@ type ServicoForm = {
   garantia: string;
 };
 
+type ServicoRelacaoForm = {
+  ativo: boolean;
+  preventiva: boolean;
+  calibracao: boolean;
+  segurancaEletrica: boolean;
+  descricao: string;
+  quantidade: number;
+  valorUnitario: number;
+  garantia: string;
+};
+
 type FormState = {
   empresaId: string;
   equipamentoId: string;
@@ -161,6 +172,69 @@ const emptyServico = (): ServicoForm => ({
   valorUnitario: 0,
   garantia: "",
 });
+
+const emptyServicoRelacao = (): ServicoRelacaoForm => ({
+  ativo: false,
+  preventiva: false,
+  calibracao: false,
+  segurancaEletrica: false,
+  descricao: "",
+  quantidade: 1,
+  valorUnitario: 0,
+  garantia: "",
+});
+
+const isFreteItem = (item: { tipo?: string | null; descricao?: string | null; peca_nome?: string | null }) =>
+  item.tipo === "peca" &&
+  (item.peca_nome || item.descricao || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") === "frete";
+
+const isDespesaViagemItem = (item: { tipo?: string | null; descricao?: string | null }) => {
+  const descricao = (item.descricao || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  return item.tipo === "outro" && descricao.includes("viagem");
+};
+
+const isServicoRelacaoItem = (item: { tipo?: string | null; descricao?: string | null; tipo_servico_id?: string | null; tipo_equipamento_id?: string | null }) =>
+  item.tipo === "servico" &&
+  !item.tipo_servico_id &&
+  !item.tipo_equipamento_id &&
+  (item.descricao || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .includes("relacao fornecida");
+
+const getServicosRelacaoLabels = (servico: ServicoRelacaoForm) =>
+  [
+    servico.preventiva ? "Preventiva" : "",
+    servico.calibracao ? "Calibração" : "",
+    servico.segurancaEletrica ? "Segurança elétrica" : "",
+  ].filter(Boolean);
+
+const SectionTitle = ({
+  title,
+  description,
+}: {
+  title: string;
+  description?: string;
+}) => (
+  <div className="space-y-1">
+    <h3 className="text-base font-bold tracking-normal text-foreground">
+      {title}
+    </h3>
+    {description && (
+      <p className="text-sm text-muted-foreground">{description}</p>
+    )}
+  </div>
+);
 
 const tipoOptions: Array<{
   value: OrcamentoTipo;
@@ -288,7 +362,14 @@ const OrcamentoFormDialog = ({
   const [form, setForm] = useState<FormState>(emptyForm);
   const [pecas, setPecas] = useState<PecaForm[]>([emptyPeca()]);
   const [servicos, setServicos] = useState<ServicoForm[]>([emptyServico()]);
-  const [preventiva, setPreventiva] = useState(false);
+  const [incluirFrete, setIncluirFrete] = useState(false);
+  const [valorFrete, setValorFrete] = useState(0);
+  const [servicoRelacao, setServicoRelacao] =
+    useState<ServicoRelacaoForm>(emptyServicoRelacao());
+  const [incluirDeslocamento, setIncluirDeslocamento] = useState(false);
+  const [valorDeslocamento, setValorDeslocamento] = useState(0);
+  const [incluirDespesasViagem, setIncluirDespesasViagem] = useState(false);
+  const [valorDespesasViagem, setValorDespesasViagem] = useState(0);
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
   const [quickCreateIndex, setQuickCreateIndex] = useState<number | null>(null);
 
@@ -394,8 +475,12 @@ const OrcamentoFormDialog = ({
       });
 
       const itens = [...(orcamento.itens || [])].sort((a, b) => a.ordem - b.ordem);
+      const freteBanco = itens.find(isFreteItem);
+      const deslocamentoBanco = itens.find((item) => item.tipo === "deslocamento");
+      const despesasViagemBanco = itens.find(isDespesaViagemItem);
+      const servicoRelacaoBanco = itens.find(isServicoRelacaoItem);
       const pecasBanco = itens
-        .filter((item) => item.tipo === "peca")
+        .filter((item) => item.tipo === "peca" && !isFreteItem(item))
         .map((item) => ({
           pecaId: item.peca_id || "",
           pecaNome: item.peca?.nome || item.peca_nome || item.descricao || "",
@@ -420,7 +505,7 @@ const OrcamentoFormDialog = ({
           garantia: item.garantia || "",
         }));
       const servicosBanco = itens
-        .filter((item) => item.tipo !== "peca")
+        .filter((item) => item.tipo === "servico" && !isServicoRelacaoItem(item))
         .map((item) => ({
           tipoServicoId: item.tipo_servico_id || "",
           tipoEquipamentoId: item.tipo_equipamento_id || "",
@@ -434,7 +519,33 @@ const OrcamentoFormDialog = ({
       setServicos(
         servicosBanco.length > 0 ? servicosBanco : [emptyServico()]
       );
-      setPreventiva(false);
+      setIncluirFrete(Boolean(freteBanco));
+      setValorFrete(Number(freteBanco?.valor_unitario || freteBanco?.valor_total || 0));
+      setIncluirDeslocamento(Boolean(deslocamentoBanco));
+      setValorDeslocamento(
+        Number(deslocamentoBanco?.valor_unitario || deslocamentoBanco?.valor_total || 0)
+      );
+      setIncluirDespesasViagem(Boolean(despesasViagemBanco));
+      setValorDespesasViagem(
+        Number(despesasViagemBanco?.valor_unitario || despesasViagemBanco?.valor_total || 0)
+      );
+      setServicoRelacao(
+        servicoRelacaoBanco
+          ? {
+              ativo: true,
+              preventiva: /preventiva/i.test(servicoRelacaoBanco.descricao || ""),
+              calibracao: /calibra/i.test(servicoRelacaoBanco.descricao || ""),
+              segurancaEletrica: /seguran/i.test(servicoRelacaoBanco.descricao || ""),
+              descricao:
+                servicoRelacaoBanco.observacoes ||
+                servicoRelacaoBanco.descricao ||
+                "",
+              quantidade: Number(servicoRelacaoBanco.quantidade || 1),
+              valorUnitario: Number(servicoRelacaoBanco.valor_unitario || 0),
+              garantia: servicoRelacaoBanco.garantia || "",
+            }
+          : emptyServicoRelacao()
+      );
       return;
     }
 
@@ -462,7 +573,13 @@ const OrcamentoFormDialog = ({
           descricao: detalhes,
         },
       ]);
-      setPreventiva(false);
+      setIncluirFrete(false);
+      setValorFrete(0);
+      setServicoRelacao(emptyServicoRelacao());
+      setIncluirDeslocamento(false);
+      setValorDeslocamento(0);
+      setIncluirDespesasViagem(false);
+      setValorDespesasViagem(0);
       return;
     }
 
@@ -472,7 +589,13 @@ const OrcamentoFormDialog = ({
     });
     setPecas([emptyPeca()]);
     setServicos([emptyServico()]);
-    setPreventiva(false);
+    setIncluirFrete(false);
+    setValorFrete(0);
+    setServicoRelacao(emptyServicoRelacao());
+    setIncluirDeslocamento(false);
+    setValorDeslocamento(0);
+    setIncluirDespesasViagem(false);
+    setValorDespesasViagem(0);
   }, [open, fromOS, mode, orcamento]);
 
   const totalPecas = useMemo(
@@ -483,22 +606,40 @@ const OrcamentoFormDialog = ({
               acc +
               Number(item.quantidade || 0) * Number(item.valorUnitario || 0),
             0
-          )
+          ) + (incluirFrete ? Number(valorFrete || 0) : 0)
         : 0,
-    [incluiPecas, pecas]
+    [incluiPecas, incluirFrete, pecas, valorFrete]
   );
 
   const totalServicos = useMemo(
-    () =>
-      incluiServicos
-        ? servicos.reduce(
+    () => {
+      if (!incluiServicos) return 0;
+
+      const totalBase = servicoRelacao.ativo
+        ? Number(servicoRelacao.quantidade || 0) *
+          Number(servicoRelacao.valorUnitario || 0)
+        : servicos.reduce(
             (acc, item) =>
               acc +
               Number(item.quantidade || 0) * Number(item.valorUnitario || 0),
             0
-          )
-        : 0,
-    [incluiServicos, servicos]
+          );
+
+      return (
+        totalBase +
+        (incluirDeslocamento ? Number(valorDeslocamento || 0) : 0) +
+        (incluirDespesasViagem ? Number(valorDespesasViagem || 0) : 0)
+      );
+    },
+    [
+      incluiServicos,
+      incluirDeslocamento,
+      incluirDespesasViagem,
+      servicoRelacao,
+      servicos,
+      valorDeslocamento,
+      valorDespesasViagem,
+    ]
   );
 
   const totalGeral = totalPecas + totalServicos;
@@ -574,9 +715,13 @@ const OrcamentoFormDialog = ({
     }
 
     const pecasValidas = pecas.filter((item) => item.pecaNome.trim());
-    const servicosValidos = servicos.filter(
-      (item) => item.tipoServicoId || item.descricao.trim()
-    );
+    const servicosValidos = servicoRelacao.ativo
+      ? []
+      : servicos.filter((item) => item.tipoServicoId || item.descricao.trim());
+    const servicoRelacaoValido =
+      servicoRelacao.ativo &&
+      getServicosRelacaoLabels(servicoRelacao).length > 0 &&
+      servicoRelacao.descricao.trim();
 
     if (incluiPecas && pecasValidas.length === 0) {
       toast({
@@ -586,9 +731,18 @@ const OrcamentoFormDialog = ({
       return false;
     }
 
-    if (incluiServicos && servicosValidos.length === 0) {
+    if (incluiServicos && servicosValidos.length === 0 && !servicoRelacaoValido) {
       toast({
         title: "Adicione ao menos um servico.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    if (servicoRelacao.ativo && !servicoRelacaoValido) {
+      toast({
+        title:
+          "Selecione ao menos um serviço e informe o descritivo da relação.",
         variant: "destructive",
       });
       return false;
@@ -597,11 +751,40 @@ const OrcamentoFormDialog = ({
     const todosItens = [
       ...(incluiPecas ? pecasValidas : []),
       ...(incluiServicos ? servicosValidos : []),
+      ...(incluiServicos && servicoRelacao.ativo
+        ? [
+            {
+              quantidade: servicoRelacao.quantidade,
+              valorUnitario: servicoRelacao.valorUnitario,
+            },
+          ]
+        : []),
     ];
 
     if (todosItens.some((item) => Number(item.quantidade || 0) <= 0)) {
       toast({
         title: "Quantidade deve ser maior que zero.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    if (incluirFrete && Number(valorFrete || 0) < 0) {
+      toast({ title: "Valor do frete nao pode ser negativo.", variant: "destructive" });
+      return false;
+    }
+
+    if (incluirDeslocamento && Number(valorDeslocamento || 0) < 0) {
+      toast({
+        title: "Valor do deslocamento nao pode ser negativo.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    if (incluirDespesasViagem && Number(valorDespesasViagem || 0) < 0) {
+      toast({
+        title: "Valor das despesas de viagem nao pode ser negativo.",
         variant: "destructive",
       });
       return false;
@@ -649,50 +832,98 @@ const OrcamentoFormDialog = ({
 
   const buildPayload = (): OrcamentoFormInput => {
     const itensPecas = incluiPecas
-      ? pecas
-          .filter((item) => item.pecaNome.trim())
-          .map((item) => ({
-            tipo: "peca" as const,
-            descricao: item.pecaNome.trim(),
-            pecaId: item.pecaId || undefined,
-            pecaNome: item.pecaNome.trim(),
-            pecaVariacaoId: item.pecaVariacaoId || undefined,
-            pecaFabricanteId: item.pecaFabricanteId || undefined,
-            pecaModeloId: item.pecaModeloId || undefined,
-            fabricanteTexto: item.fabricanteTexto.trim(),
-            modeloTexto: item.modeloTexto.trim(),
-            mostrarFabricante: item.mostrarFabricante,
-            mostrarModelo: item.mostrarModelo,
-            quantidade: Number(item.quantidade || 1),
-            valorUnitario: Number(item.valorUnitario || 0),
-            garantia: item.garantia.trim(),
-          }))
-      : [];
-
-    const itensServicos = incluiServicos
-      ? servicos
-          .filter((item) => item.tipoServicoId || item.descricao.trim())
-          .map((item) => {
-            const tipoServicoNome = getTipoServicoNome(item.tipoServicoId);
-            const tipoEquipamentoNome = getTipoEquipamentoNome(
-              item.tipoEquipamentoId
-            );
-            const descricao =
-              item.descricao.trim() ||
-              [tipoServicoNome, tipoEquipamentoNome].filter(Boolean).join(" - ") ||
-              "Servico";
-
-            return {
-              tipo: "servico" as const,
-              descricao,
-              observacoes: item.descricao.trim(),
+      ? [
+          ...pecas
+            .filter((item) => item.pecaNome.trim())
+            .map((item) => ({
+              tipo: "peca" as const,
+              descricao: item.pecaNome.trim(),
+              pecaId: item.pecaId || undefined,
+              pecaNome: item.pecaNome.trim(),
+              pecaVariacaoId: item.pecaVariacaoId || undefined,
+              pecaFabricanteId: item.pecaFabricanteId || undefined,
+              pecaModeloId: item.pecaModeloId || undefined,
+              fabricanteTexto: item.fabricanteTexto.trim(),
+              modeloTexto: item.modeloTexto.trim(),
+              mostrarFabricante: item.mostrarFabricante,
+              mostrarModelo: item.mostrarModelo,
               quantidade: Number(item.quantidade || 1),
               valorUnitario: Number(item.valorUnitario || 0),
               garantia: item.garantia.trim(),
-              tipoServicoId: item.tipoServicoId || undefined,
-              tipoEquipamentoId: item.tipoEquipamentoId || undefined,
-            };
-          })
+            })),
+          ...(incluirFrete
+            ? [
+                {
+                  tipo: "peca" as const,
+                  descricao: "Frete",
+                  pecaNome: "Frete",
+                  quantidade: 1,
+                  valorUnitario: Number(valorFrete || 0),
+                },
+              ]
+            : []),
+        ]
+      : [];
+
+    const itensServicos = incluiServicos
+      ? [
+          ...(servicoRelacao.ativo
+            ? [
+                {
+                  tipo: "servico" as const,
+                  descricao: `${getServicosRelacaoLabels(servicoRelacao).join(
+                    " / "
+                  )} - Conforme relação fornecida: ${servicoRelacao.descricao.trim()}`,
+                  observacoes: servicoRelacao.descricao.trim(),
+                  quantidade: Number(servicoRelacao.quantidade || 1),
+                  valorUnitario: Number(servicoRelacao.valorUnitario || 0),
+                  garantia: servicoRelacao.garantia.trim(),
+                },
+              ]
+            : servicos
+                .filter((item) => item.tipoServicoId || item.descricao.trim())
+                .map((item) => {
+                  const tipoServicoNome = getTipoServicoNome(item.tipoServicoId);
+                  const tipoEquipamentoNome = getTipoEquipamentoNome(
+                    item.tipoEquipamentoId
+                  );
+                  const descricao =
+                    item.descricao.trim() ||
+                    [tipoServicoNome, tipoEquipamentoNome].filter(Boolean).join(" - ") ||
+                    "Servico";
+
+                  return {
+                    tipo: "servico" as const,
+                    descricao,
+                    observacoes: item.descricao.trim(),
+                    quantidade: Number(item.quantidade || 1),
+                    valorUnitario: Number(item.valorUnitario || 0),
+                    garantia: item.garantia.trim(),
+                    tipoServicoId: item.tipoServicoId || undefined,
+                    tipoEquipamentoId: item.tipoEquipamentoId || undefined,
+                  };
+                })),
+          ...(incluirDeslocamento
+            ? [
+                {
+                  tipo: "deslocamento" as const,
+                  descricao: "Deslocamento",
+                  quantidade: 1,
+                  valorUnitario: Number(valorDeslocamento || 0),
+                },
+              ]
+            : []),
+          ...(incluirDespesasViagem
+            ? [
+                {
+                  tipo: "outro" as const,
+                  descricao: "Despesas de viagem",
+                  quantidade: 1,
+                  valorUnitario: Number(valorDespesasViagem || 0),
+                },
+              ]
+            : []),
+        ]
       : [];
 
     return {
@@ -719,7 +950,7 @@ const OrcamentoFormDialog = ({
         form.modoPagamento === "avista" ? undefined : valorParcela,
       condicoesPagamento: condicoesPagamentoTexto,
       prazoEntrega: form.prazoEntrega.trim(),
-      frete: form.frete || undefined,
+      frete: incluirFrete ? "fob" : form.frete || undefined,
       detalhesOrcamento: form.detalhesOrcamento.trim(),
       responsavelOrcamentista:
         form.responsavelOrcamentista.trim() || RESPONSAVEL_PADRAO,
@@ -783,8 +1014,11 @@ const OrcamentoFormDialog = ({
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-          <section className="rounded-lg border p-5 space-y-5 bg-card">
-            <h3 className="text-sm font-semibold">Identificacao</h3>
+          <section className="rounded-lg border border-border border-l-4 border-l-primary/70 p-5 space-y-5 bg-card">
+            <SectionTitle
+              title="Identificação do orçamento"
+              description="Dados gerais, origem e solicitante do orçamento."
+            />
 
             <div className="space-y-2">
               <Label className="text-sm">Tipo de Orcamento *</Label>
@@ -823,15 +1057,6 @@ const OrcamentoFormDialog = ({
                 })}
               </div>
             </div>
-
-            <label className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Checkbox
-                checked={preventiva}
-                disabled={isView}
-                onCheckedChange={(value) => setPreventiva(Boolean(value))}
-              />
-              Preventiva (servico para varios equipamentos - descricao livre)
-            </label>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
@@ -928,12 +1153,15 @@ const OrcamentoFormDialog = ({
 
           <section
             className={cn(
-              "rounded-lg border p-5 space-y-4 bg-card",
+              "rounded-lg border border-border border-l-4 border-l-primary/70 p-5 space-y-4 bg-card",
               !incluiPecas && "opacity-60"
             )}
           >
             <div className="flex items-center justify-between gap-3">
-              <h3 className="text-sm font-semibold">Pecas</h3>
+              <SectionTitle
+                title="Peças"
+                description="Itens de reposição, garantias e custos associados às peças."
+              />
               <div className="flex gap-2">
                 <Button
                   type="button"
@@ -1213,21 +1441,65 @@ const OrcamentoFormDialog = ({
                 })}
               </div>
             )}
+
+            {incluiPecas && (
+              <div className="rounded-md border bg-muted/20 p-4 space-y-3">
+                <label className="flex items-center gap-2 text-sm font-medium">
+                  <Checkbox
+                    checked={incluirFrete}
+                    disabled={isView}
+                    onCheckedChange={(checked) => {
+                      const next = Boolean(checked);
+                      setIncluirFrete(next);
+                      if (next) {
+                        setForm((current) => ({ ...current, frete: "fob" }));
+                      }
+                    }}
+                  />
+                  Incluir frete das peças
+                </label>
+
+                {incluirFrete && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label>Valor do frete</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={valorFrete}
+                        disabled={isView}
+                        onChange={(event) =>
+                          setValorFrete(Number(event.target.value))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Tipo de frete</Label>
+                      <Input value="FOB" readOnly />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </section>
 
           <section
             className={cn(
-              "rounded-lg border p-5 space-y-4 bg-card",
+              "rounded-lg border border-border border-l-4 border-l-primary/70 p-5 space-y-4 bg-card",
               !incluiServicos && "opacity-60"
             )}
           >
             <div className="flex items-center justify-between gap-3">
-              <h3 className="text-sm font-semibold">Servicos</h3>
+              <SectionTitle
+                title="Serviços"
+                description="Mão de obra, serviços por relação de equipamentos e custos de atendimento."
+              />
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
-                disabled={!incluiServicos || isView}
+                disabled={!incluiServicos || servicoRelacao.ativo || isView}
                 onClick={() =>
                   setServicos((current) => [...current, emptyServico()])
                 }
@@ -1243,7 +1515,133 @@ const OrcamentoFormDialog = ({
               </p>
             ) : (
               <div className="space-y-3">
-                {servicos.map((item, index) => {
+                <div className="rounded-md border bg-muted/20 p-4 space-y-4">
+                  <label className="flex items-center gap-2 text-sm font-medium">
+                    <Checkbox
+                      checked={servicoRelacao.ativo}
+                      disabled={isView}
+                      onCheckedChange={(checked) =>
+                        setServicoRelacao((current) => ({
+                          ...current,
+                          ativo: Boolean(checked),
+                        }))
+                      }
+                    />
+                    Serviço por relação de equipamentos
+                  </label>
+
+                  {servicoRelacao.ativo && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <label className="flex items-center gap-2 text-sm">
+                          <Checkbox
+                            checked={servicoRelacao.preventiva}
+                            disabled={isView}
+                            onCheckedChange={(checked) =>
+                              setServicoRelacao((current) => ({
+                                ...current,
+                                preventiva: Boolean(checked),
+                              }))
+                            }
+                          />
+                          Preventiva
+                        </label>
+                        <label className="flex items-center gap-2 text-sm">
+                          <Checkbox
+                            checked={servicoRelacao.calibracao}
+                            disabled={isView}
+                            onCheckedChange={(checked) =>
+                              setServicoRelacao((current) => ({
+                                ...current,
+                                calibracao: Boolean(checked),
+                              }))
+                            }
+                          />
+                          Calibração
+                        </label>
+                        <label className="flex items-center gap-2 text-sm">
+                          <Checkbox
+                            checked={servicoRelacao.segurancaEletrica}
+                            disabled={isView}
+                            onCheckedChange={(checked) =>
+                              setServicoRelacao((current) => ({
+                                ...current,
+                                segurancaEletrica: Boolean(checked),
+                              }))
+                            }
+                          />
+                          Segurança elétrica
+                        </label>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Descritivo da relação fornecida</Label>
+                        <Textarea
+                          rows={4}
+                          placeholder="Ex: Serviços conforme relação de equipamentos enviada pelo cliente."
+                          value={servicoRelacao.descricao}
+                          disabled={isView}
+                          onChange={(event) =>
+                            setServicoRelacao((current) => ({
+                              ...current,
+                              descricao: event.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="space-y-2">
+                          <Label>Quantidade</Label>
+                          <Input
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            value={servicoRelacao.quantidade}
+                            disabled={isView}
+                            onChange={(event) =>
+                              setServicoRelacao((current) => ({
+                                ...current,
+                                quantidade: Number(event.target.value),
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Valor unitário</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={servicoRelacao.valorUnitario}
+                            disabled={isView}
+                            onChange={(event) =>
+                              setServicoRelacao((current) => ({
+                                ...current,
+                                valorUnitario: Number(event.target.value),
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                          <Label>Garantia</Label>
+                          <Input
+                            value={servicoRelacao.garantia}
+                            disabled={isView}
+                            onChange={(event) =>
+                              setServicoRelacao((current) => ({
+                                ...current,
+                                garantia: event.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {!servicoRelacao.ativo && servicos.map((item, index) => {
                   const tipoServicoNome = getTipoServicoNome(item.tipoServicoId);
                   const tipoEquipamentoNome = getTipoEquipamentoNome(
                     item.tipoEquipamentoId
@@ -1360,12 +1758,75 @@ const OrcamentoFormDialog = ({
                     </div>
                   );
                 })}
+
+                <div className="rounded-md border bg-muted/20 p-4 space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-3">
+                      <label className="flex items-center gap-2 text-sm font-medium">
+                        <Checkbox
+                          checked={incluirDeslocamento}
+                          disabled={isView}
+                          onCheckedChange={(checked) =>
+                            setIncluirDeslocamento(Boolean(checked))
+                          }
+                        />
+                        Incluir deslocamento
+                      </label>
+                      {incluirDeslocamento && (
+                        <div className="space-y-2">
+                          <Label>Valor do deslocamento</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={valorDeslocamento}
+                            disabled={isView}
+                            onChange={(event) =>
+                              setValorDeslocamento(Number(event.target.value))
+                            }
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-3">
+                      <label className="flex items-center gap-2 text-sm font-medium">
+                        <Checkbox
+                          checked={incluirDespesasViagem}
+                          disabled={isView}
+                          onCheckedChange={(checked) =>
+                            setIncluirDespesasViagem(Boolean(checked))
+                          }
+                        />
+                        Incluir despesas de viagem
+                      </label>
+                      {incluirDespesasViagem && (
+                        <div className="space-y-2">
+                          <Label>Valor das despesas de viagem</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={valorDespesasViagem}
+                            disabled={isView}
+                            onChange={(event) =>
+                              setValorDespesasViagem(Number(event.target.value))
+                            }
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
           </section>
 
-          <section className="rounded-lg border p-5 space-y-5 bg-card">
-            <h3 className="text-sm font-semibold">Informacoes Financeiras</h3>
+          <section className="rounded-lg border border-border border-l-4 border-l-primary/70 p-5 space-y-5 bg-card">
+            <SectionTitle
+              title="Informações financeiras"
+              description="Totais, forma de pagamento, parcelas e condições comerciais."
+            />
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="rounded-md bg-muted/40 p-4">
@@ -1510,9 +1971,12 @@ const OrcamentoFormDialog = ({
             )}
           </section>
 
-          <section className="rounded-lg border p-5 space-y-4 bg-card">
-            <h3 className="text-sm font-semibold">Entrega e Validade</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <section className="rounded-lg border border-border border-l-4 border-l-primary/70 p-5 space-y-4 bg-card">
+            <SectionTitle
+              title="Entrega e validade"
+              description="Prazo de execução/entrega e validade da proposta."
+            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Prazo de Entrega</Label>
                 <Input
@@ -1541,35 +2005,13 @@ const OrcamentoFormDialog = ({
                   }
                 />
               </div>
-              <div className="space-y-2">
-                <Label>Frete</Label>
-                <Select
-                  value={form.frete || "none"}
-                  disabled={isView}
-                  onValueChange={(value) =>
-                    setForm((current) => ({
-                      ...current,
-                      frete: value === "none" ? "" : (value as FreteTipo),
-                    }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Nao informado</SelectItem>
-                    <SelectItem value="cif">CIF</SelectItem>
-                    <SelectItem value="fob">FOB</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
           </section>
 
-          <section className="rounded-lg border p-5 space-y-2 bg-card">
+          <section className="rounded-lg border border-border border-l-4 border-l-primary/70 p-5 space-y-2 bg-card">
             <div className="flex items-center gap-2">
               <CalendarDays className="w-4 h-4 text-primary" />
-              <h3 className="text-sm font-semibold">Detalhes do Orcamento</h3>
+              <SectionTitle title="Detalhes do orçamento" />
             </div>
             <Textarea
               placeholder="Descricao detalhada do orcamento..."

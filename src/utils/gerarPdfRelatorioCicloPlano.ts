@@ -323,13 +323,14 @@ export const gerarPdfRelatorioCicloPlano = async (
         body { margin: 0; color: #252525; font-family: Arial, sans-serif; }
         .document { width: 1123px; background: #fff; padding: 36px 42px 52px; font-family: Arial, sans-serif; }
         .topbar { height: 7px; background: #b91c1c; margin: -36px -42px 24px; }
-        .header { display: grid; grid-template-columns: 210px 1fr; gap: 22px; align-items: center; margin-bottom: 18px; }
-        .logo { width: 180px; height: auto; }
+        .header { display: grid; grid-template-columns: 240px 1fr; gap: 22px; align-items: center; margin-bottom: 18px; }
+        .logo { width: 210px; height: auto; }
         .title { text-align: right; }
         .title h1 { margin: 0; font-size: 24px; letter-spacing: 0; color: #1f2937; }
         .title p { margin: 6px 0 0; font-size: 14px; color: #555; }
         .meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 14px 0 18px; }
         .meta div, .card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 12px; background: #fafafa; }
+        .meta div.validity { background: #fff1f2; border-color: #fecdd3; }
         .label { display: block; color: #6b7280; font-size: 11px; margin-bottom: 3px; text-transform: uppercase; }
         .value { font-size: 13px; font-weight: 700; color: #262626; }
         .cards { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin: 14px 0 18px; }
@@ -365,7 +366,7 @@ export const gerarPdfRelatorioCicloPlano = async (
         <div><span class="label">Abertura</span><span class="value">${formatDate(ciclo.data_abertura)}</span></div>
         <div><span class="label">Fechamento</span><span class="value">${formatDate(ciclo.data_fechamento_real || ciclo.data_fechamento_prevista)}</span></div>
         <div><span class="label">Emissao</span><span class="value">${formatDate(emitidoEmDate)}</span></div>
-        <div><span class="label">Validade ate</span><span class="value">${formatDate(validadeAte)}</span></div>
+        <div class="validity"><span class="label">Validade ate</span><span class="value">${formatDate(validadeAte)}</span></div>
         <div><span class="label">Frequencia</span><span class="value">${escapeHtml(plano.frequencia)}</span></div>
       </section>
 
@@ -391,7 +392,7 @@ export const gerarPdfRelatorioCicloPlano = async (
       <section class="meta">
         <div><span class="label">Proxima visita prevista</span><span class="value">${formatDate(proximaVisita(ciclo.data_prevista, plano.frequencia))}</span></div>
         <div><span class="label">Frequencia do plano</span><span class="value">${escapeHtml(plano.frequencia)}</span></div>
-        <div><span class="label">Validade do relatorio</span><span class="value">${formatDate(validadeAte)}</span></div>
+        <div class="validity"><span class="label">Validade do relatorio</span><span class="value">${formatDate(validadeAte)}</span></div>
       </section>
 
       <p class="footer-note">ACI Equipamentos Hospitalares - Gerado em ${formatDateTime(new Date().toISOString())}</p>

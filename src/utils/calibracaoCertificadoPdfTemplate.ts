@@ -34,7 +34,7 @@ const styles = `
   *{box-sizing:border-box} body{margin:0;background:#fff;color:#1f2937;font:13px Arial,sans-serif}
   .document{width:1123px;min-height:1588px;padding:42px;background:#fff}
   header{display:flex;justify-content:space-between;align-items:flex-start;border-top:6px solid #c5161d;padding-top:14px}
-  img{width:160px} h1{font-size:22px;margin:0 0 6px;text-align:right} h2{font-size:16px;border-bottom:1px solid #ddd;padding-bottom:5px;margin:18px 0 8px}
+  img{width:190px} h1{font-size:22px;margin:0 0 6px;text-align:right} h2{font-size:16px;border-bottom:1px solid #ddd;padding-bottom:5px;margin:18px 0 8px}
   .meta{text-align:right;color:#6b7280}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px 16px;border:1px solid #e5e7eb;border-radius:6px;padding:10px}
   small{display:block;color:#6b7280;font-size:10px;font-weight:700;text-transform:uppercase;margin-bottom:2px} strong{display:block}
   table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px;page-break-inside:auto} thead{display:table-header-group}

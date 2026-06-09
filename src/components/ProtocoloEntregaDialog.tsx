@@ -11,6 +11,13 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import { useCriarEntregaComFechamentoOS } from "@/hooks/useProtocolos";
@@ -32,6 +39,8 @@ type AcessorioEntrega = {
   conferido: boolean;
   observacoes: string;
 };
+
+type EstadoDestinoEntrega = "fechada" | "liberado_entrega";
 
 const toLocalDatetimeValue = (d: Date) => {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -96,6 +105,8 @@ const ProtocoloEntregaDialog = ({
   const [responsavelNome, setResponsavelNome] = useState("");
   const [responsavelDocumento, setResponsavelDocumento] = useState("");
   const [responsavelContato, setResponsavelContato] = useState("");
+  const [estadoDestino, setEstadoDestino] =
+    useState<EstadoDestinoEntrega>("fechada");
   const [observacoes, setObservacoes] = useState("");
   const [acessorios, setAcessorios] = useState<AcessorioEntrega[]>([]);
 
@@ -108,6 +119,7 @@ const ProtocoloEntregaDialog = ({
     setResponsavelNome("");
     setResponsavelDocumento("");
     setResponsavelContato("");
+    setEstadoDestino("fechada");
     setObservacoes("");
     setAcessorios(normalizarAcessorios(os?.acessorios));
   }, [open, os]);
@@ -151,6 +163,7 @@ const ProtocoloEntregaDialog = ({
         ordemServicoId: os.id,
         empresaId: os.empresa_id,
         equipamentoId: os.equipamento_id,
+        estadoDestinoOs: estadoDestino,
         dataEntrega: dataEntrega
           ? new Date(dataEntrega).toISOString()
           : undefined,
@@ -167,7 +180,10 @@ const ProtocoloEntregaDialog = ({
       });
 
       toast({
-        title: "Protocolo de entrega criado e OS fechada com sucesso.",
+        title:
+          estadoDestino === "fechada"
+            ? "Protocolo de entrega criado e OS fechada com sucesso."
+            : "Protocolo de entrega criado e OS liberada para entrega.",
       });
       onOpenChange(false);
     } catch (error) {
@@ -252,6 +268,27 @@ const ProtocoloEntregaDialog = ({
                   disabled={saving}
                 />
               </div>
+
+              <div className="space-y-2 sm:col-span-2">
+                <Label className="text-sm">Estado da OS após entrega</Label>
+                <Select
+                  value={estadoDestino}
+                  onValueChange={(value) =>
+                    setEstadoDestino(value as EstadoDestinoEntrega)
+                  }
+                  disabled={saving}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="fechada">Fechada</SelectItem>
+                    <SelectItem value="liberado_entrega">
+                      Liberado para Entrega
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -328,8 +365,9 @@ const ProtocoloEntregaDialog = ({
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Ao salvar, a OS será fechada automaticamente e receberá a data de
-            fechamento informada.
+            Ao salvar, a OS será atualizada para o estado selecionado. A data
+            de fechamento será gravada somente quando o estado escolhido for
+            Fechada.
           </p>
         </div>
 

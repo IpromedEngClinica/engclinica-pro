@@ -86,7 +86,10 @@ const PlanoExecucaoTab = ({ planoId, onNovoCiclo }: Props) => {
   const concluirCalibracao = useConcluirItemCicloCalibracao();
   const finalizarConformes = useFinalizarPreventivasConformesEmLote();
   const marcarNaoLocalizados = useMarcarEquipamentosNaoLocalizados();
-  const itens = itensQuery.length ? itensQuery : ciclo?.itens || [];
+  const itens = useMemo(
+    () => itensQuery.length ? itensQuery : ciclo?.itens || [],
+    [ciclo?.itens, itensQuery]
+  );
   const [setor, setSetor] = useState(TODOS);
   const [servico, setServico] = useState<PlanoTipoServico>("preventiva");
   const [statusFiltro, setStatusFiltro] = useState("operacionais");
@@ -178,7 +181,8 @@ const PlanoExecucaoTab = ({ planoId, onNovoCiclo }: Props) => {
   const toggleItem = (itemId: string, checked: boolean) => {
     setSelecionados((current) => {
       const next = new Set(current);
-      checked ? next.add(itemId) : next.delete(itemId);
+      if (checked) next.add(itemId);
+      else next.delete(itemId);
       return next;
     });
   };

@@ -36,14 +36,16 @@ const PlanoHistoricoTab = ({ planoId }: Props) => {
   const [relatorioCicloId, setRelatorioCicloId] = useState<string | null>(null);
   const [relatorioAnualOpen, setRelatorioAnualOpen] = useState(false);
   const [relatorioAnualModo, setRelatorioAnualModo] = useState<"cronograma" | "cronograma_completo">("cronograma");
+  const [relatorioAnualCiclo, setRelatorioAnualCiclo] = useState<PlanoCiclo | null>(null);
   const historico = ciclos.filter((ciclo) => ciclo.status !== "aberto");
 
   const abrirRelatorioCompleto = (cicloId: string) => {
     setRelatorioCicloId(cicloId);
   };
 
-  const abrirRelatorioAnual = (modo: "cronograma" | "cronograma_completo") => {
+  const abrirRelatorioAnual = (modo: "cronograma" | "cronograma_completo", ciclo?: PlanoCiclo) => {
     setRelatorioAnualModo(modo);
+    setRelatorioAnualCiclo(ciclo || null);
     setRelatorioAnualOpen(true);
   };
 
@@ -65,8 +67,12 @@ const PlanoHistoricoTab = ({ planoId }: Props) => {
       />
       <PlanoRelatorioAnualDialog
         open={relatorioAnualOpen}
-        onOpenChange={setRelatorioAnualOpen}
+        onOpenChange={(open) => {
+          setRelatorioAnualOpen(open);
+          if (!open) setRelatorioAnualCiclo(null);
+        }}
         planoId={planoId}
+        ciclo={relatorioAnualCiclo}
         modoInicial={relatorioAnualModo}
       />
       <div className="overflow-x-auto rounded-lg border bg-card">
@@ -117,11 +123,11 @@ const PlanoHistoricoTab = ({ planoId }: Props) => {
                           <Files className="mr-2 h-4 w-4" />
                           Relatório Completo
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => abrirRelatorioAnual("cronograma")}>
+                        <DropdownMenuItem onClick={() => abrirRelatorioAnual("cronograma", ciclo)}>
                           <CalendarDays className="mr-2 h-4 w-4" />
                           Somente Cronograma
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => abrirRelatorioAnual("cronograma_completo")}>
+                        <DropdownMenuItem onClick={() => abrirRelatorioAnual("cronograma_completo", ciclo)}>
                           <CalendarDays className="mr-2 h-4 w-4" />
                           Cronograma Completo
                         </DropdownMenuItem>

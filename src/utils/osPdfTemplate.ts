@@ -343,23 +343,18 @@ export const buildOrdemServicoHtml = (
       background: #fff;
     }
 
-    .top-bar {
-      height: 5px;
-      background: var(--primary);
-      border-radius: 999px;
-      margin-bottom: 12px;
-    }
-
     .header {
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
       gap: 24px;
+      border-top: 6px solid var(--primary);
+      padding-top: 14px;
       margin-bottom: 14px;
     }
 
     .logo {
-      width: 140px;
+      width: 190px;
       height: auto;
       display: block;
     }
@@ -770,8 +765,6 @@ export const buildOrdemServicoHtml = (
 
 <body>
   <main class="document">
-    <div class="top-bar"></div>
-
     <header class="header">
       <div>
         <img class="logo" src="${logoSrc}" alt="ACI Equipamentos Hospitalares" />

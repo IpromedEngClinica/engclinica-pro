@@ -13,12 +13,18 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useGerarRelatorioAnualPlano, usePlano } from "@/hooks/usePlanos";
 import { toast } from "@/hooks/use-toast";
-import type { PlanoRelatorioAnualInput, PlanoRelatorioAnualModoPeriodo, PlanoRelatorioAnualTipoSaida } from "@/services/planosService";
+import type {
+  PlanoCiclo,
+  PlanoRelatorioAnualInput,
+  PlanoRelatorioAnualModoPeriodo,
+  PlanoRelatorioAnualTipoSaida,
+} from "@/services/planosService";
 
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   planoId: string;
+  ciclo?: PlanoCiclo | null;
   modoInicial?: "cronograma" | "cronograma_completo";
 };
 
@@ -30,17 +36,22 @@ const addMeses = (data: string, meses: number) => {
   return date.toISOString().slice(0, 10);
 };
 
-const fimPeriodo12Meses = (inicio: string) => {
+const fimPeriodo13Meses = (inicio: string) => {
   const date = new Date(`${inicio}T00:00:00`);
-  date.setMonth(date.getMonth() + 12);
+  date.setMonth(date.getMonth() + 13);
   date.setDate(date.getDate() - 1);
   return date.toISOString().slice(0, 10);
+};
+
+const inicioMes = (data: string) => {
+  const date = new Date(`${data}T00:00:00`);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-01`;
 };
 
 const mesAtual = () => new Date().getMonth() + 1;
 const anoAtual = () => new Date().getFullYear();
 
-const PlanoRelatorioAnualDialog = ({ modoInicial = "cronograma", onOpenChange, open, planoId }: Props) => {
+const PlanoRelatorioAnualDialog = ({ ciclo, modoInicial = "cronograma", onOpenChange, open, planoId }: Props) => {
   const gerar = useGerarRelatorioAnualPlano();
   const { data: plano } = usePlano(planoId);
   const [modoPeriodo, setModoPeriodo] = useState<PlanoRelatorioAnualModoPeriodo>("periodo_movel");
@@ -61,6 +72,15 @@ const PlanoRelatorioAnualDialog = ({ modoInicial = "cronograma", onOpenChange, o
   }, [modoInicial, open]);
 
   const periodo = useMemo(() => {
+    if (ciclo) {
+      const inicio = inicioMes(ciclo.data_prevista);
+      return {
+        inicio,
+        fim: fimPeriodo13Meses(inicio),
+        mesInicial: Number(inicio.slice(5, 7)),
+      };
+    }
+
     const anoNumber = Number(ano) || anoAtual();
     const mesNumber = Number(mesInicial) || 1;
     if (modoPeriodo === "ano_civil") {
@@ -73,10 +93,10 @@ const PlanoRelatorioAnualDialog = ({ modoInicial = "cronograma", onOpenChange, o
     const inicio = `${anoNumber}-${String(mesNumber).padStart(2, "0")}-01`;
     return {
       inicio,
-      fim: fimPeriodo12Meses(inicio),
+      fim: fimPeriodo13Meses(inicio),
       mesInicial: mesNumber,
     };
-  }, [ano, mesInicial, modoPeriodo]);
+  }, [ano, ciclo, mesInicial, modoPeriodo]);
 
   const emitir = hoje();
   const validadeAte = addMeses(emitir, Number(validadeMeses) || 12);
@@ -86,6 +106,7 @@ const PlanoRelatorioAnualDialog = ({ modoInicial = "cronograma", onOpenChange, o
 
     const input: PlanoRelatorioAnualInput = {
       planoId: plano.id,
+      cicloId: ciclo?.id || null,
       modoPeriodo,
       dataInicio: periodo.inicio,
       dataFim: periodo.fim,
@@ -134,15 +155,15 @@ const PlanoRelatorioAnualDialog = ({ modoInicial = "cronograma", onOpenChange, o
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl">
-        <DialogHeader><DialogTitle>Gerar relatório anual</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{ciclo ? "Gerar cronograma do ciclo" : "Gerar relatório anual"}</DialogTitle></DialogHeader>
 
         <div className="grid gap-4">
-          <div className="grid gap-3 sm:grid-cols-3">
+          {!ciclo && <div className="grid gap-3 sm:grid-cols-3">
             <Field label="Periodo">
               <Select value={modoPeriodo} onValueChange={(value) => setModoPeriodo(value as PlanoRelatorioAnualModoPeriodo)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="periodo_movel">Periodo movel de 12 meses</SelectItem>
+                    <SelectItem value="periodo_movel">Periodo movel de 13 meses</SelectItem>
                   <SelectItem value="ano_civil">Ano civil</SelectItem>
                 </SelectContent>
               </Select>
@@ -162,9 +183,10 @@ const PlanoRelatorioAnualDialog = ({ modoInicial = "cronograma", onOpenChange, o
                 </SelectContent>
               </Select>
             </Field>
-          </div>
+          </div>}
 
           <div className="rounded-md border bg-muted/20 p-3 text-sm">
+            {ciclo ? <>Ciclo: <strong>{ciclo.titulo}</strong> - </> : null}
             Periodo: <strong>{periodo.inicio}</strong> a <strong>{periodo.fim}</strong>
           </div>
 
@@ -198,8 +220,8 @@ const PlanoRelatorioAnualDialog = ({ modoInicial = "cronograma", onOpenChange, o
               <Select value={tipoSaida} onValueChange={(value) => setTipoSaida(value as PlanoRelatorioAnualTipoSaida)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="cronograma">Somente cronograma anual</SelectItem>
-                  <SelectItem value="cronograma_completo">Cronograma completo com PDFs</SelectItem>
+                  <SelectItem value="cronograma">{ciclo ? "Somente cronograma do ciclo" : "Somente cronograma anual"}</SelectItem>
+                  <SelectItem value="cronograma_completo">{ciclo ? "Cronograma do ciclo com PDFs" : "Cronograma completo com PDFs"}</SelectItem>
                 </SelectContent>
               </Select>
             </Field>

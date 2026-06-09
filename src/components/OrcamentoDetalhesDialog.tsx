@@ -72,6 +72,28 @@ const getEmpresaNome = (orcamento: OrcamentoSupabase) =>
   orcamento.empresa?.nome ||
   "Nao informado";
 
+const getItemTipoLabel = (item: NonNullable<OrcamentoSupabase["itens"]>[number]) => {
+  if (item.tipo === "peca") {
+    const nome = (item.peca_nome || item.descricao || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+    return nome === "frete" ? "Frete" : "Peca";
+  }
+
+  if (item.tipo === "deslocamento") return "Deslocamento";
+  if (item.tipo === "outro") return item.descricao || "Outro";
+
+  return [
+    item.tipo_servico?.nome,
+    item.tipo_equipamento?.nome,
+  ]
+    .filter(Boolean)
+    .join(" - ") || "Servico";
+};
+
 const Field = ({
   label,
   children,
@@ -282,14 +304,7 @@ const OrcamentoDetalhesDialog = ({
                           : item.descricao}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {item.tipo === "peca"
-                          ? "Peca"
-                          : [
-                              item.tipo_servico?.nome,
-                              item.tipo_equipamento?.nome,
-                            ]
-                              .filter(Boolean)
-                              .join(" - ") || "Servico"}
+                        {getItemTipoLabel(item)}
                       </p>
                       {item.garantia && (
                         <p className="text-xs text-muted-foreground">

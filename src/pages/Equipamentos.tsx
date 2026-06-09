@@ -34,6 +34,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import SearchableSelect from "@/components/SearchableSelect";
 import SortableTableHeader from "@/components/SortableTableHeader";
+import ListLimitSelect, {
+  DEFAULT_LIST_LIMIT,
+} from "@/components/ListLimitSelect";
 import PageHeader from "@/components/PageHeader";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -118,6 +121,7 @@ const Equipamentos = () => {
     useState<StatusEquipamentoFiltro>("ativos");
   const [sortKey, setSortKey] = useState("tipo");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [listLimit, setListLimit] = useState(DEFAULT_LIST_LIMIT);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detalhesOpen, setDetalhesOpen] = useState(false);
   const [mode, setMode] = useState<DialogMode>("create");
@@ -243,6 +247,11 @@ const Equipamentos = () => {
         sortDirection
       ),
     [filtered, sortDirection, sortGetters, sortKey]
+  );
+
+  const visibleEquipamentos = useMemo(
+    () => sortedFiltered.slice(0, listLimit),
+    [listLimit, sortedFiltered]
   );
 
   const handleSort = (key: string) => {
@@ -718,9 +727,16 @@ const Equipamentos = () => {
             />
           </div>
 
-          <Button variant="outline" size="sm" onClick={() => refetch()}>
-            Atualizar
-          </Button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <ListLimitSelect
+              value={listLimit}
+              onChange={setListLimit}
+              total={sortedFiltered.length}
+            />
+            <Button variant="outline" size="sm" onClick={() => refetch()}>
+              Atualizar
+            </Button>
+          </div>
         </div>
 
         {isLoading && (
@@ -785,7 +801,7 @@ const Equipamentos = () => {
               </thead>
 
               <tbody>
-                {sortedFiltered.map((e) => {
+                {visibleEquipamentos.map((e) => {
                   const tipo = getTipoEquipamento(e);
                   const empresa = getEmpresaNome(e);
                   const isAtivo = e.ativo !== false;

@@ -16,6 +16,9 @@ import CalibracaoPadraoDocumentosDialog from "@/components/CalibracaoPadraoDocum
 import CalibracaoPadraoFormDialog from "@/components/CalibracaoPadraoFormDialog";
 import CalibracaoProcedimentosSection from "@/components/CalibracaoProcedimentosSection";
 import CalibracaoExecucoesSection from "@/components/CalibracaoExecucoesSection";
+import ListLimitSelect, {
+  DEFAULT_LIST_LIMIT,
+} from "@/components/ListLimitSelect";
 import PageHeader from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -65,6 +68,7 @@ const Calibracao = ({ section }: { section: CalibracaoSection }) => {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [documentosOpen, setDocumentosOpen] = useState(false);
   const [selected, setSelected] = useState<CalibracaoPadrao | null>(null);
+  const [listLimit, setListLimit] = useState(DEFAULT_LIST_LIMIT);
   const { data: padroes = [], isLoading, isError, error, refetch } =
     useCalibracaoPadroes();
   const desativarPadrao = useDesativarCalibracaoPadrao();
@@ -94,6 +98,11 @@ const Calibracao = ({ section }: { section: CalibracaoSection }) => {
         { vencido: 0, ate_30_dias: 0, ate_60_dias: 0, valido: 0 }
       ),
     [padroes]
+  );
+
+  const visiblePadroes = useMemo(
+    () => filtered.slice(0, listLimit),
+    [filtered, listLimit]
   );
 
   const openCreate = () => {
@@ -216,9 +225,16 @@ const Calibracao = ({ section }: { section: CalibracaoSection }) => {
                   onChange={(event) => setSearch(event.target.value)}
                 />
               </div>
-              <Button variant="outline" size="sm" onClick={() => refetch()}>
-                Atualizar
-              </Button>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <ListLimitSelect
+                  value={listLimit}
+                  onChange={setListLimit}
+                  total={filtered.length}
+                />
+                <Button variant="outline" size="sm" onClick={() => refetch()}>
+                  Atualizar
+                </Button>
+              </div>
             </div>
 
             {isLoading && (
@@ -252,7 +268,7 @@ const Calibracao = ({ section }: { section: CalibracaoSection }) => {
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map((padrao) => {
+                    {visiblePadroes.map((padrao) => {
                       const status = getStatusValidadePadrao(padrao.data_validade);
                       return (
                         <tr key={padrao.id} className="border-b last:border-0 hover:bg-muted/30">

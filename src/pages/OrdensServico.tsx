@@ -26,6 +26,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import SearchableSelect from "@/components/SearchableSelect";
 import SortableTableHeader from "@/components/SortableTableHeader";
+import ListLimitSelect, {
+  DEFAULT_LIST_LIMIT,
+} from "@/components/ListLimitSelect";
 import PageHeader from "@/components/PageHeader";
 import { useMemo, useState } from "react";
 import {
@@ -57,6 +60,7 @@ import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import ProtocoloEntregaDialog from "@/components/ProtocoloEntregaDialog";
 import OrcamentoFormDialog from "@/components/OrcamentoFormDialog";
 import { gerarPdfOrdemServico } from "@/utils/gerarPdfOrdemServico";
+import { ordenarNomesEstadosOS } from "@/utils/ordemEstadosOS";
 import { sortByValue, type SortDirection } from "@/utils/sortUtils";
 
 const ALL = "__all__";
@@ -146,6 +150,7 @@ const OrdensServico = () => {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState("data");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [listLimit, setListLimit] = useState(DEFAULT_LIST_LIMIT);
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<DialogMode>("create");
   const [selected, setSelected] = useState<OrdemServicoSupabase | null>(null);
@@ -203,7 +208,7 @@ const OrdensServico = () => {
   );
 
   const estadoOptions = useMemo(
-    () => estadosOS.map((estado) => estado.nome),
+    () => ordenarNomesEstadosOS(estadosOS.map((estado) => estado.nome)),
     [estadosOS]
   );
 
@@ -267,6 +272,11 @@ const OrdensServico = () => {
         sortDirection
       ),
     [filtered, sortDirection, sortKey]
+  );
+
+  const visibleOrdensServico = useMemo(
+    () => sortedFiltered.slice(0, listLimit),
+    [listLimit, sortedFiltered]
   );
 
   const handleSort = (key: string) => {
@@ -642,7 +652,12 @@ const OrdensServico = () => {
             />
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <ListLimitSelect
+              value={listLimit}
+              onChange={setListLimit}
+              total={sortedFiltered.length}
+            />
             <Button
               variant={hideClosed ? "default" : "outline"}
               size="sm"
@@ -715,7 +730,7 @@ const OrdensServico = () => {
               </thead>
 
               <tbody>
-                {sortedFiltered.map((os) => {
+                {visibleOrdensServico.map((os) => {
                   const estado = getEstado(os);
                   const solicitante = getEmpresaNome(os);
                   const equipamento = getEquipamentoLabel(os);

@@ -27,6 +27,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import SearchableSelect from "@/components/SearchableSelect";
+import ListLimitSelect, {
+  DEFAULT_LIST_LIMIT,
+} from "@/components/ListLimitSelect";
 import PageHeader from "@/components/PageHeader";
 import EmpresaFormDialog, { DialogMode } from "@/components/EmpresaFormDialog";
 import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
@@ -57,6 +60,7 @@ const Empresas = () => {
   const [telefoneFiltro, setTelefoneFiltro] = useState<
     "todos" | "com_telefone" | "sem_telefone"
   >("todos");
+  const [listLimit, setListLimit] = useState(DEFAULT_LIST_LIMIT);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [equipamentoFormOpen, setEquipamentoFormOpen] = useState(false);
@@ -142,6 +146,11 @@ const Empresas = () => {
     telefoneFiltro,
     ufFiltro,
   ]);
+
+  const visibleEmpresas = useMemo(
+    () => filtered.slice(0, listLimit),
+    [filtered, listLimit]
+  );
 
   const limparFiltros = () => {
     setSearch("");
@@ -355,9 +364,16 @@ const Empresas = () => {
             />
           </div>
 
-          <Button variant="outline" size="sm" onClick={() => refetch()}>
-            Atualizar
-          </Button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <ListLimitSelect
+              value={listLimit}
+              onChange={setListLimit}
+              total={filtered.length}
+            />
+            <Button variant="outline" size="sm" onClick={() => refetch()}>
+              Atualizar
+            </Button>
+          </div>
         </div>
 
         {isLoading && (
@@ -419,7 +435,7 @@ const Empresas = () => {
               </thead>
 
               <tbody>
-                {filtered.map((e) => (
+                {visibleEmpresas.map((e) => (
                   <tr
                     key={e.id}
                     className="border-b last:border-0 hover:bg-muted/30 transition-colors"

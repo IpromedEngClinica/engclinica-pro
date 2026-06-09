@@ -25,6 +25,7 @@ import { useEmpresas } from "@/hooks/useEmpresas";
 import { useEquipamentos } from "@/hooks/useEquipamentos";
 import { useEstadosOS, useTiposOS } from "@/hooks/useCamposOS";
 import PreventivaChecklistDialog from "@/components/PreventivaChecklistDialog";
+import { ordenarNomesEstadosOS } from "@/utils/ordemEstadosOS";
 
 export type DialogMode = "create" | "edit" | "view";
 
@@ -186,7 +187,7 @@ const OrdemServicoFormDialog = ({
   const tipoOptions = useMemo(() => tiposOS.map((tipo) => tipo.nome), [tiposOS]);
 
   const estadoOptions = useMemo(
-    () => estadosOS.map((estado) => estado.nome),
+    () => ordenarNomesEstadosOS(estadosOS.map((estado) => estado.nome)),
     [estadosOS]
   );
 

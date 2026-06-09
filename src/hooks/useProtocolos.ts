@@ -87,6 +87,7 @@ export const useCriarEntregaComFechamentoOS = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: PROTOCOLOS_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ["ordens-servico"] });
+      queryClient.invalidateQueries({ queryKey: ["equipamentos"] });
     },
   });
 };

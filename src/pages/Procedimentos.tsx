@@ -1,6 +1,9 @@
 import { useMemo, useState } from "react";
 import { CalendarCheck, Loader2, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
+import ListLimitSelect, {
+  DEFAULT_LIST_LIMIT,
+} from "@/components/ListLimitSelect";
 import PageHeader from "@/components/PageHeader";
 import ProcedimentoPreventivaFormDialog from "@/components/ProcedimentoPreventivaFormDialog";
 import { Button } from "@/components/ui/button";
@@ -17,6 +20,7 @@ const Procedimentos = () => {
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(Boolean(searchParams.get("tipoEquipamentoId")));
   const [editing, setEditing] = useState<ProcedimentoPreventiva | null>(null);
+  const [listLimit, setListLimit] = useState(DEFAULT_LIST_LIMIT);
   const [tipoInicial, setTipoInicial] = useState(
     searchParams.get("tipoEquipamentoId")
   );
@@ -38,6 +42,11 @@ const Procedimentos = () => {
       );
     });
   }, [procedimentos, search]);
+
+  const visibleProcedimentos = useMemo(
+    () => filtered.slice(0, listLimit),
+    [filtered, listLimit]
+  );
 
   const openCreate = () => {
     setEditing(null);
@@ -102,7 +111,7 @@ const Procedimentos = () => {
       />
 
       <div className="bg-card rounded-xl border">
-        <div className="px-5 py-4 border-b">
+        <div className="px-5 py-4 border-b flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
@@ -112,6 +121,11 @@ const Procedimentos = () => {
               onChange={(event) => setSearch(event.target.value)}
             />
           </div>
+          <ListLimitSelect
+            value={listLimit}
+            onChange={setListLimit}
+            total={filtered.length}
+          />
         </div>
 
         {isLoading && (
@@ -153,7 +167,7 @@ const Procedimentos = () => {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((procedimento) => (
+                {visibleProcedimentos.map((procedimento) => (
                   <tr
                     key={procedimento.id}
                     className="border-b last:border-0 hover:bg-muted/30"

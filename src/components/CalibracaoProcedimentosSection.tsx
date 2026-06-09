@@ -2,6 +2,9 @@ import { AlertCircle, ChevronDown, Copy, Eye, Loader2, MoreHorizontal, Pencil, P
 import { useMemo, useState } from "react";
 import CalibracaoProcedimentoDetalhesDialog from "@/components/CalibracaoProcedimentoDetalhesDialog";
 import CalibracaoProcedimentoFormDialog from "@/components/CalibracaoProcedimentoFormDialog";
+import ListLimitSelect, {
+  DEFAULT_LIST_LIMIT,
+} from "@/components/ListLimitSelect";
 import SearchableSelect from "@/components/SearchableSelect";
 import SortableTableHeader from "@/components/SortableTableHeader";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +34,7 @@ const CalibracaoProcedimentosSection = () => {
   const [nomeFiltro, setNomeFiltro] = useState("");
   const [sortKey, setSortKey] = useState("atualizado");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [listLimit, setListLimit] = useState(DEFAULT_LIST_LIMIT);
 
   const tipos = useMemo(() => Array.from(new Set(procedimentos.map((item) => item.tipo_equipamento?.nome || "").filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt-BR")), [procedimentos]);
   const filtered = useMemo(() => procedimentos.filter((item) => {
@@ -47,6 +51,10 @@ const CalibracaoProcedimentosSection = () => {
     atualizado: (item) => item.updated_at,
   }), []);
   const sorted = useMemo(() => sortByValue(filtered, getters[sortKey] || getters.atualizado, sortDirection), [filtered, getters, sortDirection, sortKey]);
+  const visibleProcedimentos = useMemo(
+    () => sorted.slice(0, listLimit),
+    [listLimit, sorted]
+  );
   const handleSort = (key: string) => { if (sortKey === key) setSortDirection((current) => current === "asc" ? "desc" : "asc"); else { setSortKey(key); setSortDirection("asc"); } };
   const activeFilters = [tipoFiltro !== ALL, statusFiltro !== ALL, nomeFiltro.trim()].filter(Boolean).length;
 
@@ -81,12 +89,12 @@ const CalibracaoProcedimentosSection = () => {
       </div>
 
       <div className="rounded-xl border bg-card">
-        <div className="flex flex-col gap-3 border-b px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><div className="relative max-w-sm flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-9" placeholder="Buscar procedimento..." value={search} onChange={(event) => setSearch(event.target.value)} /></div><Button variant="outline" size="sm" onClick={() => refetch()}>Atualizar</Button></div>
+        <div className="flex flex-col gap-3 border-b px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><div className="relative max-w-sm flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-9" placeholder="Buscar procedimento..." value={search} onChange={(event) => setSearch(event.target.value)} /></div><div className="flex flex-col gap-2 sm:flex-row sm:items-center"><ListLimitSelect value={listLimit} onChange={setListLimit} total={sorted.length} /><Button variant="outline" size="sm" onClick={() => refetch()}>Atualizar</Button></div></div>
         {isLoading && <div className="flex justify-center gap-2 p-10 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Carregando procedimentos...</div>}
         {isError && <div className="m-5 flex gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive"><AlertCircle className="h-5 w-5" /><span>{error instanceof Error ? error.message : "Erro desconhecido."}</span></div>}
         {!isLoading && !isError && <div className="overflow-x-auto"><table className="w-full min-w-[820px] text-sm"><thead><tr className="border-b bg-muted/50">
           {[["Procedimento", "nome"], ["Tipo de equipamento", "tipo"], ["Tabelas", "tabelas"], ["Status", "status"], ["Atualizado em", "atualizado"]].map(([label, key]) => <th key={key} className="px-4 py-3 text-left text-muted-foreground"><SortableTableHeader label={label} sortField={key} sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} /></th>)}<th className="px-4 py-3 text-right text-muted-foreground">Acoes</th>
-        </tr></thead><tbody>{sorted.map((item) => <tr key={item.id} className="border-b last:border-0 hover:bg-muted/30"><td className="px-4 py-3"><button className="font-medium text-primary hover:underline" onClick={() => { setSelected(item); setDetailsOpen(true); }}>{item.nome}</button></td><td className="px-4 py-3">{item.tipo_equipamento?.nome || "-"}</td><td className="px-4 py-3">{item.tabelas?.length || 0}</td><td className="px-4 py-3"><Badge variant="outline" className={item.ativo ? "border-green-200 bg-green-50 text-green-700" : "border-red-200 bg-red-50 text-red-700"}>{item.ativo ? "Ativo" : "Desativado"}</Badge></td><td className="px-4 py-3">{formatDateTime(item.updated_at)}</td><td className="px-4 py-3 text-right"><DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" variant="ghost"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => { setSelected(item); setDetailsOpen(true); }}><Eye className="mr-2 h-4 w-4" /> Visualizar</DropdownMenuItem><DropdownMenuItem onClick={() => { setSelected(item); setFormOpen(true); }}><Pencil className="mr-2 h-4 w-4" /> Editar</DropdownMenuItem><DropdownMenuItem onClick={() => handleDuplicar(item)}><Copy className="mr-2 h-4 w-4" /> Duplicar</DropdownMenuItem>{item.ativo && <><DropdownMenuSeparator /><DropdownMenuItem className="text-destructive" onClick={() => handleDesativar(item)}><Trash2 className="mr-2 h-4 w-4" /> Desativar</DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu></td></tr>)}{sorted.length === 0 && <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">Nenhum procedimento encontrado.</td></tr>}</tbody></table></div>}
+        </tr></thead><tbody>{visibleProcedimentos.map((item) => <tr key={item.id} className="border-b last:border-0 hover:bg-muted/30"><td className="px-4 py-3"><button className="font-medium text-primary hover:underline" onClick={() => { setSelected(item); setDetailsOpen(true); }}>{item.nome}</button></td><td className="px-4 py-3">{item.tipo_equipamento?.nome || "-"}</td><td className="px-4 py-3">{item.tabelas?.length || 0}</td><td className="px-4 py-3"><Badge variant="outline" className={item.ativo ? "border-green-200 bg-green-50 text-green-700" : "border-red-200 bg-red-50 text-red-700"}>{item.ativo ? "Ativo" : "Desativado"}</Badge></td><td className="px-4 py-3">{formatDateTime(item.updated_at)}</td><td className="px-4 py-3 text-right"><DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" variant="ghost"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => { setSelected(item); setDetailsOpen(true); }}><Eye className="mr-2 h-4 w-4" /> Visualizar</DropdownMenuItem><DropdownMenuItem onClick={() => { setSelected(item); setFormOpen(true); }}><Pencil className="mr-2 h-4 w-4" /> Editar</DropdownMenuItem><DropdownMenuItem onClick={() => handleDuplicar(item)}><Copy className="mr-2 h-4 w-4" /> Duplicar</DropdownMenuItem>{item.ativo && <><DropdownMenuSeparator /><DropdownMenuItem className="text-destructive" onClick={() => handleDesativar(item)}><Trash2 className="mr-2 h-4 w-4" /> Desativar</DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu></td></tr>)}{sorted.length === 0 && <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">Nenhum procedimento encontrado.</td></tr>}</tbody></table></div>}
       </div>
     </div>
   );

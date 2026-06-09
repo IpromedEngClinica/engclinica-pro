@@ -434,6 +434,7 @@ export const useGerarRelatorioAnualPlano = () => {
       const registro = await planosService.salvarRegistroRelatorioAnual(input);
       const dados = await planosService.buscarDadosRelatorioAnualPlano({
         planoId: input.planoId,
+        cicloId: input.cicloId,
         dataInicio: input.dataInicio,
         dataFim: input.dataFim,
         incluirPreventiva: input.incluirPreventiva,
@@ -453,6 +454,7 @@ export const useGerarRelatorioAnualPlano = () => {
 
       const detalhesCiclos = await planosService.listarDocumentosDosCiclosNoPeriodo({
         planoId: input.planoId,
+        cicloId: input.cicloId,
         dataInicio: input.dataInicio,
         dataFim: input.dataFim,
       });

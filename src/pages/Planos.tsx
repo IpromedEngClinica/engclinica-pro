@@ -1,6 +1,9 @@
 import { useMemo, useState } from "react";
 import { ArrowUpDown, ChevronDown, Eye, MoreHorizontal, Pencil, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import ListLimitSelect, {
+  DEFAULT_LIST_LIMIT,
+} from "@/components/ListLimitSelect";
 import PlanoFormDialog from "@/components/PlanoFormDialog";
 import PageHeader from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
@@ -50,6 +53,7 @@ const Planos = () => {
   const [dataAte, setDataAte] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("inicio");
   const [direction, setDirection] = useState<SortDirection>("desc");
+  const [listLimit, setListLimit] = useState(DEFAULT_LIST_LIMIT);
 
   const empresas = useMemo(() => Array.from(new Map(planos.map((plano) => [plano.empresa_id, cliente(plano)])).entries()), [planos]);
   const filtered = useMemo(() => {
@@ -65,6 +69,11 @@ const Planos = () => {
         && (!dataAte || inicio <= dataAte);
     }), (plano) => sortValue(plano, sortKey), direction);
   }, [dataAte, dataDe, direction, empresa, frequencia, planos, responsavel, search, sortKey, status]);
+
+  const visiblePlanos = useMemo(
+    () => filtered.slice(0, listLimit),
+    [filtered, listLimit]
+  );
 
   const sort = (key: SortKey) => {
     if (sortKey === key) setDirection((current) => current === "asc" ? "desc" : "asc");
@@ -116,8 +125,9 @@ const Planos = () => {
         )}
       </div>
 
-      <div className="mb-3">
+      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Input className="max-w-md" placeholder="Buscar titulo, cliente ou responsavel" value={search} onChange={(event) => setSearch(event.target.value)} />
+        <ListLimitSelect value={listLimit} onChange={setListLimit} total={filtered.length} />
       </div>
 
       {isError && <p className="text-destructive">{error instanceof Error ? error.message : "Erro ao carregar planos."}</p>}
@@ -145,7 +155,7 @@ const Planos = () => {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((plano) => {
+            {visiblePlanos.map((plano) => {
               const ciclo = cicloAtual(plano);
               return (
                 <tr key={plano.id} className="border-t">
