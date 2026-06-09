@@ -5,6 +5,7 @@ import OrcamentoDetalhesDialog from "@/components/OrcamentoDetalhesDialog";
 import OrdemServicoDetalhesDialog from "@/components/OrdemServicoDetalhesDialog";
 import ProtocoloDetalhesDialog from "@/components/ProtocoloDetalhesDialog";
 import CalibracaoExecucaoDetalhesDialog from "@/components/CalibracaoExecucaoDetalhesDialog";
+import SegurancaEletricaDetalhesDialog from "@/components/SegurancaEletricaDetalhesDialog";
 import { useEquipamentoHistorico } from "@/hooks/useEquipamentoHistorico";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -30,7 +31,13 @@ import {
   calibracaoExecucoesService,
   formatNumeroCertificadoCalibracao,
 } from "@/services/calibracaoExecucoesService";
+import {
+  formatNumeroCertificadoSegurancaEletrica,
+  SegurancaEletricaExecucao,
+  segurancaEletricaService,
+} from "@/services/segurancaEletricaService";
 import { formatarMesAno } from "@/utils/calibracaoValidade";
+import { gerarPdfSegurancaEletrica } from "@/utils/gerarPdfSegurancaEletrica";
 import { formatarTipoHistorico } from "@/utils/historicoLabels";
 
 interface EquipamentoHistoricoSectionProps {
@@ -122,6 +129,10 @@ const EquipamentoHistoricoSection = ({
   const [calibracaoSelecionada, setCalibracaoSelecionada] =
     useState<CalibracaoExecucao | null>(null);
   const [calibracaoDialogOpen, setCalibracaoDialogOpen] = useState(false);
+  const [segurancaEletricaSelecionada, setSegurancaEletricaSelecionada] =
+    useState<SegurancaEletricaExecucao | null>(null);
+  const [segurancaEletricaDialogOpen, setSegurancaEletricaDialogOpen] =
+    useState(false);
 
   const handleAbrirOS = async (id: string) => {
     try {
@@ -210,6 +221,33 @@ const EquipamentoHistoricoSection = ({
     }
   };
 
+  const handleAbrirSegurancaEletrica = async (id: string) => {
+    try {
+      setSegurancaEletricaSelecionada(
+        await segurancaEletricaService.buscarPorId(id)
+      );
+      setSegurancaEletricaDialogOpen(true);
+    } catch (error) {
+      toast({
+        title: "Erro ao abrir seguranca eletrica",
+        description: error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleGerarPdfSegurancaEletrica = async (id: string) => {
+    try {
+      gerarPdfSegurancaEletrica(await segurancaEletricaService.buscarPorId(id));
+    } catch (error) {
+      toast({
+        title: "Erro ao gerar certificado",
+        description: error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (!equipamentoId) return null;
 
   if (isLoading) {
@@ -242,6 +280,7 @@ const EquipamentoHistoricoSection = ({
   const orcamentos = data?.orcamentos || [];
   const laudosObsolescencia = data?.laudosObsolescencia || [];
   const calibracoes = data?.calibracoes || [];
+  const segurancaEletrica = data?.segurancaEletrica || [];
 
   return (
     <div className="space-y-4">
@@ -544,9 +583,57 @@ const EquipamentoHistoricoSection = ({
       </SectionCard>
 
       <SectionCard title="Teste de Segurança Elétrica">
-        <EmptyText>
-          Nenhum teste de segurança elétrica vinculado a este equipamento.
-        </EmptyText>
+        {segurancaEletrica.length === 0 ? (
+          <EmptyText>
+            Nenhum teste de segurança elétrica vinculado a este equipamento.
+          </EmptyText>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/40">
+                  <th className="px-3 py-2 text-left">Número</th>
+                  <th className="px-3 py-2 text-left">Data</th>
+                  <th className="px-3 py-2 text-left">Validade</th>
+                  <th className="px-3 py-2 text-left">Resultado</th>
+                  <th className="px-3 py-2 text-left">PDF</th>
+                </tr>
+              </thead>
+              <tbody>
+                {segurancaEletrica.map((execucao) => (
+                  <tr key={execucao.id} className="border-b last:border-0">
+                    <td className="px-3 py-2">
+                      <HistoricoLink
+                        onClick={() => handleAbrirSegurancaEletrica(execucao.id)}
+                        ariaLabel={`Abrir seguranca eletrica ${formatNumeroCertificadoSegurancaEletrica(execucao.numero_certificado)}`}
+                      >
+                        {formatNumeroCertificadoSegurancaEletrica(
+                          execucao.numero_certificado
+                        )}
+                      </HistoricoLink>
+                    </td>
+                    <td className="px-3 py-2">{formatDate(execucao.data_teste)}</td>
+                    <td className="px-3 py-2">{formatDate(execucao.data_validade)}</td>
+                    <td className="px-3 py-2">
+                      {execucao.resultado_geral
+                        ? formatarTipoHistorico(execucao.resultado_geral)
+                        : "-"}
+                    </td>
+                    <td className="px-3 py-2">
+                      <button
+                        type="button"
+                        className="flex items-center gap-1 text-primary hover:underline"
+                        onClick={() => handleGerarPdfSegurancaEletrica(execucao.id)}
+                      >
+                        <FileText className="h-4 w-4" /> Gerar
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </SectionCard>
 
       <OrdemServicoDetalhesDialog
@@ -592,6 +679,15 @@ const EquipamentoHistoricoSection = ({
           if (!value) setCalibracaoSelecionada(null);
         }}
         execucao={calibracaoSelecionada}
+      />
+
+      <SegurancaEletricaDetalhesDialog
+        open={segurancaEletricaDialogOpen}
+        onOpenChange={(value) => {
+          setSegurancaEletricaDialogOpen(value);
+          if (!value) setSegurancaEletricaSelecionada(null);
+        }}
+        execucao={segurancaEletricaSelecionada}
       />
     </div>
   );

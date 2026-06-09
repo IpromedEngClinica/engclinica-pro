@@ -4,6 +4,7 @@ import { OrcamentoSupabase } from "@/services/orcamentosService";
 import { OrdemServicoSupabase } from "@/services/ordensServicoService";
 import { ProtocoloOSSupabase } from "@/services/protocolosService";
 import type { CalibracaoExecucao } from "@/services/calibracaoExecucoesService";
+import type { SegurancaEletricaExecucao } from "@/services/segurancaEletricaService";
 
 export type EquipamentoHistorico = {
   ordensServico: OrdemServicoSupabase[];
@@ -11,6 +12,7 @@ export type EquipamentoHistorico = {
   orcamentos: OrcamentoSupabase[];
   laudosObsolescencia: LaudoObsolescenciaSupabase[];
   calibracoes: CalibracaoExecucao[];
+  segurancaEletrica: SegurancaEletricaExecucao[];
 };
 
 const selectOSHistorico = `
@@ -164,11 +166,44 @@ const selectCalibracoesHistorico = `
   updated_at
 `;
 
+const selectSegurancaEletricaHistorico = `
+  id,
+  organizacao_id,
+  numero_certificado,
+  empresa_id,
+  equipamento_id,
+  padrao_id,
+  classe_equipamento,
+  tipo_parte_aplicada,
+  temperatura_ambiente_texto,
+  umidade_relativa_texto,
+  local_ensaio,
+  data_teste,
+  data_emissao,
+  data_validade,
+  tecnico_executor_nome,
+  responsavel_tecnico_nome,
+  responsavel_solicitante,
+  resultado_geral,
+  observacoes,
+  status,
+  ativo,
+  created_at,
+  updated_at
+`;
+
 export const equipamentoHistoricoService = {
   async buscarPorEquipamento(
     equipamentoId: string
   ): Promise<EquipamentoHistorico> {
-    const [ordensResult, protocolosResult, orcamentosResult, laudosResult, calibracoesResult] =
+    const [
+      ordensResult,
+      protocolosResult,
+      orcamentosResult,
+      laudosResult,
+      calibracoesResult,
+      segurancaEletricaResult,
+    ] =
       await Promise.all([
         supabase
           .from("ordens_servico")
@@ -205,6 +240,14 @@ export const equipamentoHistoricoService = {
           .eq("ativo", true)
           .eq("status", "fechada")
           .order("data_calibracao", { ascending: false }),
+
+        supabase
+          .from("seguranca_eletrica_execucoes")
+          .select(selectSegurancaEletricaHistorico)
+          .eq("equipamento_id", equipamentoId)
+          .eq("ativo", true)
+          .eq("status", "fechada")
+          .order("data_teste", { ascending: false }),
       ]);
 
     if (ordensResult.error) {
@@ -227,6 +270,10 @@ export const equipamentoHistoricoService = {
       throw new Error(calibracoesResult.error.message);
     }
 
+    if (segurancaEletricaResult.error) {
+      throw new Error(segurancaEletricaResult.error.message);
+    }
+
     return {
       ordensServico:
         (ordensResult.data as unknown as OrdemServicoSupabase[]) || [],
@@ -238,6 +285,9 @@ export const equipamentoHistoricoService = {
         (laudosResult.data as unknown as LaudoObsolescenciaSupabase[]) || [],
       calibracoes:
         (calibracoesResult.data as unknown as CalibracaoExecucao[]) || [],
+      segurancaEletrica:
+        (segurancaEletricaResult.data as unknown as SegurancaEletricaExecucao[]) ||
+        [],
     };
   },
 };

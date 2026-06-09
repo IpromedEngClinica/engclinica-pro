@@ -18,6 +18,7 @@ import {
   List,
   LogOut,
   ShieldCheck,
+  BarChart3,
 } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -32,6 +33,7 @@ const menuItems = [
 
 const menuItemsAfterCalibracao = [
   { icon: ShieldCheck, label: "Segurança Elétrica", path: "/seguranca-eletrica" },
+  { icon: BarChart3, label: "Relatórios", path: "/relatorios" },
   { icon: CalendarDays, label: "Planos", path: "/planos" },
   { icon: FileText, label: "Contratos", path: "/contratos" },
   { icon: FileBox, label: "Protocolos", path: "/protocolos" },
