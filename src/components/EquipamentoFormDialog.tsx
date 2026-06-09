@@ -67,6 +67,10 @@ const emptyForm: EquipamentoFormInput = {
 
 const statusOptions = ["Ativo", "Em manutenção", "Desativado"];
 
+const getSetoresEmpresaOptions = (empresa?: EmpresaSupabase | null) =>
+  [...new Set((empresa?.setores || []).map((setor) => setor.nome).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, "pt-BR"));
+
 const getEquipamentoStatusLabel = (
   equipamento: EquipamentoSupabase | null,
   status: string | undefined
@@ -140,6 +144,13 @@ const EquipamentoFormDialog = ({
     [empresasDisponiveis, equipamento, form.empresaId]
   );
 
+  const setorOptions = useMemo(
+    () => getSetoresEmpresaOptions(selectedEmpresa),
+    [selectedEmpresa]
+  );
+
+  const clientePossuiSetores = setorOptions.length > 0;
+
   const selectedTipoLabel = useMemo(() => {
     const tipo = tiposEquipamento.find(
       (item) => item.id === form.tipoEquipamentoId
@@ -180,6 +191,13 @@ const EquipamentoFormDialog = ({
     });
   }, [open, equipamento, mode, empresaInicialId, empresaInicial]);
 
+  useEffect(() => {
+    if (!open || readOnly || mode !== "create") return;
+    if (!form.empresaId || form.setor || setorOptions.length !== 1) return;
+
+    setForm((prev) => ({ ...prev, setor: setorOptions[0] }));
+  }, [open, readOnly, mode, form.empresaId, form.setor, setorOptions]);
+
   const update = (field: keyof EquipamentoFormInput, value: string) => {
     if (readOnly) return;
 
@@ -195,7 +213,18 @@ const EquipamentoFormDialog = ({
       return optionLabel === label;
     });
 
-    update("empresaId", empresa?.id || "");
+    const setoresEmpresa = getSetoresEmpresaOptions(empresa);
+
+    setForm((prev) => ({
+      ...prev,
+      empresaId: empresa?.id || "",
+      setor:
+        setoresEmpresa.length === 1
+          ? setoresEmpresa[0]
+          : setoresEmpresa.includes(prev.setor || "")
+            ? prev.setor
+            : "",
+    }));
   };
 
   const handleTipoChange = (label: string) => {
@@ -431,12 +460,30 @@ const EquipamentoFormDialog = ({
 
             <div className="space-y-2">
               <Label className="text-sm">Setor</Label>
-              <Input
-                placeholder="Ex: UTI, Centro Cirúrgico"
-                value={form.setor}
-                onChange={(e) => update("setor", e.target.value)}
-                disabled={readOnly || saving}
-              />
+              {readOnly ? (
+                <Input value={form.setor} disabled />
+              ) : clientePossuiSetores ? (
+                <>
+                  <SearchableSelect
+                    value={form.setor || ""}
+                    onValueChange={(value) => update("setor", value)}
+                    options={setorOptions}
+                    placeholder="Selecione o setor cadastrado"
+                    emptyText="Nenhum setor encontrado."
+                    disabled={saving}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Setores cadastrados no cliente selecionado.
+                  </p>
+                </>
+              ) : (
+                <Input
+                  placeholder="Ex: UTI, Centro Cirúrgico"
+                  value={form.setor}
+                  onChange={(e) => update("setor", e.target.value)}
+                  disabled={saving}
+                />
+              )}
             </div>
           </div>
         </div>
