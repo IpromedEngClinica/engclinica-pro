@@ -22,11 +22,15 @@ import LaudosObsolescencia from "./pages/LaudosObsolescencia";
 import Calibracao from "./pages/Calibracao";
 import SegurancaEletrica from "./pages/SegurancaEletrica";
 import Relatorios from "./pages/Relatorios";
+import UsuariosPermissoes from "./pages/UsuariosPermissoes";
+import ConviteCadastro from "./pages/ConviteCadastro";
 import NotFound from "./pages/NotFound";
 import { DataProvider } from "./contexts/DataContext";
 import SupabaseTest from "./pages/SupabaseTest";
 import Login from "./pages/Login";
 import ProtectedRoute from "./components/ProtectedRoute";
+import AdminRoute from "./components/AdminRoute";
+import PermissionRoute from "./components/PermissionRoute";
 import { AuthProvider } from "./contexts/AuthContext";
 
 const queryClient = new QueryClient();
@@ -41,50 +45,198 @@ const App = () => (
           <BrowserRouter>
             <Routes>
               <Route path="/login" element={<Login />} />
+              <Route path="/convite/:token" element={<ConviteCadastro />} />
 
               <Route element={<ProtectedRoute />}>
                 <Route element={<AppLayout />}>
-                  <Route path="/" element={<Dashboard />} />
+                  <Route
+                    path="/"
+                    element={
+                      <PermissionRoute permission="dashboard.visualizar">
+                        <Dashboard />
+                      </PermissionRoute>
+                    }
+                  />
                   <Route path="/supabase-test" element={<SupabaseTest />} />
-                  <Route path="/empresas" element={<Empresas />} />
-                  <Route path="/equipamentos" element={<Equipamentos />} />
-                  <Route path="/contratos" element={<Contratos />} />
-                  <Route path="/planos" element={<Planos />} />
-                  <Route path="/planos/:planoId" element={<PlanoDetalhes />} />
-                  <Route path="/ordens-servico" element={<OrdensServico />} />
-                  <Route path="/orcamentos" element={<Orcamentos />} />
-                  <Route path="/protocolos" element={<Protocolos />} />
+                  <Route
+                    path="/empresas"
+                    element={
+                      <PermissionRoute permission="empresas.visualizar">
+                        <Empresas />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/equipamentos"
+                    element={
+                      <PermissionRoute permission="equipamentos.visualizar">
+                        <Equipamentos />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/contratos"
+                    element={
+                      <PermissionRoute permission="contratos.visualizar">
+                        <Contratos />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/planos"
+                    element={
+                      <PermissionRoute permission="planos.visualizar">
+                        <Planos />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/planos/:planoId"
+                    element={
+                      <PermissionRoute permission="planos.visualizar">
+                        <PlanoDetalhes />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/ordens-servico"
+                    element={
+                      <PermissionRoute permission="os.visualizar">
+                        <OrdensServico />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/orcamentos"
+                    element={
+                      <PermissionRoute permission="orcamentos.visualizar">
+                        <Orcamentos />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/protocolos"
+                    element={
+                      <PermissionRoute permission="protocolos.visualizar">
+                        <Protocolos />
+                      </PermissionRoute>
+                    }
+                  />
                   <Route
                     path="/laudos-obsolescencia"
-                    element={<LaudosObsolescencia />}
+                    element={
+                      <PermissionRoute permission="laudos.visualizar">
+                        <LaudosObsolescencia />
+                      </PermissionRoute>
+                    }
                   />
-                  <Route path="/procedimentos" element={<Procedimentos />} />
-                  <Route path="/calibracao" element={<Navigate to="/calibracao/execucoes" replace />} />
-                  <Route path="/calibracao/execucoes" element={<Calibracao section="execucoes" />} />
-                  <Route path="/calibracao/padroes" element={<Calibracao section="padroes" />} />
-                  <Route path="/calibracao/procedimentos" element={<Calibracao section="procedimentos" />} />
-                  <Route path="/calibracao/configuracoes" element={<Calibracao section="configuracoes" />} />
-                  <Route path="/seguranca-eletrica" element={<SegurancaEletrica />} />
-                  <Route path="/relatorios" element={<Relatorios />} />
+                  <Route
+                    path="/procedimentos"
+                    element={
+                      <PermissionRoute permission="procedimentos.visualizar">
+                        <Procedimentos />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/calibracao"
+                    element={<Navigate to="/calibracao/execucoes" replace />}
+                  />
+                  <Route
+                    path="/calibracao/execucoes"
+                    element={
+                      <PermissionRoute permission="calibracao.visualizar">
+                        <Calibracao section="execucoes" />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/calibracao/padroes"
+                    element={
+                      <PermissionRoute permission="calibracao.gerenciar">
+                        <Calibracao section="padroes" />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/calibracao/procedimentos"
+                    element={
+                      <PermissionRoute permission="calibracao.gerenciar">
+                        <Calibracao section="procedimentos" />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/calibracao/configuracoes"
+                    element={
+                      <PermissionRoute permission="calibracao.gerenciar">
+                        <Calibracao section="configuracoes" />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/seguranca-eletrica"
+                    element={
+                      <PermissionRoute permission="seguranca_eletrica.visualizar">
+                        <SegurancaEletrica />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/relatorios"
+                    element={
+                      <PermissionRoute permission="relatorios.visualizar">
+                        <Relatorios />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/usuarios-permissoes"
+                    element={
+                      <AdminRoute>
+                        <UsuariosPermissoes />
+                      </AdminRoute>
+                    }
+                  />
                   <Route
                     path="/procedimentos-preventiva"
-                    element={<Procedimentos />}
+                    element={
+                      <PermissionRoute permission="procedimentos.visualizar">
+                        <Procedimentos />
+                      </PermissionRoute>
+                    }
                   />
                   <Route
                     path="/campos-gerenciais/tipos-equipamento"
-                    element={<TiposEquipamento />}
+                    element={
+                      <PermissionRoute permission="campos_gerenciais.gerenciar">
+                        <TiposEquipamento />
+                      </PermissionRoute>
+                    }
                   />
                   <Route
                     path="/campos-gerenciais/tipos-os"
-                    element={<TiposOS />}
+                    element={
+                      <PermissionRoute permission="campos_gerenciais.gerenciar">
+                        <TiposOS />
+                      </PermissionRoute>
+                    }
                   />
                   <Route
                     path="/campos-gerenciais/estados-os"
-                    element={<EstadosOS />}
+                    element={
+                      <PermissionRoute permission="campos_gerenciais.gerenciar">
+                        <EstadosOS />
+                      </PermissionRoute>
+                    }
                   />
                   <Route
                     path="/campos-gerenciais/pecas"
-                    element={<Pecas />}
+                    element={
+                      <PermissionRoute permission="campos_gerenciais.gerenciar">
+                        <Pecas />
+                      </PermissionRoute>
+                    }
                   />
                 </Route>
               </Route>

@@ -36,6 +36,7 @@ import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
 import EquipamentoFormDialog from "@/components/EquipamentoFormDialog";
 import { useMemo, useState } from "react";
 import { useEmpresas } from "@/hooks/useEmpresas";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   EmpresaSupabase,
   empresasService,
@@ -68,6 +69,9 @@ const Empresas = () => {
   const [selected, setSelected] = useState<EmpresaSupabase | null>(null);
   const [empresaParaNovoEquipamento, setEmpresaParaNovoEquipamento] =
     useState<EmpresaSupabase | null>(null);
+  const { hasPermission } = useAuth();
+  const canManageEmpresas = hasPermission("empresas.gerenciar");
+  const canManageEquipamentos = hasPermission("equipamentos.gerenciar");
 
   const { data: empresas = [], isLoading, isError, error, refetch } =
     useEmpresas({ statusFiltro });
@@ -197,9 +201,11 @@ const Empresas = () => {
         title="Empresas"
         description="Gerencie as empresas cadastradas no Supabase"
       >
-        <Button onClick={openCreate}>
-          <Plus className="w-4 h-4 mr-2" /> Nova Empresa
-        </Button>
+        {canManageEmpresas && (
+          <Button onClick={openCreate}>
+            <Plus className="w-4 h-4 mr-2" /> Nova Empresa
+          </Button>
+        )}
       </PageHeader>
 
       <EmpresaFormDialog
@@ -213,13 +219,19 @@ const Empresas = () => {
         open={detailsOpen}
         onOpenChange={setDetailsOpen}
         empresa={selected}
-        onEditar={(empresa) => {
-          setSelected(empresa);
-          setMode("edit");
-          setDialogOpen(true);
-          setDetailsOpen(false);
-        }}
-        onCriarEquipamento={openCreateEquipamento}
+        onEditar={
+          canManageEmpresas
+            ? (empresa) => {
+                setSelected(empresa);
+                setMode("edit");
+                setDialogOpen(true);
+                setDetailsOpen(false);
+              }
+            : undefined
+        }
+        onCriarEquipamento={
+          canManageEquipamentos ? openCreateEquipamento : undefined
+        }
       />
 
       <EquipamentoFormDialog
@@ -490,14 +502,18 @@ const Empresas = () => {
                             <DropdownMenuItem onClick={() => openView(e)}>
                               <Eye className="w-4 h-4 mr-2" /> Visualizar
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openEdit(e)}>
-                              <Pencil className="w-4 h-4 mr-2" /> Editar
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => openCreateEquipamento(e)}
-                            >
-                              <Wrench className="w-4 h-4 mr-2" /> Cadastrar Equipamento
-                            </DropdownMenuItem>
+                            {canManageEmpresas && (
+                              <DropdownMenuItem onClick={() => openEdit(e)}>
+                                <Pencil className="w-4 h-4 mr-2" /> Editar
+                              </DropdownMenuItem>
+                            )}
+                            {canManageEquipamentos && (
+                              <DropdownMenuItem
+                                onClick={() => openCreateEquipamento(e)}
+                              >
+                                <Wrench className="w-4 h-4 mr-2" /> Cadastrar Equipamento
+                              </DropdownMenuItem>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
