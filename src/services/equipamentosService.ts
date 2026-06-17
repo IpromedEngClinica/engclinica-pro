@@ -1,0 +1,303 @@
+import { supabase } from "@/lib/supabaseClient";
+import type { EmpresaSupabase } from "@/services/empresasService";
+
+export type EquipamentoSupabase = {
+  id: string;
+  numero_cadastro: number;
+  organizacao_id: string;
+  empresa_id: string;
+  tipo_equipamento_id: string | null;
+  tipo_texto: string | null;
+  fabricante: string | null;
+  modelo: string | null;
+  numero_serie: string | null;
+  patrimonio: string | null;
+  tag: string | null;
+  setor: string | null;
+  status: string;
+  data_aquisicao: string | null;
+  data_instalacao: string | null;
+  data_ultima_preventiva: string | null;
+  data_proxima_preventiva: string | null;
+  data_ultima_calibracao: string | null;
+  data_proxima_calibracao: string | null;
+  observacoes: string | null;
+  ativo: boolean;
+  created_at: string;
+  updated_at: string;
+  empresa?: EmpresaSupabase | null;
+  tipo_equipamento?: {
+    id: string;
+    nome: string;
+  } | null;
+};
+
+export type EquipamentoFormInput = {
+  empresaId: string;
+  tipoEquipamentoId?: string;
+  tipoTexto?: string;
+  fabricante?: string;
+  modelo?: string;
+  numeroSerie?: string;
+  patrimonio?: string;
+  tag?: string;
+  setor?: string;
+  status?: string;
+  dataUltimaPreventiva?: string;
+  dataProximaPreventiva?: string;
+  dataUltimaCalibracao?: string;
+  dataProximaCalibracao?: string;
+  observacoes?: string;
+};
+
+export type StatusEquipamentoFiltro = "ativos" | "todos" | "desativados";
+
+export type ListarEquipamentosFiltros = {
+  statusFiltro?: StatusEquipamentoFiltro;
+  empresaId?: string;
+  termo?: string;
+};
+
+const selectEquipamentos = `
+  id,
+  numero_cadastro,
+  organizacao_id,
+  empresa_id,
+  tipo_equipamento_id,
+  tipo_texto,
+  fabricante,
+  modelo,
+  numero_serie,
+  patrimonio,
+  tag,
+  setor,
+  status,
+  data_aquisicao,
+  data_instalacao,
+  data_ultima_preventiva,
+  data_proxima_preventiva,
+  data_ultima_calibracao,
+  data_proxima_calibracao,
+  observacoes,
+  ativo,
+  created_at,
+  updated_at,
+  empresa:empresas (
+    id,
+    organizacao_id,
+    nome,
+    nome_fantasia,
+    tipo_cliente,
+    tipo_relacao,
+    cpf_cnpj,
+    cep,
+    rua,
+    numero,
+    complemento,
+    bairro,
+    cidade,
+    estado,
+    contato,
+    email,
+    celular,
+    telefone,
+    observacoes,
+    ativo,
+    created_at,
+    updated_at
+  ),
+  tipo_equipamento:tipos_equipamento (
+    id,
+    nome
+  )
+`;
+
+const toDatabasePayload = (input: EquipamentoFormInput) => ({
+  empresa_id: input.empresaId,
+  tipo_equipamento_id: input.tipoEquipamentoId || null,
+  tipo_texto: input.tipoTexto || null,
+  fabricante: input.fabricante || null,
+  modelo: input.modelo || null,
+  numero_serie: input.numeroSerie || null,
+  patrimonio: input.patrimonio || null,
+  tag: input.tag || null,
+  setor: input.setor || null,
+  status: input.status || "Ativo",
+  data_ultima_preventiva: input.dataUltimaPreventiva || null,
+  data_proxima_preventiva: input.dataProximaPreventiva || null,
+  data_ultima_calibracao: input.dataUltimaCalibracao || null,
+  data_proxima_calibracao: input.dataProximaCalibracao || null,
+  observacoes: input.observacoes || null,
+});
+
+export const equipamentosService = {
+  async listar(filtros?: ListarEquipamentosFiltros) {
+    const statusFiltro = filtros?.statusFiltro || "ativos";
+
+    let query = supabase
+      .from("equipamentos")
+      .select(selectEquipamentos)
+      .eq("empresa.ativo", true)
+      .order("created_at", { ascending: false });
+
+    if (statusFiltro === "ativos") {
+      query = query.eq("ativo", true);
+    }
+
+    if (statusFiltro === "desativados") {
+      query = query.eq("ativo", false);
+    }
+
+    if (filtros?.empresaId) {
+      query = query.eq("empresa_id", filtros.empresaId);
+    }
+
+    if (filtros?.termo?.trim()) {
+      const termo = `%${filtros.termo.trim()}%`;
+      query = query.or(
+        [
+          `tipo_texto.ilike.${termo}`,
+          `fabricante.ilike.${termo}`,
+          `modelo.ilike.${termo}`,
+          `numero_serie.ilike.${termo}`,
+          `patrimonio.ilike.${termo}`,
+          `tag.ilike.${termo}`,
+          `setor.ilike.${termo}`,
+        ].join(",")
+      );
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return data as unknown as EquipamentoSupabase[];
+  },
+
+  async buscarPorId(id: string) {
+    const { data, error } = await supabase
+      .from("equipamentos")
+      .select(selectEquipamentos)
+      .eq("id", id)
+      .single();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return data as unknown as EquipamentoSupabase;
+  },
+
+  async criar(input: EquipamentoFormInput) {
+    if (!input.empresaId) {
+      throw new Error("Selecione a empresa vinculada ao equipamento.");
+    }
+
+    const { data: organizacaoId, error: orgError } = await supabase.rpc(
+      "current_organizacao_id"
+    );
+
+    if (orgError) {
+      throw new Error(orgError.message);
+    }
+
+    if (!organizacaoId) {
+      throw new Error("Não foi possível identificar a organização do usuário.");
+    }
+
+    const { data, error } = await supabase
+      .from("equipamentos")
+      .insert({
+        organizacao_id: organizacaoId,
+        ...toDatabasePayload(input),
+        ativo: true,
+      })
+      .select(selectEquipamentos)
+      .single();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return data as unknown as EquipamentoSupabase;
+  },
+
+  async criarEmLote(inputs: EquipamentoFormInput[]) {
+    if (inputs.length === 0) {
+      throw new Error("Adicione ao menos um equipamento ao cadastro em lote.");
+    }
+
+    if (inputs.some((input) => !input.empresaId)) {
+      throw new Error("Todos os equipamentos devem possuir uma empresa vinculada.");
+    }
+
+    const { data: organizacaoId, error: orgError } = await supabase.rpc(
+      "current_organizacao_id"
+    );
+
+    if (orgError) {
+      throw new Error(orgError.message);
+    }
+
+    if (!organizacaoId) {
+      throw new Error("Não foi possível identificar a organização do usuário.");
+    }
+
+    const payload = inputs.map((input) => ({
+      organizacao_id: organizacaoId,
+      ...toDatabasePayload(input),
+      ativo: input.status !== "Desativado",
+    }));
+
+    const { data, error } = await supabase
+      .from("equipamentos")
+      .insert(payload)
+      .select(selectEquipamentos);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return data as unknown as EquipamentoSupabase[];
+  },
+
+  async atualizar(id: string, input: EquipamentoFormInput) {
+    const { data, error } = await supabase
+      .from("equipamentos")
+      .update(toDatabasePayload(input))
+      .eq("id", id)
+      .select(selectEquipamentos)
+      .single();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return data as unknown as EquipamentoSupabase;
+  },
+
+  async excluir(id: string) {
+    const { data, error } = await supabase
+      .from("equipamentos")
+      .delete()
+      .eq("id", id)
+      .select("id")
+      .single();
+
+    if (error) {
+      if (error.code === "23503") {
+        throw new Error(
+          "Este equipamento possui registros vinculados e não pode ser excluído. Desative-o para preservar o histórico."
+        );
+      }
+
+      throw new Error(error.message);
+    }
+
+    if (!data?.id) {
+      throw new Error("Equipamento não encontrado ou usuário sem permissão para excluí-lo.");
+    }
+  },
+};

@@ -15,9 +15,9 @@ interface CamposGerenciaisListProps {
   title: string;
   description: string;
   items: string[];
-  onAdd: (item: string) => void;
-  onRemove: (index: number) => void;
-  onRename?: (index: number, novoNome: string) => void;
+  onAdd: (item: string) => void | Promise<void>;
+  onRemove: (index: number) => void | Promise<void>;
+  onRename?: (index: number, novoNome: string) => void | Promise<void>;
   placeholder?: string;
   itemLabel?: string;
   canRemove?: (index: number) => { ok: boolean; reason?: string };
@@ -38,6 +38,7 @@ const CamposGerenciaisList = ({
   const [search, setSearch] = useState("");
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingValue, setEditingValue] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const filtered = useMemo(() => {
     const indexed = items.map((value, index) => ({ value, index }));
@@ -45,19 +46,32 @@ const CamposGerenciaisList = ({
     return indexed.filter((i) => i.value.toLowerCase().includes(search.toLowerCase()));
   }, [items, search]);
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     const formatted = capitalizeWords(novo.trim());
-    if (!formatted) return;
+    if (!formatted || busy) return;
     if (items.some((t) => t.toLowerCase() === formatted.toLowerCase())) {
       toast({ title: `${itemLabel} já cadastrado`, variant: "destructive" });
       return;
     }
-    onAdd(formatted);
-    setNovo("");
-    toast({ title: `${itemLabel} adicionado com sucesso` });
+    try {
+      setBusy(true);
+      await onAdd(formatted);
+      setNovo("");
+      toast({ title: `${itemLabel} adicionado com sucesso` });
+    } catch (error) {
+      toast({
+        title: `Erro ao adicionar ${itemLabel.toLowerCase()}`,
+        description:
+          error instanceof Error ? error.message : "Não foi possível salvar o registro.",
+        variant: "destructive",
+      });
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const handleRemove = (index: number) => {
+  const handleRemove = async (index: number) => {
+    if (busy) return;
     if (canRemove) {
       const check = canRemove(index);
       if (!check.ok) {
@@ -65,8 +79,20 @@ const CamposGerenciaisList = ({
         return;
       }
     }
-    onRemove(index);
-    toast({ title: `${itemLabel} removido` });
+    try {
+      setBusy(true);
+      await onRemove(index);
+      toast({ title: `${itemLabel} removido` });
+    } catch (error) {
+      toast({
+        title: `Erro ao remover ${itemLabel.toLowerCase()}`,
+        description:
+          error instanceof Error ? error.message : "Não foi possível remover o registro.",
+        variant: "destructive",
+      });
+    } finally {
+      setBusy(false);
+    }
   };
 
   const startEdit = (index: number, currentValue: string) => {
@@ -79,10 +105,10 @@ const CamposGerenciaisList = ({
     setEditingValue("");
   };
 
-  const confirmEdit = (index: number) => {
+  const confirmEdit = async (index: number) => {
     if (!onRename) return;
     const formatted = capitalizeWords(editingValue.trim());
-    if (!formatted) return;
+    if (!formatted || busy) return;
     const original = items[index];
     if (formatted === original) {
       cancelEdit();
@@ -92,12 +118,24 @@ const CamposGerenciaisList = ({
       toast({ title: `${itemLabel} já cadastrado`, variant: "destructive" });
       return;
     }
-    onRename(index, formatted);
-    toast({
-      title: `${itemLabel} atualizado`,
-      description: "Todas as referências dependentes foram atualizadas.",
-    });
-    cancelEdit();
+    try {
+      setBusy(true);
+      await onRename(index, formatted);
+      toast({
+        title: `${itemLabel} atualizado`,
+        description: "Consultas dependentes foram atualizadas.",
+      });
+      cancelEdit();
+    } catch (error) {
+      toast({
+        title: `Erro ao atualizar ${itemLabel.toLowerCase()}`,
+        description:
+          error instanceof Error ? error.message : "Não foi possível atualizar o registro.",
+        variant: "destructive",
+      });
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -112,7 +150,7 @@ const CamposGerenciaisList = ({
             onKeyDown={(e) => e.key === "Enter" && handleAdd()}
             className="flex-1"
           />
-          <Button onClick={handleAdd}>
+          <Button onClick={handleAdd} disabled={busy}>
             <Plus className="w-4 h-4 mr-2" /> Adicionar
           </Button>
         </div>
@@ -159,6 +197,7 @@ const CamposGerenciaisList = ({
                         variant="ghost"
                         size="icon"
                         onClick={() => confirmEdit(index)}
+                        disabled={busy}
                         className="text-success hover:text-success"
                       >
                         <Check className="w-4 h-4" />
@@ -167,6 +206,7 @@ const CamposGerenciaisList = ({
                         variant="ghost"
                         size="icon"
                         onClick={cancelEdit}
+                        disabled={busy}
                         className="text-muted-foreground"
                       >
                         <X className="w-4 h-4" />
@@ -179,6 +219,7 @@ const CamposGerenciaisList = ({
                           variant="ghost"
                           size="icon"
                           onClick={() => startEdit(index, value)}
+                          disabled={busy}
                           className="text-muted-foreground hover:text-primary"
                           title="Editar"
                         >
@@ -189,6 +230,7 @@ const CamposGerenciaisList = ({
                         variant="ghost"
                         size="icon"
                         onClick={() => handleRemove(index)}
+                        disabled={busy}
                         className="text-muted-foreground hover:text-destructive"
                         title="Remover"
                       >

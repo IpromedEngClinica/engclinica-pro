@@ -1,343 +1,492 @@
-import { FileBox, Search, Eye, Printer, PackageCheck } from "lucide-react";
-import { useMemo, useState } from "react";
-import { Input } from "@/components/ui/input";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+  AlertCircle,
+  Eye,
+  FileText,
+  Loader2,
+  MoreHorizontal,
+  PackageCheck,
+  PackageSearch,
+  Search,
+} from "lucide-react";
+import { useMemo, useState } from "react";
 import PageHeader from "@/components/PageHeader";
-import OrdemServicoDetalhesDialog from "@/components/OrdemServicoDetalhesDialog";
+import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
 import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
-import { ProtocoloRecolhimento, ProtocoloEntrega, useData } from "@/contexts/DataContext";
-import { generateProtocoloEntregaPdf } from "@/lib/protocoloEntregaPdf";
+import ProtocoloDetalhesDialog from "@/components/ProtocoloDetalhesDialog";
+import ListLimitSelect, {
+  DEFAULT_LIST_LIMIT,
+} from "@/components/ListLimitSelect";
+import SortableTableHeader from "@/components/SortableTableHeader";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { useProtocolos } from "@/hooks/useProtocolos";
+import {
+  ProtocoloOSSupabase,
+  protocolosService,
+  TipoProtocoloOS,
+} from "@/services/protocolosService";
+import {
+  empresasService,
+  type EmpresaSupabase,
+} from "@/services/empresasService";
+import {
+  equipamentosService,
+  type EquipamentoSupabase,
+} from "@/services/equipamentosService";
+import { toast } from "@/hooks/use-toast";
+import { getEquipamentoLabel } from "@/utils/equipamentoDisplay";
+import { gerarPdfProtocolo } from "@/utils/gerarPdfProtocolo";
+import { sortByValue, type SortDirection } from "@/utils/sortUtils";
 
-const formatDate = (iso: string) => {
-  if (!iso) return "—";
+const getEmpresaNome = (p: ProtocoloOSSupabase) =>
+  p.empresa?.nome_fantasia || p.empresa?.nome || "Não informado";
+
+const formatTipo = (tipo: string) => {
+  const map: Record<string, string> = {
+    recolhimento: "Recolhimento",
+    entrega: "Entrega",
+  };
+
+  return map[tipo] || tipo;
+};
+
+const formatDate = (iso?: string | null) => {
+  if (!iso) return "-";
+
   const d = new Date(iso);
-  return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+
+  if (Number.isNaN(d.getTime())) return "-";
+
+  return d.toLocaleString("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+};
+
+const getDataPrincipal = (p: ProtocoloOSSupabase) => {
+  if (p.tipo === "recolhimento") return p.data_recolhimento || p.data_protocolo;
+  if (p.tipo === "entrega") return p.data_entrega || p.data_protocolo;
+  return p.data_protocolo;
+};
+
+const tipoBadgeClass = (tipo: TipoProtocoloOS) =>
+  tipo === "entrega"
+    ? "bg-success/10 text-success"
+    : "bg-primary/10 text-primary";
+
+const statusBadgeClass = (status: string) => {
+  const normalized = status.toLowerCase();
+
+  if (normalized.includes("cancel")) {
+    return "bg-destructive/10 text-destructive";
+  }
+
+  return "bg-muted text-muted-foreground";
 };
 
 const Protocolos = () => {
-  const { protocolosRecolhimento, protocolosEntrega, ordensServico, equipamentos, empresasList } = useData();
+  const [tipoFiltro, setTipoFiltro] = useState<TipoProtocoloOS | "todos">(
+    "todos"
+  );
   const [search, setSearch] = useState("");
-  const [searchEnt, setSearchEnt] = useState("");
-  const [selecionado, setSelecionado] = useState<ProtocoloRecolhimento | null>(null);
-  const [entregaSel, setEntregaSel] = useState<ProtocoloEntrega | null>(null);
+  const [sortKey, setSortKey] = useState("data");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [listLimit, setListLimit] = useState(DEFAULT_LIST_LIMIT);
+  const [detalhesOpen, setDetalhesOpen] = useState(false);
+  const [protocoloDetalhes, setProtocoloDetalhes] =
+    useState<ProtocoloOSSupabase | null>(null);
+  const [empresaDialogOpen, setEmpresaDialogOpen] = useState(false);
+  const [empresaSelecionada, setEmpresaSelecionada] =
+    useState<EmpresaSupabase | null>(null);
+  const [equipamentoDialogOpen, setEquipamentoDialogOpen] = useState(false);
+  const [equipamentoSelecionado, setEquipamentoSelecionado] =
+    useState<EquipamentoSupabase | null>(null);
 
-  const [osOpen, setOsOpen] = useState(false);
-  const [osSel, setOsSel] = useState(ordensServico[0] ?? null);
-  const [eqOpen, setEqOpen] = useState(false);
-  const [eqSel, setEqSel] = useState(equipamentos[0] ?? null);
+  const { data: protocolos = [], isLoading, isError, error, refetch } =
+    useProtocolos(tipoFiltro === "todos" ? undefined : tipoFiltro);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const list = [...protocolosRecolhimento].sort((a, b) =>
-      (b.dataCriacao || "").localeCompare(a.dataCriacao || "")
-    );
-    if (!q) return list;
-    return list.filter(
-      (p) =>
+
+    return protocolos.filter((p) => {
+      const empresa = getEmpresaNome(p).toLowerCase();
+      const equipamento = getEquipamentoLabel(p.equipamento).toLowerCase();
+      const osNumero = p.ordem_servico?.numero || "";
+      const responsavel = p.responsavel_nome || "";
+
+      return (
+        !q ||
         p.numero.toLowerCase().includes(q) ||
-        p.empresa.toLowerCase().includes(q) ||
-        p.recolhidoPor.toLowerCase().includes(q) ||
-        p.osNumero.toLowerCase().includes(q) ||
-        p.defeitoRelatado.toLowerCase().includes(q)
+        empresa.includes(q) ||
+        equipamento.includes(q) ||
+        osNumero.toLowerCase().includes(q) ||
+        responsavel.toLowerCase().includes(q)
+      );
+    });
+  }, [protocolos, search]);
+
+  const sortGetters: Record<string, (item: ProtocoloOSSupabase) => unknown> = {
+    numero: (p) => p.numero,
+    tipo: (p) => p.tipo,
+    data: getDataPrincipal,
+    cliente: getEmpresaNome,
+    equipamento: (p) => getEquipamentoLabel(p.equipamento),
+    os: (p) => p.ordem_servico?.numero,
+    responsavel: (p) => p.responsavel_nome,
+    status: (p) => p.status,
+  };
+
+  const sortedFiltered = useMemo(
+    () =>
+      sortByValue(
+        filtered,
+        sortGetters[sortKey] || sortGetters.data,
+        sortDirection
+      ),
+    [filtered, sortDirection, sortKey]
+  );
+
+  const visibleProtocolos = useMemo(
+    () => sortedFiltered.slice(0, listLimit),
+    [listLimit, sortedFiltered]
+  );
+
+  const handleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortKey(key);
+    setSortDirection("asc");
+  };
+
+  const openDetalhes = (protocolo: ProtocoloOSSupabase) => {
+    setProtocoloDetalhes(protocolo);
+    setDetalhesOpen(true);
+  };
+
+  const abrirEmpresa = async (empresa: ProtocoloOSSupabase["empresa"]) => {
+    if (!empresa) return;
+    try {
+      const empresaCompleta = await empresasService.buscarPorId(empresa.id);
+      setEmpresaSelecionada(empresaCompleta);
+      setEmpresaDialogOpen(true);
+    } catch (error) {
+      toast({
+        title: "Erro ao abrir empresa",
+        description: error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const abrirEquipamento = async (
+    equipamento: ProtocoloOSSupabase["equipamento"]
+  ) => {
+    if (!equipamento) return;
+    try {
+      const equipamentoCompleto = await equipamentosService.buscarPorId(
+        equipamento.id
+      );
+      setEquipamentoSelecionado(equipamentoCompleto);
+      setEquipamentoDialogOpen(true);
+    } catch (error) {
+      toast({
+        title: "Erro ao abrir equipamento",
+        description: error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const TipoIcon = ({ tipo }: { tipo: TipoProtocoloOS }) =>
+    tipo === "entrega" ? (
+      <PackageCheck className="w-4 h-4" />
+    ) : (
+      <PackageSearch className="w-4 h-4" />
     );
-  }, [protocolosRecolhimento, search]);
-
-  const filteredEntrega = useMemo(() => {
-    const q = searchEnt.trim().toLowerCase();
-    const list = [...protocolosEntrega].sort((a, b) =>
-      (b.dataEntrega || "").localeCompare(a.dataEntrega || "")
-    );
-    if (!q) return list;
-    return list.filter(
-      (p) =>
-        p.numero.toLowerCase().includes(q) ||
-        p.empresa.toLowerCase().includes(q) ||
-        p.entreguePor.toLowerCase().includes(q) ||
-        p.recebidoPor.toLowerCase().includes(q) ||
-        p.osNumero.toLowerCase().includes(q)
-    );
-  }, [protocolosEntrega, searchEnt]);
-
-  const equipamentoLabel = (id: number | null) => {
-    if (!id) return "—";
-    const eq = equipamentos.find((e) => e.id === id);
-    return eq ? `${eq.tipo} - ${eq.modelo}` : "—";
-  };
-
-  const abrirOS = (osId: number | null) => {
-    if (!osId) return;
-    const os = ordensServico.find((o) => o.id === osId);
-    if (os) { setOsSel(os); setOsOpen(true); }
-  };
-
-  const abrirEquipamento = (id: number | null) => {
-    if (!id) return;
-    const eq = equipamentos.find((e) => e.id === id);
-    if (eq) { setEqSel(eq); setEqOpen(true); }
-  };
-
-  const imprimirEntrega = (pe: ProtocoloEntrega) => {
-    const empresa = empresasList.find((e) => e.nome === pe.empresa);
-    const equipamento = equipamentos.find((e) => e.id === pe.equipamentoId);
-    generateProtocoloEntregaPdf(pe, empresa, equipamento);
-  };
 
   return (
     <div className="p-6 lg:p-8">
       <PageHeader
         title="Protocolos"
-        description="Consulte os protocolos de recolhimento e entrega"
+        description="Consulte os protocolos de recolhimento e entrega salvos no Supabase"
       />
 
-      <Tabs defaultValue="recolhimento" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="recolhimento">
-            <FileBox className="w-4 h-4 mr-2" /> Recolhimento
-          </TabsTrigger>
-          <TabsTrigger value="entrega">
-            <PackageCheck className="w-4 h-4 mr-2" /> Entrega
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="recolhimento">
-          <div className="bg-card rounded-xl border">
-            <div className="px-5 py-4 border-b flex gap-3">
-              <div className="relative flex-1 max-w-sm">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar por número, empresa, OS..."
-                  className="pl-9"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/50">
-                    <th className="text-left px-5 py-3 font-medium text-muted-foreground">Número</th>
-                    <th className="text-left px-5 py-3 font-medium text-muted-foreground">Data</th>
-                    <th className="text-left px-5 py-3 font-medium text-muted-foreground">Empresa</th>
-                    <th className="text-left px-5 py-3 font-medium text-muted-foreground">Equipamento</th>
-                    <th className="text-left px-5 py-3 font-medium text-muted-foreground">Recolhido por</th>
-                    <th className="text-left px-5 py-3 font-medium text-muted-foreground">OS</th>
-                    <th className="text-right px-5 py-3 font-medium text-muted-foreground">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((p) => (
-                    <tr key={p.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                      <td className="px-5 py-3 font-medium">
-                        <button type="button" onClick={() => setSelecionado(p)} className="text-primary hover:underline flex items-center gap-2">
-                          <FileBox className="w-4 h-4" /> {p.numero}
-                        </button>
-                      </td>
-                      <td className="px-5 py-3 text-muted-foreground">{formatDate(p.dataCriacao)}</td>
-                      <td className="px-5 py-3 text-muted-foreground">{p.empresa}</td>
-                      <td className="px-5 py-3 text-muted-foreground">
-                        <button type="button" onClick={() => abrirEquipamento(p.equipamentoId)} className="text-primary hover:underline">
-                          {equipamentoLabel(p.equipamentoId)}
-                        </button>
-                      </td>
-                      <td className="px-5 py-3 text-muted-foreground">{p.recolhidoPor}</td>
-                      <td className="px-5 py-3">
-                        <button type="button" onClick={() => abrirOS(p.osId)} className="text-primary hover:underline">
-                          {p.osNumero}
-                        </button>
-                      </td>
-                      <td className="px-5 py-3 text-right">
-                        <Button variant="ghost" size="icon" onClick={() => setSelecionado(p)} title="Visualizar">
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                  {filtered.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="px-5 py-8 text-center text-sm text-muted-foreground">
-                        Nenhum protocolo de recolhimento encontrado.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="entrega">
-          <div className="bg-card rounded-xl border">
-            <div className="px-5 py-4 border-b flex gap-3">
-              <div className="relative flex-1 max-w-sm">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar por número, empresa, OS..."
-                  className="pl-9"
-                  value={searchEnt}
-                  onChange={(e) => setSearchEnt(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/50">
-                    <th className="text-left px-5 py-3 font-medium text-muted-foreground">Número</th>
-                    <th className="text-left px-5 py-3 font-medium text-muted-foreground">Data</th>
-                    <th className="text-left px-5 py-3 font-medium text-muted-foreground">Empresa</th>
-                    <th className="text-left px-5 py-3 font-medium text-muted-foreground">Equipamento</th>
-                    <th className="text-left px-5 py-3 font-medium text-muted-foreground">Entregue por</th>
-                    <th className="text-left px-5 py-3 font-medium text-muted-foreground">Recebido por</th>
-                    <th className="text-left px-5 py-3 font-medium text-muted-foreground">OS</th>
-                    <th className="text-right px-5 py-3 font-medium text-muted-foreground">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredEntrega.map((p) => (
-                    <tr key={p.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                      <td className="px-5 py-3 font-medium">
-                        <button type="button" onClick={() => setEntregaSel(p)} className="text-primary hover:underline flex items-center gap-2">
-                          <PackageCheck className="w-4 h-4" /> {p.numero}
-                        </button>
-                      </td>
-                      <td className="px-5 py-3 text-muted-foreground">{formatDate(p.dataEntrega)}</td>
-                      <td className="px-5 py-3 text-muted-foreground">{p.empresa}</td>
-                      <td className="px-5 py-3 text-muted-foreground">
-                        <button type="button" onClick={() => abrirEquipamento(p.equipamentoId)} className="text-primary hover:underline">
-                          {equipamentoLabel(p.equipamentoId)}
-                        </button>
-                      </td>
-                      <td className="px-5 py-3 text-muted-foreground">{p.entreguePor}</td>
-                      <td className="px-5 py-3 text-muted-foreground">{p.recebidoPor}</td>
-                      <td className="px-5 py-3">
-                        <button type="button" onClick={() => abrirOS(p.osId)} className="text-primary hover:underline">
-                          {p.osNumero}
-                        </button>
-                      </td>
-                      <td className="px-5 py-3 text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => setEntregaSel(p)} title="Visualizar">
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => imprimirEntrega(p)} title="Imprimir PDF">
-                            <Printer className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {filteredEntrega.length === 0 && (
-                    <tr>
-                      <td colSpan={8} className="px-5 py-8 text-center text-sm text-muted-foreground">
-                        Nenhum protocolo de entrega encontrado.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </TabsContent>
-      </Tabs>
-
-      {/* Detalhes - Recolhimento */}
-      <Dialog open={!!selecionado} onOpenChange={(v) => !v && setSelecionado(null)}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-xl">
-              {selecionado ? `Protocolo de Recolhimento ${selecionado.numero}` : ""}
-            </DialogTitle>
-          </DialogHeader>
-          {selecionado && (
-            <div className="space-y-4">
-              <div className="rounded-lg border p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                <div><span className="font-semibold">Data: </span>{formatDate(selecionado.dataCriacao)}</div>
-                <div><span className="font-semibold">Empresa: </span>{selecionado.empresa}</div>
-                <div><span className="font-semibold">Equipamento: </span>{equipamentoLabel(selecionado.equipamentoId)}</div>
-                <div><span className="font-semibold">Recolhido por: </span>{selecionado.recolhidoPor}</div>
-                <div className="sm:col-span-2"><span className="font-semibold">OS gerada: </span>{selecionado.osNumero}</div>
-              </div>
-              <div className="rounded-lg border p-4 space-y-2">
-                <h3 className="text-sm font-semibold">Defeito relatado</h3>
-                <p className="text-sm whitespace-pre-wrap">{selecionado.defeitoRelatado}</p>
-              </div>
-              <div className="rounded-lg border p-4 space-y-2">
-                <h3 className="text-sm font-semibold">Acessórios</h3>
-                {selecionado.acessorios.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">Nenhum acessório registrado.</p>
-                ) : (
-                  <ul className="list-disc list-inside text-sm space-y-1">
-                    {selecionado.acessorios.map((a, i) => <li key={i}>{a}</li>)}
-                  </ul>
-                )}
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Detalhes - Entrega */}
-      <Dialog open={!!entregaSel} onOpenChange={(v) => !v && setEntregaSel(null)}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-xl flex items-center justify-between mr-8">
-              <span>{entregaSel ? `Protocolo de Entrega ${entregaSel.numero}` : ""}</span>
-              {entregaSel && (
-                <Button size="sm" variant="outline" onClick={() => imprimirEntrega(entregaSel)}>
-                  <Printer className="w-4 h-4 mr-2" /> PDF
-                </Button>
-              )}
-            </DialogTitle>
-          </DialogHeader>
-          {entregaSel && (
-            <div className="space-y-4">
-              <div className="rounded-lg border p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                <div><span className="font-semibold">Data da Entrega: </span>{formatDate(entregaSel.dataEntrega)}</div>
-                <div><span className="font-semibold">Empresa: </span>{entregaSel.empresa}</div>
-                <div><span className="font-semibold">Equipamento: </span>{equipamentoLabel(entregaSel.equipamentoId)}</div>
-                <div><span className="font-semibold">OS: </span>{entregaSel.osNumero}</div>
-                <div><span className="font-semibold">Entregue por: </span>{entregaSel.entreguePor}</div>
-                <div><span className="font-semibold">Recebido por: </span>{entregaSel.recebidoPor}</div>
-                <div><span className="font-semibold">Testado: </span>{entregaSel.testado ? "Sim" : "Não"}</div>
-                <div><span className="font-semibold">Funciona: </span>{entregaSel.funciona ? "Sim" : "Não"}</div>
-              </div>
-              <div className="rounded-lg border p-4 space-y-2">
-                <h3 className="text-sm font-semibold">Observações</h3>
-                <p className="text-sm whitespace-pre-wrap">{entregaSel.observacoes || "—"}</p>
-              </div>
-              <div className="rounded-lg border p-4 space-y-2">
-                <h3 className="text-sm font-semibold">Acessórios</h3>
-                {entregaSel.acessorios.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">Nenhum acessório registrado.</p>
-                ) : (
-                  <ul className="list-disc list-inside text-sm space-y-1">
-                    {entregaSel.acessorios.map((a, i) => <li key={i}>{a}</li>)}
-                  </ul>
-                )}
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      <OrdemServicoDetalhesDialog open={osOpen} onOpenChange={setOsOpen} os={osSel} />
-      <EquipamentoDetalhesDialog
-        open={eqOpen}
-        onOpenChange={setEqOpen}
-        equipamento={eqSel}
-        onSelectOS={(id) => {
-          const os = ordensServico.find((o) => o.id === id);
-          if (os) { setEqOpen(false); setOsSel(os); setOsOpen(true); }
+      <ProtocoloDetalhesDialog
+        open={detalhesOpen}
+        onOpenChange={(value) => {
+          setDetalhesOpen(value);
+          if (!value) setProtocoloDetalhes(null);
         }}
+        protocolo={protocoloDetalhes}
+        onOpenEmpresa={abrirEmpresa}
+        onOpenEquipamento={abrirEquipamento}
       />
+
+      <EmpresaDetalhesDialog
+        open={empresaDialogOpen}
+        onOpenChange={(value) => {
+          setEmpresaDialogOpen(value);
+          if (!value) setEmpresaSelecionada(null);
+        }}
+        empresa={empresaSelecionada}
+      />
+
+      <EquipamentoDetalhesDialog
+        open={equipamentoDialogOpen}
+        onOpenChange={(value) => {
+          setEquipamentoDialogOpen(value);
+          if (!value) setEquipamentoSelecionado(null);
+        }}
+        equipamento={equipamentoSelecionado}
+      />
+
+      <div className="bg-card rounded-xl border">
+        <div className="px-5 py-4 border-b flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-start">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant={tipoFiltro === "todos" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setTipoFiltro("todos")}
+            >
+              Todos
+            </Button>
+            <Button
+              variant={tipoFiltro === "recolhimento" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setTipoFiltro("recolhimento")}
+            >
+              <PackageSearch className="w-4 h-4 mr-2" />
+              Recolhimento
+            </Button>
+            <Button
+              variant={tipoFiltro === "entrega" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setTipoFiltro("entrega")}
+            >
+              <PackageCheck className="w-4 h-4 mr-2" />
+              Entrega
+            </Button>
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative w-full sm:w-80">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar protocolo, empresa, OS..."
+                className="pl-9"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+
+            <ListLimitSelect
+              value={listLimit}
+              onChange={setListLimit}
+              total={sortedFiltered.length}
+            />
+            <Button variant="outline" size="sm" onClick={() => refetch()}>
+              Atualizar
+            </Button>
+          </div>
+        </div>
+
+        {isLoading && (
+          <div className="px-5 py-10 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Carregando protocolos...
+          </div>
+        )}
+
+        {isError && (
+          <div className="px-5 py-8">
+            <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 flex gap-3">
+              <AlertCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium text-destructive">
+                  Erro ao carregar protocolos
+                </p>
+                <p className="text-sm text-destructive/80 mt-1">
+                  {error instanceof Error ? error.message : "Erro desconhecido."}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!isLoading && !isError && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  <th className="text-left px-5 py-3 font-medium text-muted-foreground">
+                    <SortableTableHeader label="Numero" sortField="numero" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
+                  </th>
+                  <th className="text-left px-5 py-3 font-medium text-muted-foreground">
+                    <SortableTableHeader label="Tipo" sortField="tipo" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
+                  </th>
+                  <th className="text-left px-5 py-3 font-medium text-muted-foreground">
+                    <SortableTableHeader label="Empresa" sortField="cliente" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
+                  </th>
+                  <th className="text-left px-5 py-3 font-medium text-muted-foreground">
+                    <SortableTableHeader label="Equipamento" sortField="equipamento" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
+                  </th>
+                  <th className="text-left px-5 py-3 font-medium text-muted-foreground">
+                    <SortableTableHeader label="OS vinculada" sortField="os" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
+                  </th>
+                  <th className="text-left px-5 py-3 font-medium text-muted-foreground">
+                    <SortableTableHeader label="Data" sortField="data" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
+                  </th>
+                  <th className="text-left px-5 py-3 font-medium text-muted-foreground">
+                    <SortableTableHeader label="Responsavel" sortField="responsavel" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
+                  </th>
+                  <th className="text-left px-5 py-3 font-medium text-muted-foreground">
+                    <SortableTableHeader label="Status" sortField="status" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
+                  </th>
+                  <th className="text-right px-5 py-3 font-medium text-muted-foreground">
+                    Ações
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {visibleProtocolos.map((protocolo) => (
+                  <tr
+                    key={protocolo.id}
+                    className="border-b last:border-0 hover:bg-muted/30 transition-colors"
+                  >
+                    <td className="px-5 py-3 font-medium">
+                      <button
+                        type="button"
+                        onClick={() => openDetalhes(protocolo)}
+                        className="text-primary hover:underline flex items-center gap-2"
+                      >
+                        <TipoIcon tipo={protocolo.tipo} />
+                        {protocolo.numero}
+                      </button>
+                    </td>
+
+                    <td className="px-5 py-3">
+                      <span
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium ${tipoBadgeClass(
+                          protocolo.tipo
+                        )}`}
+                      >
+                        {formatTipo(protocolo.tipo)}
+                      </span>
+                    </td>
+
+                    <td className="px-5 py-3 text-muted-foreground">
+                      {protocolo.empresa ? (
+                        <button
+                          type="button"
+                          className="text-primary hover:underline font-medium text-left"
+                          onClick={() => abrirEmpresa(protocolo.empresa)}
+                        >
+                          {getEmpresaNome(protocolo)}
+                        </button>
+                      ) : (
+                        getEmpresaNome(protocolo)
+                      )}
+                    </td>
+
+                    <td className="px-5 py-3 text-muted-foreground">
+                      {protocolo.equipamento ? (
+                        <button
+                          type="button"
+                          className="text-primary hover:underline font-medium text-left"
+                          onClick={() =>
+                            abrirEquipamento(protocolo.equipamento)
+                          }
+                        >
+                          {getEquipamentoLabel(protocolo.equipamento)}
+                        </button>
+                      ) : (
+                        getEquipamentoLabel(protocolo.equipamento)
+                      )}
+                    </td>
+
+                    <td className="px-5 py-3 text-muted-foreground">
+                      {protocolo.ordem_servico?.numero || "-"}
+                    </td>
+
+                    <td className="px-5 py-3 text-muted-foreground">
+                      {formatDate(getDataPrincipal(protocolo))}
+                    </td>
+
+                    <td className="px-5 py-3 text-muted-foreground">
+                      {protocolo.responsavel_nome || "-"}
+                    </td>
+
+                    <td className="px-5 py-3">
+                      <span
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusBadgeClass(
+                          protocolo.status
+                        )}`}
+                      >
+                        {protocolo.status || "-"}
+                      </span>
+                    </td>
+
+                    <td className="px-5 py-3">
+                      <div className="flex justify-end">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" title="Ações">
+                              <MoreHorizontal className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+
+                          <DropdownMenuContent
+                            align="end"
+                            className="w-48 bg-popover"
+                          >
+                            <DropdownMenuItem
+                              onClick={() => openDetalhes(protocolo)}
+                            >
+                              <Eye className="w-4 h-4 mr-2" />
+                              Visualizar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={async () => {
+                                const protocoloCompleto =
+                                  await protocolosService.buscarPorId(protocolo.id);
+                                await gerarPdfProtocolo(protocoloCompleto);
+                              }}
+                            >
+                              <FileText className="w-4 h-4 mr-2" />
+                              Gerar PDF
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+
+                {filtered.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={9}
+                      className="px-5 py-8 text-center text-sm text-muted-foreground"
+                    >
+                      Nenhum protocolo encontrado.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

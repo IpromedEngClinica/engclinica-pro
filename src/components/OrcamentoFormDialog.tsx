@@ -1,671 +1,2126 @@
+import {
+  CalendarDays,
+  Layers,
+  Package,
+  Plus,
+  Save,
+  Trash2,
+  Wrench,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import SearchableSelect from "@/components/SearchableSelect";
+import PecaQuickCreateDialog, {
+  type PecaQuickCreateResult,
+} from "@/components/PecaQuickCreateDialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import SearchableSelect from "@/components/SearchableSelect";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Trash2, Wrench, Package, Layers } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { useTiposOS } from "@/hooks/useCamposOS";
+import { useEmpresas } from "@/hooks/useEmpresas";
+import {
+  encontrarVariacaoPeca,
+  getPrecoSugeridoPeca,
+  PecaSupabase,
+  usePecas,
+} from "@/hooks/usePecas";
+import { useTiposEquipamento } from "@/hooks/useTiposEquipamento";
 import { toast } from "@/hooks/use-toast";
 import {
-  useData,
-  OrcamentoTipo,
   FormaPagamento,
+  FreteTipo,
   ModoPagamento,
-  TipoFrete,
-  OrcamentoItemPeca,
-  OrcamentoItemServico,
-  OrdemServico,
-  Orcamento,
-} from "@/contexts/DataContext";
+  OrcamentoFormInput,
+  OrcamentoOrigem,
+  OrcamentoSupabase,
+  OrcamentoTipo,
+} from "@/services/orcamentosService";
+import { OrdemServicoSupabase } from "@/services/ordensServicoService";
+import {
+  useAtualizarOrcamento,
+  useCriarOrcamento,
+} from "@/hooks/useOrcamentos";
+import { cn } from "@/lib/utils";
+import {
+  getEquipamentoLabel as formatEquipamentoLabel,
+  getIdentificadorEquipamento,
+} from "@/utils/equipamentoDisplay";
 
-export type DialogMode = "create" | "edit" | "view";
+export type OrcamentoDialogMode = "create" | "edit" | "view";
+export type DialogMode = OrcamentoDialogMode;
 
-interface Props {
+interface OrcamentoFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  fromOS?: OrdemServico | null;
-  mode?: DialogMode;
-  orcamento?: Orcamento | null;
+  mode?: OrcamentoDialogMode;
+  orcamento?: OrcamentoSupabase | null;
+  fromOS?: OrdemServicoSupabase | null;
 }
 
-const nowDateTimeLocal = () => {
-  const d = new Date();
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-  return d.toISOString().slice(0, 16);
+type PecaForm = {
+  pecaId: string;
+  pecaNome: string;
+  pecaVariacaoId: string;
+  pecaFabricanteId: string;
+  pecaModeloId: string;
+  fabricanteTexto: string;
+  modeloTexto: string;
+  mostrarFabricante: boolean;
+  mostrarModelo: boolean;
+  quantidade: number;
+  valorUnitario: number;
+  valorUnitarioEditadoManual: boolean;
+  garantia: string;
 };
 
-const tiposOrcamento: OrcamentoTipo[] = ["Serviço", "Peças", "Peças + Serviços"];
-const formasPagamento: FormaPagamento[] = ["Dinheiro", "Cartão", "Boleto", "Pix"];
-const modosPagamento: ModoPagamento[] = ["À vista", "Parcelado", "Entrada + Parcela"];
-const fretes: TipoFrete[] = ["CIF", "FOB"];
+type ServicoForm = {
+  tipoServicoId: string;
+  tipoEquipamentoId: string;
+  descricao: string;
+  quantidade: number;
+  valorUnitario: number;
+  garantia: string;
+};
 
-const formatBRL = (v: number) =>
-  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+type ServicoRelacaoForm = {
+  ativo: boolean;
+  preventiva: boolean;
+  calibracao: boolean;
+  segurancaEletrica: boolean;
+  descricao: string;
+  quantidade: number;
+  valorUnitario: number;
+  garantia: string;
+};
 
-const OrcamentoFormDialog = ({ open, onOpenChange, fromOS, mode = "create", orcamento = null }: Props) => {
-  const { empresas, pecas, addPeca, tiposOS, tipos, equipamentos, addOrcamento, updateOrcamento, buildOrcamentoNumero } = useData();
+type FormState = {
+  empresaId: string;
+  equipamentoId: string;
+  ordemServicoId: string;
+  dataOrcamento: string;
+  tipoOrcamento: OrcamentoTipo;
+  origem: OrcamentoOrigem;
+  formaPagamento: FormaPagamento | "";
+  modoPagamento: ModoPagamento;
+  numeroParcelas: number;
+  diasEntreParcelas: number;
+  valorEntrada: number;
+  prazoEntrega: string;
+  validadeDias: number;
+  frete: FreteTipo | "";
+  detalhesOrcamento: string;
+  responsavelOrcamentista: string;
+  identificador: string;
+};
 
-  const readOnly = mode === "view";
+const RESPONSAVEL_PADRAO = "Icaro Rezende";
 
-  const [tipo, setTipo] = useState<OrcamentoTipo>("Serviço");
-  const [solicitante, setSolicitante] = useState("");
-  const [pecasItems, setPecasItems] = useState<OrcamentoItemPeca[]>([]);
-  const [servicosItems, setServicosItems] = useState<OrcamentoItemServico[]>([]);
-  const [formaPagamento, setFormaPagamento] = useState<FormaPagamento>("Pix");
-  const [modoPagamento, setModoPagamento] = useState<ModoPagamento>("À vista");
-  const [numeroParcelas, setNumeroParcelas] = useState(1);
-  const [valorEntrada, setValorEntrada] = useState(0);
-  const [dataCriacao, setDataCriacao] = useState(nowDateTimeLocal());
-  const [prazoEntrega, setPrazoEntrega] = useState("");
-  const [validadeDias, setValidadeDias] = useState(90);
-  const [frete, setFrete] = useState<TipoFrete>("CIF");
-  const [detalhes, setDetalhes] = useState("");
-  const [responsavel, setResponsavel] = useState("Ícaro Rezende");
-  const [identificador, setIdentificador] = useState("");
-  const [numeroPreview, setNumeroPreview] = useState("");
-  const [preventiva, setPreventiva] = useState(false);
+const emptyForm: FormState = {
+  empresaId: "",
+  equipamentoId: "",
+  ordemServicoId: "",
+  dataOrcamento: "",
+  tipoOrcamento: "servico",
+  origem: "avulso",
+  formaPagamento: "",
+  modoPagamento: "avista",
+  numeroParcelas: 1,
+  diasEntreParcelas: 30,
+  valorEntrada: 0,
+  prazoEntrega: "",
+  validadeDias: 90,
+  frete: "",
+  detalhesOrcamento: "",
+  responsavelOrcamentista: RESPONSAVEL_PADRAO,
+  identificador: "",
+};
+
+const emptyPeca = (): PecaForm => ({
+  pecaId: "",
+  pecaNome: "",
+  pecaVariacaoId: "",
+  pecaFabricanteId: "",
+  pecaModeloId: "",
+  fabricanteTexto: "",
+  modeloTexto: "",
+  mostrarFabricante: false,
+  mostrarModelo: false,
+  quantidade: 1,
+  valorUnitario: 0,
+  valorUnitarioEditadoManual: false,
+  garantia: "",
+});
+
+const emptyServico = (): ServicoForm => ({
+  tipoServicoId: "",
+  tipoEquipamentoId: "",
+  descricao: "",
+  quantidade: 1,
+  valorUnitario: 0,
+  garantia: "",
+});
+
+const emptyServicoRelacao = (): ServicoRelacaoForm => ({
+  ativo: false,
+  preventiva: false,
+  calibracao: false,
+  segurancaEletrica: false,
+  descricao: "",
+  quantidade: 1,
+  valorUnitario: 0,
+  garantia: "",
+});
+
+const DESCRITIVO_PREVENTIVA = `Serviços a serem executados:
+Testes de funcionamento com a utilização de padrões certificados
+Inspeção geral dos itens críticos de cada equipamentos
+Elaboração de cronograma de manutenção
+Emissão de laudo de manutenção preventiva com laudo de conformidade
+Testes de funcionamento nos equipamentos
+Limpeza externa e limpeza dos cabos dos sensores
+Ajustes finais
+
+Peças não inclusas. Caso seja necessário a execução de uma manutenção corretiva para a emissão dos certificados, será gerada uma nova proposta para a contratante. Apenas quando essa aprovar, a contratada irá executar o serviço de manutenção corretiva e emitir os laudos.`;
+
+const DESCRITIVO_CALIBRACAO = `Testes de funcionamento com a utilização de padrões certificados
+Emissão de laudo de manutenção preventiva com laudo de conformidade
+Emissão de certificado de calibração conforme ABNT NBR ISO/IEC 17025:2017
+Envio dos certificados até a rastreabilidade RBC
+Testes de funcionamento
+Limpeza externa e limpeza dos cabos e sensores
+Ajustes finais
+
+Peças não inclusas. Caso seja necessário a execução de uma manutenção corretiva para a emissão dos certificados, será  gerada uma nova proposta para a contratante. Apenas quando essa aprovar, a contratada irá executar o serviço de manutenção corretiva e emitir os laudos.`;
+
+const isFreteItem = (item: { tipo?: string | null; descricao?: string | null; peca_nome?: string | null }) =>
+  item.tipo === "peca" &&
+  (item.peca_nome || item.descricao || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") === "frete";
+
+const isDespesaViagemItem = (item: { tipo?: string | null; descricao?: string | null }) => {
+  const descricao = (item.descricao || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  return item.tipo === "outro" && descricao.includes("viagem");
+};
+
+const isServicoRelacaoItem = (item: { tipo?: string | null; descricao?: string | null; tipo_servico_id?: string | null; tipo_equipamento_id?: string | null }) =>
+  item.tipo === "servico" &&
+  !item.tipo_servico_id &&
+  !item.tipo_equipamento_id &&
+  (item.descricao || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .includes("relacao fornecida");
+
+const getServicosRelacaoLabels = (servico: ServicoRelacaoForm) =>
+  [
+    servico.preventiva ? "Preventiva" : "",
+    servico.calibracao ? "Calibração" : "",
+    servico.segurancaEletrica ? "Segurança elétrica" : "",
+  ].filter(Boolean);
+
+const SectionTitle = ({
+  title,
+  description,
+}: {
+  title: string;
+  description?: string;
+}) => (
+  <div className="space-y-1">
+    <h3 className="text-base font-bold tracking-normal text-foreground">
+      {title}
+    </h3>
+    {description && (
+      <p className="text-sm text-muted-foreground">{description}</p>
+    )}
+  </div>
+);
+
+const tipoOptions: Array<{
+  value: OrcamentoTipo;
+  title: string;
+  description: string;
+  icon: typeof Wrench;
+}> = [
+  {
+    value: "servico",
+    title: "Servico",
+    description: "Apenas mao de obra",
+    icon: Wrench,
+  },
+  {
+    value: "pecas",
+    title: "Pecas",
+    description: "Apenas pecas",
+    icon: Package,
+  },
+  {
+    value: "pecas_servicos",
+    title: "Pecas + Servicos",
+    description: "Pecas e servicos",
+    icon: Layers,
+  },
+];
+
+const formatCurrency = (value?: number | null) =>
+  new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(Number(value || 0));
+
+const formatFormaPagamento = (forma?: FormaPagamento | "" | null) => {
+  const map: Record<string, string> = {
+    dinheiro: "Dinheiro",
+    cartao: "Cartao",
+    boleto: "Boleto",
+    pix: "Pix",
+  };
+
+  return forma ? map[forma] || forma : "Nao informado";
+};
+
+const formatModoPagamento = (modo?: ModoPagamento | null) => {
+  const map: Record<string, string> = {
+    avista: "A vista",
+    parcelado: "Parcelado",
+    entrada_parcela: "Entrada + parcelas",
+  };
+
+  return modo ? map[modo] || modo : "A vista";
+};
+
+const formatDate = (iso?: string | null) => {
+  if (!iso) return "-";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "-";
+  return d.toLocaleDateString("pt-BR");
+};
+
+const addDays = (days: number) => {
+  const date = new Date();
+  date.setDate(date.getDate() + Number(days || 0));
+  return date.toISOString().slice(0, 10);
+};
+
+const validadeToDays = (iso?: string | null) => {
+  if (!iso) return 90;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(iso);
+  target.setHours(0, 0, 0, 0);
+  if (Number.isNaN(target.getTime())) return 90;
+  return Math.max(
+    1,
+    Math.round((target.getTime() - today.getTime()) / 86400000)
+  );
+};
+
+const getEmpresaNome = (
+  source?: OrdemServicoSupabase | OrcamentoSupabase | null
+) => source?.empresa?.nome_fantasia || source?.empresa?.nome || "";
+
+const getEquipamentoLabel = (
+  source?: OrdemServicoSupabase | OrcamentoSupabase | null
+) => formatEquipamentoLabel(source?.equipamento);
+
+const toDateTimeLocalValue = (iso?: string | null) => {
+  const date = iso ? new Date(iso) : new Date();
+  if (Number.isNaN(date.getTime())) return "";
+
+  const offsetMs = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+};
+
+const montarIdentificadorPorOS = (os: OrdemServicoSupabase) => {
+  const tipoServico = os.tipo_os?.nome || "Servico";
+  const tipoEquipamento =
+    os.equipamento?.tipo_equipamento?.nome ||
+    os.equipamento?.tipo_texto ||
+    "Equipamento";
+  const modelo = os.equipamento?.modelo;
+  const identificador = getIdentificadorEquipamento(os.equipamento);
+
+  return [tipoServico, tipoEquipamento, modelo, identificador]
+    .filter(Boolean)
+    .join(" - ");
+};
+
+const OrcamentoFormDialog = ({
+  open,
+  onOpenChange,
+  mode = "create",
+  orcamento = null,
+  fromOS = null,
+}: OrcamentoFormDialogProps) => {
+  const { data: empresas = [] } = useEmpresas();
+  const { data: tiposOS = [] } = useTiposOS();
+  const { data: tiposEquipamento = [] } = useTiposEquipamento();
+  const { data: pecasCadastro = [] } = usePecas();
+  const criarOrcamento = useCriarOrcamento();
+  const atualizarOrcamento = useAtualizarOrcamento();
+
+  const [form, setForm] = useState<FormState>(emptyForm);
+  const [pecas, setPecas] = useState<PecaForm[]>([emptyPeca()]);
+  const [servicos, setServicos] = useState<ServicoForm[]>([emptyServico()]);
+  const [incluirFrete, setIncluirFrete] = useState(false);
+  const [valorFrete, setValorFrete] = useState(0);
+  const [servicoRelacao, setServicoRelacao] =
+    useState<ServicoRelacaoForm>(emptyServicoRelacao());
+  const [incluirDeslocamento, setIncluirDeslocamento] = useState(false);
+  const [valorDeslocamento, setValorDeslocamento] = useState(0);
+  const [incluirDespesasViagem, setIncluirDespesasViagem] = useState(false);
+  const [valorDespesasViagem, setValorDespesasViagem] = useState(0);
+  const [quickCreateOpen, setQuickCreateOpen] = useState(false);
+  const [quickCreateIndex, setQuickCreateIndex] = useState<number | null>(null);
+
+  const isView = mode === "view";
+  const isSubmitting = criarOrcamento.isPending || atualizarOrcamento.isPending;
+  const incluiPecas =
+    form.tipoOrcamento === "pecas" || form.tipoOrcamento === "pecas_servicos";
+  const incluiServicos =
+    form.tipoOrcamento === "servico" ||
+    form.tipoOrcamento === "pecas_servicos";
+
+  const empresaSelecionada = empresas.find((empresa) => empresa.id === form.empresaId);
+  const empresaLabel =
+    empresaSelecionada?.nome_fantasia ||
+    empresaSelecionada?.nome ||
+    getEmpresaNome(fromOS || orcamento) ||
+    "";
+
+  const empresaOptions = empresas.map(
+    (empresa) => empresa.nome_fantasia || empresa.nome
+  );
+  const tipoServicoOptions = tiposOS.map((tipo) => tipo.nome);
+  const tipoEquipamentoOptions = tiposEquipamento.map((tipo) => tipo.nome);
+  const pecaOptions = pecasCadastro.map((peca) => peca.nome);
+
+  const getTipoServicoNome = (id: string) =>
+    tiposOS.find((tipo) => tipo.id === id)?.nome || "";
+
+  const getTipoEquipamentoNome = (id: string) =>
+    tiposEquipamento.find((tipo) => tipo.id === id)?.nome || "";
+
+  const getPecaCadastro = (item: PecaForm) =>
+    pecasCadastro.find((peca) => peca.id === item.pecaId) ||
+    pecasCadastro.find((peca) => peca.nome === item.pecaNome);
+
+  const buildPecaPatch = (
+    item: PecaForm,
+    peca: PecaSupabase | null | undefined,
+    fabricanteId?: string | null,
+    modeloId?: string | null,
+    forcePreco = false
+  ): Partial<PecaForm> => {
+    const variacao = encontrarVariacaoPeca(peca, fabricanteId, modeloId);
+    const precoSugerido = getPrecoSugeridoPeca(peca, fabricanteId, modeloId);
+    const shouldApplyPrice =
+      forcePreco || !item.valorUnitarioEditadoManual;
+
+    return {
+      pecaVariacaoId: variacao?.id || "",
+      ...(shouldApplyPrice && precoSugerido !== null
+        ? { valorUnitario: precoSugerido }
+        : {}),
+    };
+  };
+
+  const selecionarPecaNoItem = (
+    index: number,
+    peca: PecaSupabase,
+    forcePreco = true
+  ) => {
+    const baseItem = pecas[index] || emptyPeca();
+    updatePeca(index, {
+      pecaId: peca.id,
+      pecaNome: peca.nome,
+      pecaFabricanteId: "",
+      pecaModeloId: "",
+      fabricanteTexto: "",
+      modeloTexto: "",
+      mostrarFabricante: false,
+      mostrarModelo: false,
+      valorUnitarioEditadoManual: forcePreco
+        ? false
+        : baseItem.valorUnitarioEditadoManual,
+      ...buildPecaPatch(baseItem, peca, null, null, forcePreco),
+    });
+  };
 
   useEffect(() => {
     if (!open) return;
 
-    // Modo edição/visualização de orçamento existente
     if (orcamento && (mode === "edit" || mode === "view")) {
-      setNumeroPreview(orcamento.numero);
-      setDataCriacao(orcamento.dataCriacao);
-      setTipo(orcamento.tipo);
-      setSolicitante(orcamento.solicitante);
-      setPecasItems(orcamento.pecas);
-      setServicosItems(orcamento.servicos);
-      setFormaPagamento(orcamento.formaPagamento);
-      setModoPagamento(orcamento.modoPagamento);
-      setNumeroParcelas(orcamento.numeroParcelas);
-      setValorEntrada(orcamento.valorEntrada);
-      setPrazoEntrega(orcamento.prazoEntrega);
-      setValidadeDias(orcamento.validadeDias);
-      setFrete(orcamento.frete);
-      setDetalhes(orcamento.detalhes);
-      setResponsavel(orcamento.responsavelOrcamentista);
-      setIdentificador(orcamento.identificador || "");
+      setForm({
+        ...emptyForm,
+        empresaId: orcamento.empresa_id,
+        equipamentoId: orcamento.equipamento_id || "",
+        ordemServicoId: orcamento.ordem_servico_id || "",
+        dataOrcamento: toDateTimeLocalValue(orcamento.data_orcamento),
+        tipoOrcamento: orcamento.tipo_orcamento || "servico",
+        origem: orcamento.origem || "avulso",
+        formaPagamento: orcamento.forma_pagamento || "",
+        modoPagamento: orcamento.modo_pagamento || "avista",
+        numeroParcelas: orcamento.numero_parcelas || 1,
+        diasEntreParcelas: orcamento.dias_entre_parcelas || 30,
+        valorEntrada: Number(orcamento.valor_entrada || 0),
+        prazoEntrega:
+          orcamento.prazo_entrega || orcamento.prazo_execucao || "",
+        validadeDias: validadeToDays(orcamento.data_validade),
+        frete: orcamento.frete || "",
+        detalhesOrcamento: orcamento.detalhes_orcamento || "",
+        responsavelOrcamentista:
+          orcamento.responsavel_orcamentista || RESPONSAVEL_PADRAO,
+        identificador: orcamento.identificador || orcamento.observacoes || "",
+      });
+
+      const itens = [...(orcamento.itens || [])].sort((a, b) => a.ordem - b.ordem);
+      const freteBanco = itens.find(isFreteItem);
+      const deslocamentoBanco = itens.find((item) => item.tipo === "deslocamento");
+      const despesasViagemBanco = itens.find(isDespesaViagemItem);
+      const servicoRelacaoBanco = itens.find(isServicoRelacaoItem);
+      const pecasBanco = itens
+        .filter((item) => item.tipo === "peca" && !isFreteItem(item))
+        .map((item) => ({
+          pecaId: item.peca_id || "",
+          pecaNome: item.peca?.nome || item.peca_nome || item.descricao || "",
+          pecaVariacaoId: item.peca_variacao_id || "",
+          pecaFabricanteId: item.peca_fabricante_id || "",
+          pecaModeloId: item.peca_modelo_id || "",
+          fabricanteTexto:
+            item.fabricante_texto ||
+            item.peca_variacao?.fabricante_texto ||
+            item.peca_fabricante?.nome ||
+            "",
+          modeloTexto:
+            item.modelo_texto ||
+            item.peca_variacao?.modelo_texto ||
+            item.peca_modelo?.nome ||
+            "",
+          mostrarFabricante: Boolean(item.mostrar_fabricante),
+          mostrarModelo: Boolean(item.mostrar_modelo),
+          quantidade: Number(item.quantidade || 1),
+          valorUnitario: Number(item.valor_unitario || 0),
+          valorUnitarioEditadoManual: true,
+          garantia: item.garantia || "",
+        }));
+      const servicosBanco = itens
+        .filter((item) => item.tipo === "servico" && !isServicoRelacaoItem(item))
+        .map((item) => ({
+          tipoServicoId: item.tipo_servico_id || "",
+          tipoEquipamentoId: item.tipo_equipamento_id || "",
+          descricao: item.observacoes || item.descricao || "",
+          quantidade: Number(item.quantidade || 1),
+          valorUnitario: Number(item.valor_unitario || 0),
+          garantia: item.garantia || "",
+        }));
+
+      setPecas(pecasBanco.length > 0 ? pecasBanco : [emptyPeca()]);
+      setServicos(
+        servicosBanco.length > 0 ? servicosBanco : [emptyServico()]
+      );
+      setIncluirFrete(Boolean(freteBanco));
+      setValorFrete(Number(freteBanco?.valor_unitario || freteBanco?.valor_total || 0));
+      setIncluirDeslocamento(Boolean(deslocamentoBanco));
+      setValorDeslocamento(
+        Number(deslocamentoBanco?.valor_unitario || deslocamentoBanco?.valor_total || 0)
+      );
+      setIncluirDespesasViagem(Boolean(despesasViagemBanco));
+      setValorDespesasViagem(
+        Number(despesasViagemBanco?.valor_unitario || despesasViagemBanco?.valor_total || 0)
+      );
+      setServicoRelacao(
+        servicoRelacaoBanco
+          ? {
+              ativo: true,
+              preventiva: /preventiva/i.test(servicoRelacaoBanco.descricao || ""),
+              calibracao: /calibra/i.test(servicoRelacaoBanco.descricao || ""),
+              segurancaEletrica: /seguran/i.test(servicoRelacaoBanco.descricao || ""),
+              descricao:
+                servicoRelacaoBanco.observacoes ||
+                servicoRelacaoBanco.descricao ||
+                "",
+              quantidade: Number(servicoRelacaoBanco.quantidade || 1),
+              valorUnitario: Number(servicoRelacaoBanco.valor_unitario || 0),
+              garantia: servicoRelacaoBanco.garantia || "",
+            }
+          : emptyServicoRelacao()
+      );
       return;
     }
-
-    const numero = buildOrcamentoNumero(fromOS?.numero ?? null);
-    setNumeroPreview(numero);
-    setDataCriacao(nowDateTimeLocal());
-    setFormaPagamento("Pix");
-    setModoPagamento("À vista");
-    setNumeroParcelas(1);
-    setValorEntrada(0);
-    setPrazoEntrega("");
-    setValidadeDias(90);
-    setFrete("CIF");
-    setResponsavel("Ícaro Rezende");
 
     if (fromOS) {
-      // Puxar o tipo de equipamento a partir do equipamento da OS
-      const eq = equipamentos.find((e) => e.id === fromOS.equipamentoId);
-      const tipoEquip = eq?.tipo ?? "";
-      const ident = eq
-        ? [eq.tipo, eq.fabricante, eq.modelo, eq.serie && `Série ${eq.serie}`, eq.patrimonio && `Pat. ${eq.patrimonio}`]
-            .filter(Boolean)
-            .join(" • ")
-        : "";
-
-      setTipo("Serviço");
-      setSolicitante(fromOS.solicitante);
-      setIdentificador(ident);
-      setPecasItems([]);
-      setServicosItems([
+      const detalhes =
+        fromOS.descricao_servico || fromOS.problema_relatado || "";
+      const identificador = montarIdentificadorPorOS(fromOS);
+      setForm({
+        ...emptyForm,
+        empresaId: fromOS.empresa_id,
+        equipamentoId: fromOS.equipamento_id || "",
+        ordemServicoId: fromOS.id,
+        dataOrcamento: toDateTimeLocalValue(),
+        origem: "os",
+        tipoOrcamento: "servico",
+        detalhesOrcamento: detalhes,
+        identificador,
+      });
+      setPecas([emptyPeca()]);
+      setServicos([
         {
-          tipoServico: fromOS.tipoServico,
-          tipoEquipamento: tipoEquip,
-          quantidade: 1,
-          valorUnitario: 0,
-          garantiaDias: 90,
+          ...emptyServico(),
+          tipoServicoId: fromOS.tipo_os_id || "",
+          tipoEquipamentoId: fromOS.equipamento?.tipo_equipamento?.id || "",
+          descricao: detalhes,
         },
       ]);
-      setDetalhes(fromOS.descricaoServico || "");
-    } else {
-      setTipo("Serviço");
-      setSolicitante("");
-      setIdentificador("");
-      setPecasItems([]);
-      setServicosItems([]);
-      setDetalhes("");
+      setIncluirFrete(false);
+      setValorFrete(0);
+      setServicoRelacao(emptyServicoRelacao());
+      setIncluirDeslocamento(false);
+      setValorDeslocamento(0);
+      setIncluirDespesasViagem(false);
+      setValorDespesasViagem(0);
+      return;
     }
-  }, [open, fromOS, orcamento, mode, buildOrcamentoNumero, equipamentos]);
 
-  const incluiPecas = tipo === "Peças" || tipo === "Peças + Serviços";
-  const incluiServicos = tipo === "Serviço" || tipo === "Peças + Serviços";
-
-  // Garantir que listas correspondam ao tipo selecionado
-  useEffect(() => {
-    if (!incluiPecas) setPecasItems([]);
-    if (!incluiServicos) setServicosItems([]);
-  }, [tipo]); // eslint-disable-line react-hooks/exhaustive-deps
+    setForm({
+      ...emptyForm,
+      dataOrcamento: toDateTimeLocalValue(),
+    });
+    setPecas([emptyPeca()]);
+    setServicos([emptyServico()]);
+    setIncluirFrete(false);
+    setValorFrete(0);
+    setServicoRelacao(emptyServicoRelacao());
+    setIncluirDeslocamento(false);
+    setValorDeslocamento(0);
+    setIncluirDespesasViagem(false);
+    setValorDespesasViagem(0);
+  }, [open, fromOS, mode, orcamento]);
 
   const totalPecas = useMemo(
-    () => pecasItems.reduce((s, i) => s + i.quantidade * i.valorUnitario, 0),
-    [pecasItems]
+    () =>
+      incluiPecas
+        ? pecas.reduce(
+            (acc, item) =>
+              acc +
+              Number(item.quantidade || 0) * Number(item.valorUnitario || 0),
+            0
+          ) + (incluirFrete ? Number(valorFrete || 0) : 0)
+        : 0,
+    [incluiPecas, incluirFrete, pecas, valorFrete]
   );
+
   const totalServicos = useMemo(
-    () => servicosItems.reduce((s, i) => s + i.quantidade * i.valorUnitario, 0),
-    [servicosItems]
+    () => {
+      if (!incluiServicos) return 0;
+
+      const totalBase = servicoRelacao.ativo
+        ? Number(servicoRelacao.quantidade || 0) *
+          Number(servicoRelacao.valorUnitario || 0)
+        : servicos.reduce(
+            (acc, item) =>
+              acc +
+              Number(item.quantidade || 0) * Number(item.valorUnitario || 0),
+            0
+          );
+
+      return (
+        totalBase +
+        (incluirDeslocamento ? Number(valorDeslocamento || 0) : 0) +
+        (incluirDespesasViagem ? Number(valorDespesasViagem || 0) : 0)
+      );
+    },
+    [
+      incluiServicos,
+      incluirDeslocamento,
+      incluirDespesasViagem,
+      servicoRelacao,
+      servicos,
+      valorDeslocamento,
+      valorDespesasViagem,
+    ]
   );
+
   const totalGeral = totalPecas + totalServicos;
+  const numeroParcelas = Math.max(1, Number(form.numeroParcelas || 1));
+  const diasEntreParcelas = Math.max(1, Number(form.diasEntreParcelas || 30));
+  const valorEntrada =
+    form.modoPagamento === "entrada_parcela"
+      ? Math.min(Number(form.valorEntrada || 0), totalGeral)
+      : 0;
+  const valorParcela =
+    form.modoPagamento === "parcelado"
+      ? totalGeral / numeroParcelas
+      : form.modoPagamento === "entrada_parcela"
+        ? (totalGeral - valorEntrada) / numeroParcelas
+        : totalGeral;
+  const condicoesPagamentoTexto = (() => {
+    const forma = formatFormaPagamento(form.formaPagamento);
+    const modo = formatModoPagamento(form.modoPagamento);
 
-  const valorParcela = useMemo(() => {
-    if (modoPagamento === "À vista" || numeroParcelas <= 0) return totalGeral;
-    if (modoPagamento === "Parcelado") return totalGeral / numeroParcelas;
-    if (modoPagamento === "Entrada + Parcela") {
-      const restante = Math.max(totalGeral - valorEntrada, 0);
-      return numeroParcelas > 0 ? restante / numeroParcelas : 0;
-    }
-    return totalGeral;
-  }, [modoPagamento, numeroParcelas, totalGeral, valorEntrada]);
-
-  const addPecaItem = () =>
-    setPecasItems((p) => [...p, { peca: "", quantidade: 1, valorUnitario: 0, garantiaDias: 90 }]);
-  const updatePecaItem = (i: number, patch: Partial<OrcamentoItemPeca>) =>
-    setPecasItems((p) => p.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
-  const removePecaItem = (i: number) =>
-    setPecasItems((p) => p.filter((_, idx) => idx !== i));
-
-  const addServicoItem = () =>
-    setServicosItems((s) => [
-      ...s,
-      { tipoServico: "", tipoEquipamento: "", quantidade: 1, valorUnitario: 0, garantiaDias: 90 },
-    ]);
-  const updateServicoItem = (i: number, patch: Partial<OrcamentoItemServico>) =>
-    setServicosItems((s) => s.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
-  const removeServicoItem = (i: number) =>
-    setServicosItems((s) => s.filter((_, idx) => idx !== i));
-
-  const handleSave = () => {
-    if (!solicitante) {
-      toast({ title: "Selecione o solicitante", variant: "destructive" });
-      return;
-    }
-    if (incluiPecas && pecasItems.length === 0 && incluiServicos && servicosItems.length === 0) {
-      toast({ title: "Adicione ao menos uma peça ou um serviço", variant: "destructive" });
-      return;
-    }
-    if (incluiPecas && !incluiServicos && pecasItems.length === 0) {
-      toast({ title: "Adicione ao menos uma peça", variant: "destructive" });
-      return;
-    }
-    if (incluiServicos && !incluiPecas && servicosItems.length === 0) {
-      toast({ title: "Adicione ao menos um serviço", variant: "destructive" });
-      return;
-    }
-    if (incluiPecas && incluiServicos && pecasItems.length === 0 && servicosItems.length === 0) {
-      toast({ title: "Adicione ao menos uma peça ou um serviço", variant: "destructive" });
-      return;
+    if (form.modoPagamento === "parcelado") {
+      return `${forma} - ${numeroParcelas} parcelas de ${formatCurrency(
+        valorParcela
+      )} a cada ${diasEntreParcelas} dias.`;
     }
 
-    const payload = {
-      numero: numeroPreview,
-      osId: orcamento?.osId ?? fromOS?.id ?? null,
-      dataCriacao,
-      tipo,
-      solicitante,
-      pecas: incluiPecas ? pecasItems : [],
-      servicos: incluiServicos ? servicosItems : [],
-      formaPagamento,
-      modoPagamento,
-      numeroParcelas: modoPagamento === "À vista" ? 1 : numeroParcelas,
-      valorEntrada: modoPagamento === "Entrada + Parcela" ? valorEntrada : 0,
-      prazoEntrega,
-      validadeDias,
-      frete,
-      detalhes,
-      responsavelOrcamentista: responsavel,
-      identificador,
-      status: orcamento?.status ?? ("Pendente" as const),
-    };
-
-    if (mode === "edit" && orcamento) {
-      updateOrcamento(orcamento.id, payload);
-      toast({ title: "Orçamento atualizado com sucesso!" });
-    } else {
-      addOrcamento(payload);
-      toast({ title: "Orçamento criado com sucesso!" });
+    if (form.modoPagamento === "entrada_parcela") {
+      return `${forma} - Entrada de ${formatCurrency(
+        valorEntrada
+      )} + ${numeroParcelas} parcelas de ${formatCurrency(
+        valorParcela
+      )} a cada ${diasEntreParcelas} dias.`;
     }
-    onOpenChange(false);
+
+    return `${forma} - ${modo}.`;
+  })();
+
+  const updatePeca = (index: number, patch: Partial<PecaForm>) => {
+    setPecas((current) =>
+      current.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, ...patch } : item
+      )
+    );
   };
 
-  const dialogTitle =
-    mode === "view" ? `Visualizar Orçamento ${numeroPreview}` :
-    mode === "edit" ? `Editar Orçamento ${numeroPreview}` :
-    fromOS ? `Novo Orçamento (a partir da ${fromOS.numero})` : "Novo Orçamento";
+  const updateServico = (index: number, patch: Partial<ServicoForm>) => {
+    setServicos((current) =>
+      current.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, ...patch } : item
+      )
+    );
+  };
+
+  const appendDetalhesOrcamento = (texto: string) => {
+    setForm((current) => ({
+      ...current,
+      detalhesOrcamento: current.detalhesOrcamento.trim()
+        ? `${current.detalhesOrcamento.trimEnd()}\n\n${texto}`
+        : texto,
+    }));
+  };
+
+  const removePeca = (index: number) => {
+    setPecas((current) =>
+      current.length === 1
+        ? [emptyPeca()]
+        : current.filter((_, itemIndex) => itemIndex !== index)
+    );
+  };
+
+  const removeServico = (index: number) => {
+    setServicos((current) =>
+      current.length === 1
+        ? [emptyServico()]
+        : current.filter((_, itemIndex) => itemIndex !== index)
+    );
+  };
+
+  const validar = () => {
+    if (!form.empresaId) {
+      toast({ title: "Solicitante obrigatorio.", variant: "destructive" });
+      return false;
+    }
+
+    const pecasValidas = pecas.filter((item) => item.pecaNome.trim());
+    const servicosValidos = servicoRelacao.ativo
+      ? []
+      : servicos.filter((item) => item.tipoServicoId || item.descricao.trim());
+    const servicoRelacaoValido =
+      servicoRelacao.ativo &&
+      getServicosRelacaoLabels(servicoRelacao).length > 0 &&
+      servicoRelacao.descricao.trim();
+
+    if (incluiPecas && pecasValidas.length === 0) {
+      toast({
+        title: "Adicione ao menos uma peca.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    if (incluiServicos && servicosValidos.length === 0 && !servicoRelacaoValido) {
+      toast({
+        title: "Adicione ao menos um servico.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    if (servicoRelacao.ativo && !servicoRelacaoValido) {
+      toast({
+        title:
+          "Selecione ao menos um serviço e informe o descritivo da relação.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    const todosItens = [
+      ...(incluiPecas ? pecasValidas : []),
+      ...(incluiServicos ? servicosValidos : []),
+      ...(incluiServicos && servicoRelacao.ativo
+        ? [
+            {
+              quantidade: servicoRelacao.quantidade,
+              valorUnitario: servicoRelacao.valorUnitario,
+            },
+          ]
+        : []),
+    ];
+
+    if (todosItens.some((item) => Number(item.quantidade || 0) <= 0)) {
+      toast({
+        title: "Quantidade deve ser maior que zero.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    if (incluirFrete && Number(valorFrete || 0) < 0) {
+      toast({ title: "Valor do frete nao pode ser negativo.", variant: "destructive" });
+      return false;
+    }
+
+    if (incluirDeslocamento && Number(valorDeslocamento || 0) < 0) {
+      toast({
+        title: "Valor do deslocamento nao pode ser negativo.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    if (incluirDespesasViagem && Number(valorDespesasViagem || 0) < 0) {
+      toast({
+        title: "Valor das despesas de viagem nao pode ser negativo.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    if (todosItens.some((item) => Number(item.valorUnitario || 0) < 0)) {
+      toast({
+        title: "Valor unitario nao pode ser negativo.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    if (form.modoPagamento !== "avista") {
+      if (Number(form.numeroParcelas || 0) < 1) {
+        toast({
+          title: "Numero de parcelas deve ser maior que zero.",
+          variant: "destructive",
+        });
+        return false;
+      }
+
+      if (Number(form.diasEntreParcelas || 0) < 1) {
+        toast({
+          title: "Dias entre parcelas deve ser maior que zero.",
+          variant: "destructive",
+        });
+        return false;
+      }
+    }
+
+    if (
+      form.modoPagamento === "entrada_parcela" &&
+      Number(form.valorEntrada || 0) > totalGeral
+    ) {
+      toast({
+        title: "Valor da entrada nao pode ser maior que o total.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    return true;
+  };
+
+  const buildPayload = (): OrcamentoFormInput => {
+    const itensPecas = incluiPecas
+      ? [
+          ...pecas
+            .filter((item) => item.pecaNome.trim())
+            .map((item) => ({
+              tipo: "peca" as const,
+              descricao: item.pecaNome.trim(),
+              pecaId: item.pecaId || undefined,
+              pecaNome: item.pecaNome.trim(),
+              pecaVariacaoId: item.pecaVariacaoId || undefined,
+              pecaFabricanteId: item.pecaFabricanteId || undefined,
+              pecaModeloId: item.pecaModeloId || undefined,
+              fabricanteTexto: item.fabricanteTexto.trim(),
+              modeloTexto: item.modeloTexto.trim(),
+              mostrarFabricante: item.mostrarFabricante,
+              mostrarModelo: item.mostrarModelo,
+              quantidade: Number(item.quantidade || 1),
+              valorUnitario: Number(item.valorUnitario || 0),
+              garantia: item.garantia.trim(),
+            })),
+          ...(incluirFrete
+            ? [
+                {
+                  tipo: "peca" as const,
+                  descricao: "Frete",
+                  pecaNome: "Frete",
+                  quantidade: 1,
+                  valorUnitario: Number(valorFrete || 0),
+                },
+              ]
+            : []),
+        ]
+      : [];
+
+    const itensServicos = incluiServicos
+      ? [
+          ...(servicoRelacao.ativo
+            ? [
+                {
+                  tipo: "servico" as const,
+                  descricao: `${getServicosRelacaoLabels(servicoRelacao).join(
+                    " / "
+                  )} - Conforme relação fornecida: ${servicoRelacao.descricao.trim()}`,
+                  observacoes: servicoRelacao.descricao.trim(),
+                  quantidade: Number(servicoRelacao.quantidade || 1),
+                  valorUnitario: Number(servicoRelacao.valorUnitario || 0),
+                  garantia: servicoRelacao.garantia.trim(),
+                },
+              ]
+            : servicos
+                .filter((item) => item.tipoServicoId || item.descricao.trim())
+                .map((item) => {
+                  const tipoServicoNome = getTipoServicoNome(item.tipoServicoId);
+                  const tipoEquipamentoNome = getTipoEquipamentoNome(
+                    item.tipoEquipamentoId
+                  );
+                  const descricao =
+                    item.descricao.trim() ||
+                    [tipoServicoNome, tipoEquipamentoNome].filter(Boolean).join(" - ") ||
+                    "Servico";
+
+                  return {
+                    tipo: "servico" as const,
+                    descricao,
+                    observacoes: item.descricao.trim(),
+                    quantidade: Number(item.quantidade || 1),
+                    valorUnitario: Number(item.valorUnitario || 0),
+                    garantia: item.garantia.trim(),
+                    tipoServicoId: item.tipoServicoId || undefined,
+                    tipoEquipamentoId: item.tipoEquipamentoId || undefined,
+                  };
+                })),
+          ...(incluirDeslocamento
+            ? [
+                {
+                  tipo: "deslocamento" as const,
+                  descricao: "Deslocamento",
+                  quantidade: 1,
+                  valorUnitario: Number(valorDeslocamento || 0),
+                },
+              ]
+            : []),
+          ...(incluirDespesasViagem
+            ? [
+                {
+                  tipo: "outro" as const,
+                  descricao: "Despesas de viagem",
+                  quantidade: 1,
+                  valorUnitario: Number(valorDespesasViagem || 0),
+                },
+              ]
+            : []),
+        ]
+      : [];
+
+    return {
+      empresaId: form.empresaId,
+      equipamentoId: form.equipamentoId || undefined,
+      ordemServicoId: form.ordemServicoId || undefined,
+      identificador: form.identificador.trim(),
+      dataOrcamento: form.dataOrcamento
+        ? new Date(form.dataOrcamento).toISOString()
+        : undefined,
+      dataValidade: addDays(form.validadeDias),
+      status: "pendente",
+      tipoOrcamento: form.tipoOrcamento,
+      origem: form.origem,
+      formaPagamento: form.formaPagamento || undefined,
+      modoPagamento: form.modoPagamento,
+      numeroParcelas:
+        form.modoPagamento === "avista" ? undefined : numeroParcelas,
+      diasEntreParcelas:
+        form.modoPagamento === "avista" ? undefined : diasEntreParcelas,
+      valorEntrada:
+        form.modoPagamento === "entrada_parcela" ? valorEntrada : undefined,
+      valorParcela:
+        form.modoPagamento === "avista" ? undefined : valorParcela,
+      condicoesPagamento: condicoesPagamentoTexto,
+      prazoEntrega: form.prazoEntrega.trim(),
+      frete: incluirFrete ? "fob" : form.frete || undefined,
+      detalhesOrcamento: form.detalhesOrcamento.trim(),
+      responsavelOrcamentista:
+        form.responsavelOrcamentista.trim() || RESPONSAVEL_PADRAO,
+      itens: [...itensPecas, ...itensServicos],
+    };
+  };
+
+  const handleSubmit = async () => {
+    if (isView || !validar()) return;
+
+    try {
+      if (mode === "edit" && orcamento) {
+        await atualizarOrcamento.mutateAsync({
+          id: orcamento.id,
+          input: buildPayload(),
+        });
+        toast({ title: "Orcamento atualizado com sucesso." });
+      } else {
+        await criarOrcamento.mutateAsync(buildPayload());
+        toast({ title: "Orcamento criado com sucesso." });
+      }
+
+      onOpenChange(false);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Erro inesperado ao salvar.";
+
+      toast({
+        title: "Erro ao salvar orcamento",
+        description: message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleEmpresaChange = (label: string) => {
+    const empresa = empresas.find(
+      (item) => (item.nome_fantasia || item.nome) === label
+    );
+    setForm((current) => ({
+      ...current,
+      empresaId: empresa?.id || "",
+    }));
+  };
+
+  const title =
+    mode === "view" && orcamento
+      ? `Orcamento ${orcamento.numero}`
+      : mode === "edit" && orcamento
+        ? `Editar orcamento ${orcamento.numero}`
+        : "Novo Orcamento";
+
+  const dataCriacao = orcamento?.data_orcamento || new Date().toISOString();
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-5xl h-[90vh] max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
-        <DialogHeader className="px-6 pt-6 pb-3 border-b shrink-0">
-          <DialogTitle className="text-xl">{dialogTitle}</DialogTitle>
+      <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+        <DialogHeader className="px-6 py-4 border-b">
+          <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
 
-        <div className={cn("flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4", readOnly && "[&_input]:pointer-events-none [&_button]:pointer-events-none [&_textarea]:pointer-events-none")}>
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+          <section className="rounded-lg border border-border border-l-4 border-l-primary/70 p-5 space-y-5 bg-card">
+            <SectionTitle
+              title="Identificação do orçamento"
+              description="Dados gerais, origem e solicitante do orçamento."
+            />
 
-        {/* Identificação */}
-        <div className="rounded-lg border p-5 space-y-5">
-          <h3 className="text-sm font-semibold">Identificação</h3>
-
-          {/* Tipo de Orçamento — Cards de seleção */}
-          <div className="space-y-2">
-            <Label className="text-sm">Tipo de Orçamento *</Label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {([
-                { value: "Serviço", icon: Wrench, desc: "Apenas mão de obra" },
-                { value: "Peças", icon: Package, desc: "Apenas peças" },
-                { value: "Peças + Serviços", icon: Layers, desc: "Peças e serviços" },
-              ] as { value: OrcamentoTipo; icon: typeof Wrench; desc: string }[]).map((opt) => {
-                const Icon = opt.icon;
-                const active = tipo === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => !readOnly && setTipo(opt.value)}
-                    className={cn(
-                      "flex flex-col items-start gap-1 rounded-lg border-2 p-4 text-left transition-all",
-                      active
-                        ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-                        : "border-border hover:border-primary/40 hover:bg-muted/30"
-                    )}
-                  >
-                    <div className="flex items-center gap-2">
-                      <Icon className={cn("w-4 h-4", active ? "text-primary" : "text-muted-foreground")} />
-                      <span className={cn("text-sm font-medium", active && "text-primary")}>
-                        {opt.value}
-                      </span>
-                    </div>
-                    <span className="text-xs text-muted-foreground">{opt.desc}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <label className="flex items-center gap-2 mt-3 cursor-pointer w-fit">
-              <Checkbox
-                checked={preventiva}
-                onCheckedChange={(v) => !readOnly && setPreventiva(!!v)}
-              />
-              <span className="text-sm">
-                Preventiva <span className="text-muted-foreground">(serviço para vários equipamentos — descrição livre)</span>
-              </span>
-            </label>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
             <div className="space-y-2">
-              <Label className="text-sm">Número</Label>
-              <Input value={numeroPreview} disabled className="bg-muted" />
+              <Label className="text-sm">Tipo de Orcamento *</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {tipoOptions.map((option) => {
+                  const Icon = option.icon;
+                  const selected = form.tipoOrcamento === option.value;
+
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      disabled={isView}
+                      onClick={() =>
+                        setForm((current) => ({
+                          ...current,
+                          tipoOrcamento: option.value,
+                        }))
+                      }
+                      className={cn(
+                        "rounded-lg border p-4 text-left transition-colors disabled:cursor-not-allowed",
+                        selected
+                          ? "border-primary bg-primary/5 text-primary"
+                          : "hover:bg-muted/40"
+                      )}
+                    >
+                      <div className="flex items-center gap-2 font-medium">
+                        <Icon className="w-4 h-4" />
+                        {option.title}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {option.description}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>Numero</Label>
+                <Input value={orcamento?.numero || "Gerado automaticamente"} readOnly />
+              </div>
+              <div className="space-y-2">
+                <Label>Data de Criacao</Label>
+                <Input
+                  type="datetime-local"
+                  value={form.dataOrcamento}
+                  disabled={isView}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      dataOrcamento: event.target.value,
+                    }))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Responsavel Orcamentista</Label>
+                <Input
+                  value={form.responsavelOrcamentista}
+                  disabled={isView}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      responsavelOrcamentista: event.target.value,
+                    }))
+                  }
+                />
+              </div>
+            </div>
+
             <div className="space-y-2">
-              <Label className="text-sm">Data de Criação</Label>
+              <Label>Identificador do Orcamento</Label>
               <Input
-                type="datetime-local"
-                value={dataCriacao}
-                onChange={(e) => setDataCriacao(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm">Responsável Orçamentista</Label>
-              <Input value={responsavel} onChange={(e) => setResponsavel(e.target.value)} />
-            </div>
-            <div className="space-y-2 sm:col-span-3">
-              <Label className="text-sm">Identificador do Orçamento</Label>
-              <Input
-                placeholder="Ex: Equipamento, n° de série, patrimônio ou descrição curta"
-                value={identificador}
-                onChange={(e) => setIdentificador(e.target.value)}
+                placeholder="Ex: Equipamento, numero de serie, patrimonio ou descricao curta"
+                value={form.identificador}
+                disabled={isView}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    identificador: event.target.value,
+                  }))
+                }
               />
               <p className="text-xs text-muted-foreground">
-                Primeira linha da identificação técnica — aparece nas listagens e no PDF.
+                Primeira linha da identificacao tecnica. Este campo e salvo em
+                observacoes.
               </p>
             </div>
-            <div className="space-y-2 sm:col-span-3">
-              <Label className="text-sm">Solicitante *</Label>
-              <SearchableSelect
-                value={solicitante}
-                onValueChange={setSolicitante}
-                options={empresas}
-                placeholder="Selecione a empresa"
-                emptyText="Nenhuma empresa encontrada."
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>Solicitante *</Label>
+                {form.origem === "os" ? (
+                  <Input value={empresaLabel || "Nao informado"} readOnly />
+                ) : (
+                  <SearchableSelect
+                    value={empresaLabel}
+                    onValueChange={handleEmpresaChange}
+                    options={empresaOptions}
+                    placeholder="Selecione o solicitante"
+                    emptyText="Nenhum solicitante encontrado."
+                  />
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label>Origem</Label>
+                <Input value={form.origem === "os" ? "OS" : "Avulso"} readOnly />
+              </div>
+              <div className="space-y-2">
+                <Label>OS vinculada</Label>
+                <Input
+                  value={
+                    fromOS?.numero ||
+                    orcamento?.ordem_servico?.numero ||
+                    (form.ordemServicoId ? form.ordemServicoId : "-")
+                  }
+                  readOnly
+                />
+              </div>
+            </div>
+
+            {form.origem === "os" && (
+              <div className="space-y-2">
+                <Label>Equipamento da OS</Label>
+                <Input value={getEquipamentoLabel(fromOS || orcamento)} readOnly />
+              </div>
+            )}
+          </section>
+
+          <section
+            className={cn(
+              "rounded-lg border border-border border-l-4 border-l-primary/70 p-5 space-y-4 bg-card",
+              !incluiPecas && "opacity-60"
+            )}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <SectionTitle
+                title="Peças"
+                description="Itens de reposição, garantias e custos associados às peças."
               />
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={!incluiPecas || isView}
+                  onClick={() => setPecas((current) => [...current, emptyPeca()])}
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  Adicionar peca
+                </Button>
+              </div>
             </div>
-          </div>
-        </div>
 
-        {/* Peças */}
-        <div className={`rounded-lg border p-5 space-y-4 ${!incluiPecas ? "opacity-50 pointer-events-none" : ""}`}>
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">Peças</h3>
-            <Button type="button" size="sm" onClick={addPecaItem} disabled={!incluiPecas}>
-              <Plus className="w-4 h-4 mr-1" /> Adicionar peça
-            </Button>
-          </div>
-          {pecasItems.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
-              {incluiPecas ? "Nenhuma peça adicionada." : "Tipo selecionado não inclui peças."}
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {pecasItems.map((item, i) => (
-                <div key={i} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end border rounded-md p-3">
-                  <div className="md:col-span-4 space-y-2">
-                    <Label className="text-xs">Peça</Label>
-                    <SearchableSelect
-                      value={item.peca}
-                      onValueChange={(v) => updatePecaItem(i, { peca: v })}
-                      options={pecas}
-                      placeholder="Selecione a peça"
-                      emptyText="Nenhuma peça encontrada."
-                      addNewLabel="Cadastrar nova peça"
-                      onAddNew={() => {
-                        const nome = window.prompt("Nome da nova peça:")?.trim();
-                        if (!nome) return;
-                        if (pecas.includes(nome)) {
-                          updatePecaItem(i, { peca: nome });
-                          return;
-                        }
-                        addPeca(nome);
-                        updatePecaItem(i, { peca: nome });
-                        toast({ title: `Peça "${nome}" cadastrada` });
-                      }}
-                    />
-                  </div>
-                  <div className="md:col-span-2 space-y-2">
-                    <Label className="text-xs">Qtd</Label>
-                    <Input
-                      type="number"
-                      min={1}
-                      value={item.quantidade}
-                      onChange={(e) => updatePecaItem(i, { quantidade: Number(e.target.value) || 0 })}
-                    />
-                  </div>
-                  <div className="md:col-span-2 space-y-2">
-                    <Label className="text-xs">Valor Unit. (R$)</Label>
-                    <Input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      value={item.valorUnitario}
-                      onChange={(e) => updatePecaItem(i, { valorUnitario: Number(e.target.value) || 0 })}
-                    />
-                  </div>
-                  <div className="md:col-span-3 space-y-2">
-                    <Label className="text-xs">Garantia (dias)</Label>
-                    <Input
-                      type="number"
-                      min={0}
-                      value={item.garantiaDias}
-                      onChange={(e) => updatePecaItem(i, { garantiaDias: Number(e.target.value) || 0 })}
-                    />
-                  </div>
-                  <div className="md:col-span-1 flex justify-end">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removePecaItem(i)}
-                      className="text-muted-foreground hover:text-destructive"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+            {!incluiPecas ? (
+              <p className="text-sm text-muted-foreground">
+                Tipo selecionado nao inclui pecas.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {pecas.map((item, index) => {
+                  const pecaCadastro = getPecaCadastro(item);
+                  const fabricantes = (pecaCadastro?.fabricantes || []).filter(
+                    (fabricante) => fabricante.ativo
+                  );
+                  const modelos = (pecaCadastro?.modelos || []).filter(
+                    (modelo) => modelo.ativo
+                  );
 
-        {/* Serviços */}
-        <div className={`rounded-lg border p-5 space-y-4 ${!incluiServicos ? "opacity-50 pointer-events-none" : ""}`}>
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold">Serviços</h3>
-            <Button type="button" size="sm" onClick={addServicoItem} disabled={!incluiServicos}>
-              <Plus className="w-4 h-4 mr-1" /> Adicionar serviço
-            </Button>
-          </div>
-          {servicosItems.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
-              {incluiServicos ? "Nenhum serviço adicionado." : "Tipo selecionado não inclui serviços."}
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {servicosItems.map((item, i) => (
-                <div key={i} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end border rounded-md p-3">
-                  {preventiva ? (
-                    <div className="md:col-span-7 space-y-2">
-                      <Label className="text-xs">Tipo de Serviço (livre)</Label>
-                      <Input
-                        placeholder="Descreva o serviço (ex: Preventiva em todos os monitores)"
-                        value={item.tipoEquipamento}
-                        onChange={(e) => updateServicoItem(i, { tipoServico: "Manutenção Preventiva", tipoEquipamento: e.target.value })}
+                  const handlePecaSelecionada = (value: string) => {
+                    const peca = pecasCadastro.find(
+                      (itemCadastro) => itemCadastro.nome === value
+                    );
+                    if (peca) {
+                      selecionarPecaNoItem(index, peca, false);
+                    } else {
+                      updatePeca(index, {
+                        pecaId: "",
+                        pecaNome: value,
+                        pecaVariacaoId: "",
+                        pecaFabricanteId: "",
+                        pecaModeloId: "",
+                        fabricanteTexto: "",
+                        modeloTexto: "",
+                        mostrarFabricante: false,
+                        mostrarModelo: false,
+                      });
+                    }
+                  };
+
+                  return (
+                  <div
+                    key={index}
+                    className="rounded-md border p-4 space-y-3"
+                  >
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                    <div className="space-y-2 md:col-span-3">
+                      <Label>Peça cadastrada</Label>
+                      <SearchableSelect
+                        value={pecaCadastro?.nome || ""}
+                        disabled={isView}
+                        onValueChange={handlePecaSelecionada}
+                        options={pecaOptions}
+                        placeholder="Selecione uma peça..."
+                        emptyText="Nenhuma peça cadastrada."
+                        onAddNew={() => {
+                          setQuickCreateIndex(index);
+                          setQuickCreateOpen(true);
+                        }}
+                        addNewLabel="Cadastrar nova peça"
                       />
                     </div>
-                  ) : (
-                    <>
-                      <div className="md:col-span-4 space-y-2">
-                        <Label className="text-xs">Tipo de Serviço</Label>
-                        <SearchableSelect
-                          value={item.tipoServico}
-                          onValueChange={(v) => updateServicoItem(i, { tipoServico: v })}
-                          options={tiposOS}
-                          placeholder="Selecione o tipo"
-                          emptyText="Nenhum tipo encontrado."
+                    <div className="space-y-2 md:col-span-2">
+                      <Label>Nome da peça</Label>
+                      <Input
+                        value={item.pecaNome}
+                        disabled={isView}
+                        onChange={(event) =>
+                          handlePecaSelecionada(event.target.value)
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label>Quantidade</Label>
+                      <Input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={item.quantidade}
+                        disabled={isView}
+                        onChange={(event) =>
+                          updatePeca(index, {
+                            quantidade: Number(event.target.value),
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label>Valor unitario</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={item.valorUnitario}
+                        disabled={isView}
+                        onChange={(event) =>
+                          updatePeca(index, {
+                            valorUnitario: Number(event.target.value),
+                            valorUnitarioEditadoManual: true,
+                          })
+                        }
+                      />
+                      {pecaCadastro && item.valorUnitarioEditadoManual && (
+                        <Button
+                          type="button"
+                          variant="link"
+                          size="sm"
+                          className="h-auto px-0 py-0 text-xs"
+                          disabled={isView}
+                          onClick={() => {
+                            const preco = getPrecoSugeridoPeca(
+                              pecaCadastro,
+                              item.pecaFabricanteId || null,
+                              item.pecaModeloId || null
+                            );
+                            updatePeca(index, {
+                              ...buildPecaPatch(
+                                item,
+                                pecaCadastro,
+                                item.pecaFabricanteId || null,
+                                item.pecaModeloId || null,
+                                true
+                              ),
+                              valorUnitario: preco ?? item.valorUnitario,
+                              valorUnitarioEditadoManual: false,
+                            });
+                          }}
+                        >
+                          Usar preco sugerido
+                        </Button>
+                      )}
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label>Garantia</Label>
+                      <Input
+                        value={item.garantia}
+                        disabled={isView}
+                        onChange={(event) =>
+                          updatePeca(index, { garantia: event.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="md:col-span-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive"
+                        disabled={isView}
+                        onClick={() => removePeca(index)}
+                        title="Remover peca"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                      <div className="space-y-2 md:col-span-3">
+                        <Label>Fabricante</Label>
+                        <Select
+                          value={item.pecaFabricanteId || "none"}
+                          disabled={isView || fabricantes.length === 0}
+                          onValueChange={(value) => {
+                            const fabricante =
+                              value === "none"
+                                ? null
+                                : fabricantes.find((option) => option.id === value);
+                            updatePeca(index, {
+                              pecaFabricanteId: fabricante?.id || "",
+                              fabricanteTexto: fabricante?.nome || "",
+                              mostrarFabricante: fabricante
+                                ? item.mostrarFabricante
+                                : false,
+                              ...buildPecaPatch(
+                                item,
+                                pecaCadastro,
+                                fabricante?.id || null,
+                                item.pecaModeloId || null
+                              ),
+                            });
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Nao informar" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Nao informar</SelectItem>
+                            {fabricantes.map((fabricante) => (
+                              <SelectItem key={fabricante.id} value={fabricante.id}>
+                                {fabricante.nome}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2 md:col-span-3">
+                        <Label>Modelo</Label>
+                        <Select
+                          value={item.pecaModeloId || "none"}
+                          disabled={isView || modelos.length === 0}
+                          onValueChange={(value) => {
+                            const modelo =
+                              value === "none"
+                                ? null
+                                : modelos.find((option) => option.id === value);
+                            updatePeca(index, {
+                              pecaModeloId: modelo?.id || "",
+                              modeloTexto: modelo?.nome || "",
+                              mostrarModelo: modelo ? item.mostrarModelo : false,
+                              ...buildPecaPatch(
+                                item,
+                                pecaCadastro,
+                                item.pecaFabricanteId || null,
+                                modelo?.id || null
+                              ),
+                            });
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Nao informar" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Nao informar</SelectItem>
+                            {modelos.map((modelo) => (
+                              <SelectItem key={modelo.id} value={modelo.id}>
+                                {modelo.nome}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <label className="flex items-center gap-2 md:col-span-3 text-sm">
+                        <Checkbox
+                          checked={item.mostrarFabricante}
+                          disabled={isView || !item.fabricanteTexto}
+                          onCheckedChange={(checked) =>
+                            updatePeca(index, {
+                              mostrarFabricante: Boolean(checked),
+                            })
+                          }
+                        />
+                        Mostrar fabricante para o cliente
+                      </label>
+                      <label className="flex items-center gap-2 md:col-span-3 text-sm">
+                        <Checkbox
+                          checked={item.mostrarModelo}
+                          disabled={isView || !item.modeloTexto}
+                          onCheckedChange={(checked) =>
+                            updatePeca(index, {
+                              mostrarModelo: Boolean(checked),
+                            })
+                          }
+                        />
+                        Mostrar modelo para o cliente
+                      </label>
+                    </div>
+                  </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {incluiPecas && (
+              <div className="rounded-md border bg-muted/20 p-4 space-y-3">
+                <label className="flex items-center gap-2 text-sm font-medium">
+                  <Checkbox
+                    checked={incluirFrete}
+                    disabled={isView}
+                    onCheckedChange={(checked) => {
+                      const next = Boolean(checked);
+                      setIncluirFrete(next);
+                      if (next) {
+                        setForm((current) => ({ ...current, frete: "fob" }));
+                      }
+                    }}
+                  />
+                  Incluir frete das peças
+                </label>
+
+                {incluirFrete && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label>Valor do frete</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={valorFrete}
+                        disabled={isView}
+                        onChange={(event) =>
+                          setValorFrete(Number(event.target.value))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Tipo de frete</Label>
+                      <Input value="FOB" readOnly />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+
+          <section
+            className={cn(
+              "rounded-lg border border-border border-l-4 border-l-primary/70 p-5 space-y-4 bg-card",
+              !incluiServicos && "opacity-60"
+            )}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <SectionTitle
+                title="Serviços"
+                description="Mão de obra, serviços por relação de equipamentos e custos de atendimento."
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={!incluiServicos || servicoRelacao.ativo || isView}
+                onClick={() =>
+                  setServicos((current) => [...current, emptyServico()])
+                }
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                Adicionar servico
+              </Button>
+            </div>
+
+            {!incluiServicos ? (
+              <p className="text-sm text-muted-foreground">
+                Tipo selecionado nao inclui servicos.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                <div className="rounded-md border bg-muted/20 p-4 space-y-4">
+                  <label className="flex items-center gap-2 text-sm font-medium">
+                    <Checkbox
+                      checked={servicoRelacao.ativo}
+                      disabled={isView}
+                      onCheckedChange={(checked) =>
+                        setServicoRelacao((current) => ({
+                          ...current,
+                          ativo: Boolean(checked),
+                        }))
+                      }
+                    />
+                    Serviço por relação de equipamentos
+                  </label>
+
+                  {servicoRelacao.ativo && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <label className="flex items-center gap-2 text-sm">
+                          <Checkbox
+                            checked={servicoRelacao.preventiva}
+                            disabled={isView}
+                            onCheckedChange={(checked) =>
+                              setServicoRelacao((current) => ({
+                                ...current,
+                                preventiva: Boolean(checked),
+                              }))
+                            }
+                          />
+                          Preventiva
+                        </label>
+                        <label className="flex items-center gap-2 text-sm">
+                          <Checkbox
+                            checked={servicoRelacao.calibracao}
+                            disabled={isView}
+                            onCheckedChange={(checked) =>
+                              setServicoRelacao((current) => ({
+                                ...current,
+                                calibracao: Boolean(checked),
+                              }))
+                            }
+                          />
+                          Calibração
+                        </label>
+                        <label className="flex items-center gap-2 text-sm">
+                          <Checkbox
+                            checked={servicoRelacao.segurancaEletrica}
+                            disabled={isView}
+                            onCheckedChange={(checked) =>
+                              setServicoRelacao((current) => ({
+                                ...current,
+                                segurancaEletrica: Boolean(checked),
+                              }))
+                            }
+                          />
+                          Segurança elétrica
+                        </label>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Descritivo da relação fornecida</Label>
+                        <Textarea
+                          rows={4}
+                          placeholder="Ex: Serviços conforme relação de equipamentos enviada pelo cliente."
+                          value={servicoRelacao.descricao}
+                          disabled={isView}
+                          onChange={(event) =>
+                            setServicoRelacao((current) => ({
+                              ...current,
+                              descricao: event.target.value,
+                            }))
+                          }
                         />
                       </div>
-                      <div className="md:col-span-3 space-y-2">
-                        <Label className="text-xs">Tipo de Equipamento</Label>
-                        <SearchableSelect
-                          value={item.tipoEquipamento}
-                          onValueChange={(v) => updateServicoItem(i, { tipoEquipamento: v })}
-                          options={tipos}
-                          placeholder="Selecione"
-                          emptyText="Nenhum encontrado."
-                        />
+
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="space-y-2">
+                          <Label>Quantidade</Label>
+                          <Input
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            value={servicoRelacao.quantidade}
+                            disabled={isView}
+                            onChange={(event) =>
+                              setServicoRelacao((current) => ({
+                                ...current,
+                                quantidade: Number(event.target.value),
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Valor unitário</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={servicoRelacao.valorUnitario}
+                            disabled={isView}
+                            onChange={(event) =>
+                              setServicoRelacao((current) => ({
+                                ...current,
+                                valorUnitario: Number(event.target.value),
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                          <Label>Garantia</Label>
+                          <Input
+                            value={servicoRelacao.garantia}
+                            disabled={isView}
+                            onChange={(event) =>
+                              setServicoRelacao((current) => ({
+                                ...current,
+                                garantia: event.target.value,
+                              }))
+                            }
+                          />
+                        </div>
                       </div>
-                    </>
+                    </div>
                   )}
-                  <div className="md:col-span-1 space-y-2">
-                    <Label className="text-xs">Qtd</Label>
-                    <Input
-                      type="number"
-                      min={1}
-                      value={item.quantidade}
-                      onChange={(e) => updateServicoItem(i, { quantidade: Number(e.target.value) || 0 })}
-                    />
-                  </div>
-                  <div className="md:col-span-2 space-y-2">
-                    <Label className="text-xs">Valor Unit. (R$)</Label>
-                    <Input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      value={item.valorUnitario}
-                      onChange={(e) => updateServicoItem(i, { valorUnitario: Number(e.target.value) || 0 })}
-                    />
-                  </div>
-                  <div className="md:col-span-1 space-y-2">
-                    <Label className="text-xs">Gar. (dias)</Label>
-                    <Input
-                      type="number"
-                      min={0}
-                      value={item.garantiaDias}
-                      onChange={(e) => updateServicoItem(i, { garantiaDias: Number(e.target.value) || 0 })}
-                    />
-                  </div>
-                  <div className="md:col-span-1 flex justify-end">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeServicoItem(i)}
-                      className="text-muted-foreground hover:text-destructive"
+                </div>
+
+                {!servicoRelacao.ativo && servicos.map((item, index) => {
+                  const tipoServicoNome = getTipoServicoNome(item.tipoServicoId);
+                  const tipoEquipamentoNome = getTipoEquipamentoNome(
+                    item.tipoEquipamentoId
+                  );
+
+                  return (
+                    <div
+                      key={index}
+                      className="rounded-md border p-4 space-y-3"
                     >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                        <div className="space-y-2 md:col-span-3">
+                          <Label>Tipo de Servico</Label>
+                          <SearchableSelect
+                            value={tipoServicoNome}
+                            onValueChange={(value) => {
+                              const tipo = tiposOS.find(
+                                (item) => item.nome === value
+                              );
+                              updateServico(index, {
+                                tipoServicoId: tipo?.id || "",
+                              });
+                            }}
+                            options={tipoServicoOptions}
+                            placeholder="Selecione"
+                            emptyText="Nenhum tipo encontrado."
+                          />
+                        </div>
+                        <div className="space-y-2 md:col-span-3">
+                          <Label>Tipo de Equipamento</Label>
+                          <SearchableSelect
+                            value={tipoEquipamentoNome}
+                            onValueChange={(value) => {
+                              const tipo = tiposEquipamento.find(
+                                (item) => item.nome === value
+                              );
+                              updateServico(index, {
+                                tipoEquipamentoId: tipo?.id || "",
+                              });
+                            }}
+                            options={tipoEquipamentoOptions}
+                            placeholder="Selecione"
+                            emptyText="Nenhum tipo encontrado."
+                          />
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                          <Label>Quantidade</Label>
+                          <Input
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            value={item.quantidade}
+                            disabled={isView}
+                            onChange={(event) =>
+                              updateServico(index, {
+                                quantidade: Number(event.target.value),
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                          <Label>Valor unitario</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={item.valorUnitario}
+                            disabled={isView}
+                            onChange={(event) =>
+                              updateServico(index, {
+                                valorUnitario: Number(event.target.value),
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2 md:col-span-1">
+                          <Label>Garantia</Label>
+                          <Input
+                            value={item.garantia}
+                            disabled={isView}
+                            onChange={(event) =>
+                              updateServico(index, {
+                                garantia: event.target.value,
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="md:col-span-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="text-destructive"
+                            disabled={isView}
+                            onClick={() => removeServico(index)}
+                            title="Remover servico"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Descricao complementar</Label>
+                        <Input
+                          value={item.descricao}
+                          disabled={isView}
+                          onChange={(event) =>
+                            updateServico(index, {
+                              descricao: event.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+
+                <div className="rounded-md border bg-muted/20 p-4 space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-3">
+                      <label className="flex items-center gap-2 text-sm font-medium">
+                        <Checkbox
+                          checked={incluirDeslocamento}
+                          disabled={isView}
+                          onCheckedChange={(checked) =>
+                            setIncluirDeslocamento(Boolean(checked))
+                          }
+                        />
+                        Incluir deslocamento
+                      </label>
+                      {incluirDeslocamento && (
+                        <div className="space-y-2">
+                          <Label>Valor do deslocamento</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={valorDeslocamento}
+                            disabled={isView}
+                            onChange={(event) =>
+                              setValorDeslocamento(Number(event.target.value))
+                            }
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-3">
+                      <label className="flex items-center gap-2 text-sm font-medium">
+                        <Checkbox
+                          checked={incluirDespesasViagem}
+                          disabled={isView}
+                          onCheckedChange={(checked) =>
+                            setIncluirDespesasViagem(Boolean(checked))
+                          }
+                        />
+                        Incluir despesas de viagem
+                      </label>
+                      {incluirDespesasViagem && (
+                        <div className="space-y-2">
+                          <Label>Valor das despesas de viagem</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={valorDespesasViagem}
+                            disabled={isView}
+                            onChange={(event) =>
+                              setValorDespesasViagem(Number(event.target.value))
+                            }
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Financeiro */}
-        <div className="rounded-lg border p-5 space-y-5">
-          <h3 className="text-sm font-semibold">Informações Financeiras</h3>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="rounded-md bg-muted/40 p-3">
-              <p className="text-xs text-muted-foreground">Total Peças</p>
-              <p className="text-lg font-semibold">{formatBRL(totalPecas)}</p>
-            </div>
-            <div className="rounded-md bg-muted/40 p-3">
-              <p className="text-xs text-muted-foreground">Total Serviços</p>
-              <p className="text-lg font-semibold">{formatBRL(totalServicos)}</p>
-            </div>
-            <div className="rounded-md bg-primary/10 p-3">
-              <p className="text-xs text-muted-foreground">Total Geral</p>
-              <p className="text-lg font-semibold text-primary">{formatBRL(totalGeral)}</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <div className="space-y-2">
-              <Label className="text-sm">Forma de Pagamento</Label>
-              <SearchableSelect
-                value={formaPagamento}
-                onValueChange={(v) => setFormaPagamento(v as FormaPagamento)}
-                options={formasPagamento}
-                placeholder="Selecione"
-                emptyText="—"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm">Modo de Pagamento</Label>
-              <SearchableSelect
-                value={modoPagamento}
-                onValueChange={(v) => setModoPagamento(v as ModoPagamento)}
-                options={modosPagamento}
-                placeholder="Selecione"
-                emptyText="—"
-              />
-            </div>
-
-            {modoPagamento === "Parcelado" && (
-              <>
-                <div className="space-y-2">
-                  <Label className="text-sm">Nº de Parcelas</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={numeroParcelas}
-                    onChange={(e) => setNumeroParcelas(Number(e.target.value) || 1)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm">Valor da Parcela</Label>
-                  <Input value={formatBRL(valorParcela)} disabled className="bg-muted" />
-                </div>
-              </>
+              </div>
             )}
+          </section>
 
-            {modoPagamento === "Entrada + Parcela" && (
-              <>
+          <section className="rounded-lg border border-border border-l-4 border-l-primary/70 p-5 space-y-5 bg-card">
+            <SectionTitle
+              title="Informações financeiras"
+              description="Totais, forma de pagamento, parcelas e condições comerciais."
+            />
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="rounded-md bg-muted/40 p-4">
+                <p className="text-xs text-muted-foreground">Total Pecas</p>
+                <p className="text-lg font-semibold">
+                  {formatCurrency(totalPecas)}
+                </p>
+              </div>
+              <div className="rounded-md bg-muted/40 p-4">
+                <p className="text-xs text-muted-foreground">Total Servicos</p>
+                <p className="text-lg font-semibold">
+                  {formatCurrency(totalServicos)}
+                </p>
+              </div>
+              <div className="rounded-md bg-primary/10 p-4">
+                <p className="text-xs text-muted-foreground">Total Geral</p>
+                <p className="text-lg font-semibold text-primary">
+                  {formatCurrency(totalGeral)}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Forma de Pagamento</Label>
+                <Select
+                  value={form.formaPagamento || "none"}
+                  disabled={isView}
+                  onValueChange={(value) =>
+                    setForm((current) => ({
+                      ...current,
+                      formaPagamento:
+                        value === "none" ? "" : (value as FormaPagamento),
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Nao informado</SelectItem>
+                    <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                    <SelectItem value="cartao">Cartao</SelectItem>
+                    <SelectItem value="boleto">Boleto</SelectItem>
+                    <SelectItem value="pix">Pix</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Modo de Pagamento</Label>
+                <Select
+                  value={form.modoPagamento}
+                  disabled={isView}
+                  onValueChange={(value) =>
+                    setForm((current) => ({
+                      ...current,
+                      modoPagamento: value as ModoPagamento,
+                      numeroParcelas:
+                        value === "avista" ? 1 : Math.max(2, current.numeroParcelas || 2),
+                      diasEntreParcelas:
+                        value === "avista" ? 30 : current.diasEntreParcelas || 30,
+                      valorEntrada:
+                        value === "entrada_parcela" ? current.valorEntrada || 0 : 0,
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="avista">A vista</SelectItem>
+                    <SelectItem value="parcelado">Parcelado</SelectItem>
+                    <SelectItem value="entrada_parcela">
+                      Entrada + Parcelas
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {form.modoPagamento !== "avista" && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {form.modoPagamento === "entrada_parcela" && (
+                  <div className="space-y-2">
+                    <Label>Valor da entrada</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={form.valorEntrada}
+                      disabled={isView}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          valorEntrada: Number(event.target.value),
+                        }))
+                      }
+                    />
+                  </div>
+                )}
                 <div className="space-y-2">
-                  <Label className="text-sm">Valor da Entrada (R$)</Label>
+                  <Label>Numero de parcelas</Label>
                   <Input
                     type="number"
-                    min={0}
-                    step="0.01"
-                    value={valorEntrada}
-                    onChange={(e) => setValorEntrada(Number(e.target.value) || 0)}
+                    min="1"
+                    step="1"
+                    value={form.numeroParcelas}
+                    disabled={isView}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        numeroParcelas: Number(event.target.value),
+                      }))
+                    }
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-sm">Nº de Parcelas (após entrada)</Label>
+                  <Label>Dias entre parcelas</Label>
                   <Input
                     type="number"
-                    min={1}
-                    value={numeroParcelas}
-                    onChange={(e) => setNumeroParcelas(Number(e.target.value) || 1)}
+                    min="1"
+                    step="1"
+                    value={form.diasEntreParcelas}
+                    disabled={isView}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        diasEntreParcelas: Number(event.target.value),
+                      }))
+                    }
                   />
                 </div>
-                <div className="space-y-2 sm:col-span-2">
-                  <Label className="text-sm">Valor de cada parcela</Label>
-                  <Input value={formatBRL(valorParcela)} disabled className="bg-muted" />
+                <div className="space-y-2">
+                  <Label>Valor da parcela</Label>
+                  <Input value={formatCurrency(valorParcela)} readOnly />
                 </div>
-              </>
+                <div className="space-y-2 md:col-span-3">
+                  <Label>Condicoes de pagamento</Label>
+                  <Input value={condicoesPagamentoTexto} readOnly />
+                </div>
+              </div>
             )}
-          </div>
-        </div>
+          </section>
 
-        {/* Entrega e Validade */}
-        <div className="rounded-lg border p-5 space-y-5">
-          <h3 className="text-sm font-semibold">Entrega e Validade</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-            <div className="space-y-2">
-              <Label className="text-sm">Prazo de Entrega</Label>
-              <Input
-                placeholder="Ex: 15 dias úteis"
-                value={prazoEntrega}
-                onChange={(e) => setPrazoEntrega(e.target.value)}
-              />
+          <section className="rounded-lg border border-border border-l-4 border-l-primary/70 p-5 space-y-4 bg-card">
+            <SectionTitle
+              title="Entrega e validade"
+              description="Prazo de execução/entrega e validade da proposta."
+            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Prazo de Entrega</Label>
+                <Input
+                  value={form.prazoEntrega}
+                  disabled={isView}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      prazoEntrega: event.target.value,
+                    }))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Validade da Proposta (dias)</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={form.validadeDias}
+                  disabled={isView}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      validadeDias: Number(event.target.value),
+                    }))
+                  }
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label className="text-sm">Validade da Proposta (dias)</Label>
-              <Input
-                type="number"
-                min={1}
-                value={validadeDias}
-                onChange={(e) => setValidadeDias(Number(e.target.value) || 0)}
-              />
+          </section>
+
+          <section className="rounded-lg border border-border border-l-4 border-l-primary/70 p-5 space-y-2 bg-card">
+            <div className="flex items-center gap-2">
+              <CalendarDays className="w-4 h-4 text-primary" />
+              <SectionTitle title="Detalhes do orçamento" />
             </div>
-            <div className="space-y-2">
-              <Label className="text-sm">Frete</Label>
-              <SearchableSelect
-                value={frete}
-                onValueChange={(v) => setFrete(v as TipoFrete)}
-                options={fretes}
-                placeholder="Selecione"
-                emptyText="—"
-              />
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={isView}
+                onClick={() => appendDetalhesOrcamento(DESCRITIVO_PREVENTIVA)}
+              >
+                Descritivo Preventiva
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={isView}
+                onClick={() => appendDetalhesOrcamento(DESCRITIVO_CALIBRACAO)}
+              >
+                Descritivo Calibração
+              </Button>
             </div>
-          </div>
+            <Textarea
+              placeholder="Descricao detalhada do orcamento..."
+              rows={6}
+              value={form.detalhesOrcamento}
+              disabled={isView}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  detalhesOrcamento: event.target.value,
+                }))
+              }
+            />
+          </section>
         </div>
 
-        {/* Detalhes */}
-        <div className="rounded-lg border p-5 space-y-2">
-          <h3 className="text-sm font-semibold">Detalhes do Orçamento</h3>
-          <Textarea
-            placeholder="Descrição detalhada do orçamento..."
-            rows={5}
-            value={detalhes}
-            onChange={(e) => setDetalhes(e.target.value)}
-          />
-        </div>
-
-        </div>
-
-        <DialogFooter className="px-6 py-4 border-t shrink-0 bg-background">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {readOnly ? "Fechar" : "Cancelar"}
+        <DialogFooter className="px-6 py-4 border-t bg-background">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+          >
+            {isView ? "Fechar" : "Cancelar"}
           </Button>
-          {!readOnly && (
-            <Button onClick={handleSave}>
-              {mode === "edit" ? "Salvar Alterações" : "Salvar Orçamento"}
+          {!isView && (
+            <Button onClick={handleSubmit} disabled={isSubmitting}>
+              <Save className="w-4 h-4 mr-2" />
+              {isSubmitting ? "Salvando..." : "Salvar Orcamento"}
             </Button>
           )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <PecaQuickCreateDialog
+      open={quickCreateOpen}
+      onOpenChange={setQuickCreateOpen}
+      onCreated={(peca, result?: PecaQuickCreateResult) => {
+        const index = quickCreateIndex ?? Math.max(0, pecas.length - 1);
+        if (result?.fabricanteId || result?.modeloId) {
+          const baseItem = pecas[index] || emptyPeca();
+          updatePeca(index, {
+            pecaId: peca.id,
+            pecaNome: peca.nome,
+            pecaFabricanteId: result.fabricanteId || "",
+            pecaModeloId: result.modeloId || "",
+            fabricanteTexto: result.fabricanteNome || "",
+            modeloTexto: result.modeloNome || "",
+            mostrarFabricante: Boolean(result.fabricanteNome),
+            mostrarModelo: Boolean(result.modeloNome),
+            valorUnitarioEditadoManual: false,
+            ...buildPecaPatch(
+              baseItem,
+              peca,
+              result.fabricanteId || null,
+              result.modeloId || null,
+              true
+            ),
+          });
+          return;
+        }
+
+        selecionarPecaNoItem(index, peca, true);
+      }}
+    />
+    </>
   );
 };
 

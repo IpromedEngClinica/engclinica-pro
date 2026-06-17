@@ -3,14 +3,15 @@ import {
   EmpresaFormInput,
   empresasService,
   EmpresaSupabase,
+  ListarEmpresasFiltros,
 } from "@/services/empresasService";
 
 export const EMPRESAS_QUERY_KEY = ["empresas"];
 
-export const useEmpresas = () => {
+export const useEmpresas = (filtros?: ListarEmpresasFiltros) => {
   return useQuery<EmpresaSupabase[]>({
-    queryKey: EMPRESAS_QUERY_KEY,
-    queryFn: empresasService.listar,
+    queryKey: [...EMPRESAS_QUERY_KEY, filtros],
+    queryFn: () => empresasService.listar(filtros),
   });
 };
 

@@ -13,6 +13,7 @@ interface SearchableSelectProps {
   emptyText?: string;
   onAddNew?: () => void;
   addNewLabel?: string;
+  disabled?: boolean;
 }
 
 const SearchableSelect = ({
@@ -23,6 +24,7 @@ const SearchableSelect = ({
   emptyText = "Nenhum item encontrado.",
   onAddNew,
   addNewLabel = "Adicionar novo",
+  disabled = false,
 }: SearchableSelectProps) => {
   const [open, setOpen] = useState(false);
 
@@ -33,6 +35,7 @@ const SearchableSelect = ({
           variant="outline"
           role="combobox"
           aria-expanded={open}
+          disabled={disabled}
           className="w-full justify-between font-normal"
         >
           <span className={cn("truncate", !value && "text-muted-foreground")}>

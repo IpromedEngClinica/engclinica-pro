@@ -1,200 +1,379 @@
-import { useMemo } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Pencil, ClipboardList, FileBox, CalendarCheck, FileWarning } from "lucide-react";
-import { Equipamento, useData } from "@/contexts/DataContext";
+  CalendarCheck,
+  ClipboardList,
+  Cpu,
+  FileWarning,
+  PackageCheck,
+  Pencil,
+  Ruler,
+} from "lucide-react";
+import { useState } from "react";
+import type { ReactNode } from "react";
+import CalibracaoExecucaoFormDialog from "@/components/CalibracaoExecucaoFormDialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import EquipamentoHistoricoSection from "@/components/EquipamentoHistoricoSection";
+import EquipamentoFormDialog from "@/components/EquipamentoFormDialog";
+import LaudoObsolescenciaFormDialog from "@/components/LaudoObsolescenciaFormDialog";
+import ModalActionsBar from "@/components/ModalActionsBar";
+import OrdemServicoFormDialog from "@/components/OrdemServicoFormDialog";
+import PreventivaChecklistDialog from "@/components/PreventivaChecklistDialog";
+import ProtocoloRecolhimentoDialog from "@/components/ProtocoloRecolhimentoDialog";
 import { toast } from "@/hooks/use-toast";
+import {
+  procedimentosPreventivaService,
+  type ProcedimentoPreventiva,
+} from "@/services/procedimentosPreventivaService";
+import type { EquipamentoSupabase } from "@/services/equipamentosService";
+import { getBloqueioCriacaoCalibracao } from "@/utils/equipamentoCalibracao";
 
-interface Props {
+interface EquipamentoDetalhesDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  equipamento: Equipamento | null;
-  onSelectOS?: (osId: number) => void;
-  onEdit?: (eq: Equipamento) => void;
-  onCriarOS?: (eq: Equipamento, tipoServico?: string) => void;
-  onCriarProtocolo?: (eq: Equipamento) => void;
+  equipamento: EquipamentoSupabase | null;
+  onEditar?: (equipamento: EquipamentoSupabase) => void;
+  onCriarOS?: (equipamento: EquipamentoSupabase) => void;
+  onCriarPreventiva?: (equipamento: EquipamentoSupabase) => void;
+  onCriarProtocoloRecolhimento?: (equipamento: EquipamentoSupabase) => void;
+  onCriarLaudo?: (equipamento: EquipamentoSupabase) => void;
+  onCriarCalibracao?: (equipamento: EquipamentoSupabase) => void;
 }
 
-const Card = ({ title, children }: { title: string; children: React.ReactNode }) => (
-  <div className="rounded-lg border bg-card shadow-sm">
-    <div className="inline-block -mt-3 ml-4 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium">
-      {title}
-    </div>
-    <div className="p-5 pt-3 space-y-2 text-foreground">{children}</div>
-  </div>
-);
+const getTipoEquipamento = (equipamento: EquipamentoSupabase) =>
+  equipamento.tipo_equipamento?.nome ||
+  equipamento.tipo_texto ||
+  "Equipamento";
 
-const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
-  <div className="text-sm">
-    <span className="font-semibold text-foreground">{label}: </span>
-    <span className="text-foreground">{children || "—"}</span>
-  </div>
-);
+const getEmpresaNome = (equipamento: EquipamentoSupabase) =>
+  equipamento.empresa?.nome_fantasia ||
+  equipamento.empresa?.nome ||
+  "Não informado";
 
-const formatDate = (iso: string) => {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+const getEquipamentoStatusLabel = (equipamento: EquipamentoSupabase) => {
+  if (equipamento.ativo === false) {
+    return "Desativado";
+  }
+
+  return equipamento.status || "Ativo";
 };
 
-const EquipamentoDetalhesDialog = ({ open, onOpenChange, equipamento, onSelectOS, onEdit, onCriarOS, onCriarProtocolo }: Props) => {
-  const { ordensServico } = useData();
+const formatDate = (value?: string | null) => {
+  if (!value) return "-";
 
-  const futuro = (label: string) =>
-    toast({ title: label, description: "Funcionalidade em desenvolvimento." });
+  const date = new Date(value);
 
-  const historico = useMemo(() => {
-    if (!equipamento) return [];
-    return ordensServico
-      .filter((o) => o.equipamentoId === equipamento.id)
-      .sort((a, b) => (b.dataCriacao || "").localeCompare(a.dataCriacao || ""));
-  }, [ordensServico, equipamento]);
+  if (Number.isNaN(date.getTime())) return "-";
 
-  const recorrentes = useMemo(() => {
-    const counts: Record<string, number> = {};
-    historico.forEach((o) => {
-      const key = (o.origemProblema || o.tipoServico || "").trim();
-      if (!key) return;
-      counts[key] = (counts[key] || 0) + 1;
-    });
-    return Object.entries(counts)
-      .filter(([, n]) => n >= 2)
-      .sort((a, b) => b[1] - a[1]);
-  }, [historico]);
+  return date.toLocaleDateString("pt-BR");
+};
+
+const Field = ({
+  label,
+  value,
+}: {
+  label: string;
+  value?: string | boolean | null;
+}) => {
+  const display =
+    typeof value === "boolean" ? (value ? "Sim" : "Não") : value || "-";
+
+  return (
+    <div className="text-sm">
+      <span className="font-medium text-muted-foreground">{label}: </span>
+      <span className="text-foreground">{display}</span>
+    </div>
+  );
+};
+
+const Section = ({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) => (
+  <section className="rounded-lg border p-4 space-y-3">
+    <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+      {children}
+    </div>
+  </section>
+);
+
+const EquipamentoDetalhesDialog = ({
+  open,
+  onOpenChange,
+  equipamento,
+  onEditar,
+  onCriarOS,
+  onCriarPreventiva,
+  onCriarProtocoloRecolhimento,
+  onCriarLaudo,
+  onCriarCalibracao,
+}: EquipamentoDetalhesDialogProps) => {
+  const [editarOpen, setEditarOpen] = useState(false);
+  const [osOpen, setOsOpen] = useState(false);
+  const [recolhimentoOpen, setRecolhimentoOpen] = useState(false);
+  const [preventivaOpen, setPreventivaOpen] = useState(false);
+  const [procedimentoPreventiva, setProcedimentoPreventiva] =
+    useState<ProcedimentoPreventiva | null>(null);
+  const [laudoOpen, setLaudoOpen] = useState(false);
+  const [calibracaoOpen, setCalibracaoOpen] = useState(false);
 
   if (!equipamento) return null;
 
+  const tipo = getTipoEquipamento(equipamento);
+  const isAtivo = equipamento.ativo !== false;
+
+  const handleEditar = () => {
+    if (onEditar) {
+      onEditar(equipamento);
+      return;
+    }
+
+    setEditarOpen(true);
+  };
+
+  const handleCriarOS = () => {
+    if (onCriarOS) {
+      onCriarOS(equipamento);
+      return;
+    }
+
+    setOsOpen(true);
+  };
+
+  const handleRecolhimento = () => {
+    if (onCriarProtocoloRecolhimento) {
+      onCriarProtocoloRecolhimento(equipamento);
+      return;
+    }
+
+    setRecolhimentoOpen(true);
+  };
+
+  const handlePreventiva = async () => {
+    if (onCriarPreventiva) {
+      onCriarPreventiva(equipamento);
+      return;
+    }
+
+    if (!equipamento.tipo_equipamento_id) {
+      toast({
+        title: "Tipo de equipamento nao informado.",
+        description: "Cadastre o tipo de equipamento antes de criar a preventiva.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const procedimento =
+        await procedimentosPreventivaService.buscarAtivoPorTipoEquipamento(
+          equipamento.tipo_equipamento_id
+        );
+
+      if (!procedimento) {
+        toast({
+          title: "Nenhum procedimento preventivo cadastrado.",
+          description: "Cadastre um procedimento para este tipo de equipamento.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setProcedimentoPreventiva(procedimento);
+      setPreventivaOpen(true);
+    } catch (error) {
+      toast({
+        title: "Erro ao buscar procedimento preventivo",
+        description: error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleLaudo = () => {
+    if (onCriarLaudo) {
+      onCriarLaudo(equipamento);
+      return;
+    }
+
+    setLaudoOpen(true);
+  };
+
+  const handleCriarCalibracao = () => {
+    const bloqueio = getBloqueioCriacaoCalibracao(equipamento);
+    if (bloqueio) {
+      toast({
+        title: "Nao foi possivel criar calibracao",
+        description: bloqueio,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (onCriarCalibracao) {
+      onCriarCalibracao(equipamento);
+      return;
+    }
+
+    setCalibracaoOpen(true);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl h-[90vh] flex flex-col p-0 gap-0">
-        <DialogHeader className="px-6 py-4 border-b shrink-0 flex flex-row items-center justify-between">
-          <DialogTitle className="text-xl text-foreground">
-            {equipamento.tipo} <span className="text-muted-foreground font-normal">| {equipamento.modelo}</span>
-          </DialogTitle>
-          <div className="mr-8 flex gap-2">
-            {onEdit && (
-              <Button size="sm" variant="outline" onClick={() => onEdit(equipamento)}>
-                <Pencil className="w-4 h-4 mr-2" /> Editar
-              </Button>
-            )}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="default">
-                  <MoreHorizontal className="w-4 h-4 mr-2" /> Ações
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-6xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center gap-2">
+              <Cpu className="w-5 h-5 text-primary" />
+              {tipo}
+            </DialogTitle>
+          </DialogHeader>
+
+          <ModalActionsBar>
+            <Button variant="outline" size="sm" onClick={handleEditar}>
+              <Pencil className="w-4 h-4 mr-2" />
+              Editar
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleCriarCalibracao}>
+              <Ruler className="w-4 h-4 mr-2" />
+              {"Criar Calibra\u00e7\u00e3o"}
+            </Button>
+            {isAtivo && (
+              <>
+                <Button variant="outline" size="sm" onClick={handleCriarOS}>
+                  <ClipboardList className="w-4 h-4 mr-2" />
+                  Criar OS
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56 bg-popover">
-                {onCriarOS && (
-                  <DropdownMenuItem onClick={() => onCriarOS(equipamento)}>
-                    <ClipboardList className="w-4 h-4 mr-2" /> Criar Ordem de Serviço
-                  </DropdownMenuItem>
-                )}
-                {onCriarProtocolo && (
-                  <DropdownMenuItem onClick={() => onCriarProtocolo(equipamento)}>
-                    <FileBox className="w-4 h-4 mr-2" /> Criar Protocolo de Recolhimento
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => futuro("Criar Preventiva")}>
-                  <CalendarCheck className="w-4 h-4 mr-2" /> Criar Preventiva
-                </DropdownMenuItem>
-                {onCriarOS && (
-                  <DropdownMenuItem onClick={() => onCriarOS(equipamento, "Laudo De Obsolescência")}>
-                    <FileWarning className="w-4 h-4 mr-2" /> Criar Laudo de Obsolescência
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                <Button variant="outline" size="sm" onClick={handleRecolhimento}>
+                  <PackageCheck className="w-4 h-4 mr-2" />
+                  Recolhimento
+                </Button>
+                <Button variant="outline" size="sm" onClick={handlePreventiva}>
+                  <CalendarCheck className="w-4 h-4 mr-2" />
+                  Preventiva
+                </Button>
+              </>
+            )}
+            <Button size="sm" onClick={handleLaudo}>
+              <FileWarning className="w-4 h-4 mr-2" />
+              Laudo
+            </Button>
+          </ModalActionsBar>
+
+          <div className="space-y-4">
+          <Section title="Dados do Equipamento">
+            <Field
+              label="Nº do equipamento"
+              value={String(equipamento.numero_cadastro).padStart(3, "0")}
+            />
+            <Field label="Tipo" value={tipo} />
+            <Field label="Status" value={getEquipamentoStatusLabel(equipamento)} />
+            <Field label="Proprietário" value={getEmpresaNome(equipamento)} />
+            <Field label="Fabricante" value={equipamento.fabricante} />
+            <Field label="Modelo" value={equipamento.modelo} />
+            <Field label="TAG" value={equipamento.tag} />
+            <Field label="Número de Série" value={equipamento.numero_serie} />
+            <Field label="Patrimonio" value={equipamento.patrimonio} />
+            <Field label="Setor" value={equipamento.setor} />
+          </Section>
+
+          <Section title="Preventiva e Calibração">
+            <Field
+              label="Última Preventiva"
+              value={formatDate(equipamento.data_ultima_preventiva)}
+            />
+            <Field
+              label="Próxima Preventiva"
+              value={formatDate(equipamento.data_proxima_preventiva)}
+            />
+            <Field
+              label="Última Calibração"
+              value={formatDate(equipamento.data_ultima_calibracao)}
+            />
+            <Field
+              label="Próxima Calibração"
+              value={formatDate(equipamento.data_proxima_calibracao)}
+            />
+          </Section>
+
+          {equipamento.observacoes && (
+            <section className="rounded-lg border p-4 space-y-2">
+              <h3 className="text-sm font-semibold text-foreground">
+                Observações
+              </h3>
+              <p className="text-sm text-foreground whitespace-pre-wrap">
+                {equipamento.observacoes}
+              </p>
+            </section>
+          )}
+
+          <EquipamentoHistoricoSection equipamentoId={equipamento.id} />
           </div>
-        </DialogHeader>
-        <div className="flex-1 overflow-y-auto min-h-0 p-6 space-y-6">
-          <Card title="Dados Básicos">
-            <Field label="Identificação">{equipamento.tag}</Field>
-            <Field label="Estado">{equipamento.status}</Field>
-            <Field label="Tipo">{equipamento.tipo}</Field>
-            <Field label="Proprietário">{equipamento.empresa}</Field>
-            <Field label="Fabricante">{equipamento.fabricante}</Field>
-            <Field label="Modelo">{equipamento.modelo}</Field>
-            <Field label="Número de Série">{equipamento.serie}</Field>
-            <Field label="Patrimônio">{equipamento.patrimonio}</Field>
-            <Field label="Setor">{equipamento.setor}</Field>
-          </Card>
 
-          <div>
-            <h2 className="text-lg font-semibold text-foreground mb-3">Histórico de Atividades</h2>
+          <DialogFooter className="pt-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-            <Card title="Ordens de Serviço">
-              {historico.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Nenhuma ordem de serviço registrada para este equipamento.
-                </p>
-              ) : (
-                <div className="overflow-x-auto -mx-2">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b bg-muted/40">
-                        <th className="text-left px-3 py-2 font-medium text-muted-foreground">Número</th>
-                        <th className="text-left px-3 py-2 font-medium text-muted-foreground">Estado</th>
-                        <th className="text-left px-3 py-2 font-medium text-muted-foreground">Solicitante</th>
-                        <th className="text-left px-3 py-2 font-medium text-muted-foreground">Responsável</th>
-                        <th className="text-left px-3 py-2 font-medium text-muted-foreground">Tipo de Serviço</th>
-                        <th className="text-left px-3 py-2 font-medium text-muted-foreground">Data</th>
-                        <th className="text-left px-3 py-2 font-medium text-muted-foreground">Origem do Problema</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {historico.map((o) => (
-                        <tr
-                          key={o.id}
-                          className="border-b last:border-0 hover:bg-muted/30 cursor-pointer"
-                          onClick={() => onSelectOS?.(o.id)}
-                        >
-                          <td className="px-3 py-2 font-medium text-primary">{o.numero}</td>
-                          <td className="px-3 py-2">{o.estado}</td>
-                          <td className="px-3 py-2">{o.solicitante}</td>
-                          <td className="px-3 py-2">{o.responsavelTecnico || "—"}</td>
-                          <td className="px-3 py-2">{o.tipoServico}</td>
-                          <td className="px-3 py-2">{formatDate(o.dataCriacao)}</td>
-                          <td className="px-3 py-2">{o.origemProblema || "—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </Card>
+      <EquipamentoFormDialog
+        open={editarOpen}
+        onOpenChange={setEditarOpen}
+        mode="edit"
+        equipamento={equipamento}
+      />
 
-            <div className="mt-6">
-              <Card title="Defeitos Recorrentes">
-                {recorrentes.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    Nenhum defeito recorrente identificado.
-                  </p>
-                ) : (
-                  <ul className="text-sm space-y-1.5">
-                    {recorrentes.map(([nome, qtd]) => (
-                      <li key={nome} className="flex items-center justify-between">
-                        <span className="text-foreground">{nome}</span>
-                        <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
-                          {qtd}x
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </Card>
-            </div>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+      <OrdemServicoFormDialog
+        open={osOpen}
+        onOpenChange={setOsOpen}
+        mode="create"
+        fromEquipamento={{
+          id: equipamento.id,
+          empresaId: equipamento.empresa_id,
+        }}
+      />
+
+      <ProtocoloRecolhimentoDialog
+        open={recolhimentoOpen}
+        onOpenChange={setRecolhimentoOpen}
+        equipamento={equipamento}
+      />
+
+      <PreventivaChecklistDialog
+        open={preventivaOpen}
+        onOpenChange={(value) => {
+          setPreventivaOpen(value);
+          if (!value) setProcedimentoPreventiva(null);
+        }}
+        equipamento={equipamento}
+        procedimento={procedimentoPreventiva}
+      />
+
+      <LaudoObsolescenciaFormDialog
+        open={laudoOpen}
+        onOpenChange={setLaudoOpen}
+        initialEmpresaId={equipamento.empresa_id}
+        initialEquipamentoId={equipamento.id}
+      />
+
+      <CalibracaoExecucaoFormDialog
+        open={calibracaoOpen}
+        onOpenChange={setCalibracaoOpen}
+        empresaInicialId={equipamento.empresa_id}
+        equipamentoInicialId={equipamento.id}
+      />
+    </>
   );
 };
 

@@ -1,6 +1,6 @@
 import { FormEvent, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
-import { Cpu, LogIn } from "lucide-react";
+import { LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
@@ -42,15 +42,17 @@ const Login = () => {
         <div className="bg-card border rounded-2xl shadow-sm p-6 space-y-6">
           <div className="flex flex-col items-center text-center space-y-3">
             <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center">
-              <Cpu className="w-6 h-6 text-primary-foreground" />
+              <span className="text-sm font-bold tracking-wide text-primary-foreground">
+                ACI
+              </span>
             </div>
 
             <div>
               <h1 className="text-2xl font-bold text-foreground">
-                EngClinica Pro
+                Ipromed - Sistema de Gestão
               </h1>
               <p className="text-sm text-muted-foreground mt-1">
-                Acesse o sistema de gestão de engenharia clínica.
+                Acesso ao ambiente operacional da ACI.
               </p>
             </div>
           </div>
