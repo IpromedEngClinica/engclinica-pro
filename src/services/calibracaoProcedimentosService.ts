@@ -190,6 +190,7 @@ const selectPadraoTabela = `
   nome,
   grandeza,
   unidade,
+  resolucao_padrao,
   ordem,
   ativo,
   pontos:calibracao_padrao_pontos (${selectPadraoPonto})
@@ -399,6 +400,7 @@ export const calibracaoProcedimentosService = {
       .from("calibracao_padroes")
       .select(selectPadraoSelecionavel)
       .eq("ativo", true)
+      .is("renovado_por_id", null)
       .gte("data_validade", dataReferencia)
       .order("nome_padrao", { ascending: true });
     if (error) throw new Error(error.message);

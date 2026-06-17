@@ -5,6 +5,7 @@ import type {
 import { formatNumeroCertificadoSegurancaEletrica } from "@/services/segurancaEletricaService";
 import { getEquipamentoLabel } from "@/utils/equipamentoDisplay";
 import { formatDecimalSeguranca } from "@/utils/segurancaEletricaTemplate";
+import type { AssinaturasDocumento } from "@/services/assinaturasService";
 
 const FOOTER =
   "ACI Comercio LTDA - Assistencia Tecnica Hospitalar e Engenharia Clinica - Rua Jose Martins da Silva, 215 - Ceramica - Juiz de Fora - MG - CEP 36.080-370 - PABX: (32) 3221-7944 - E-mail: acicomercio@yahoo.com.br - CNPJ: 71.208.094/0001-37";
@@ -119,12 +120,15 @@ const styles = `
   .na{color:#6b7280;font-weight:700}
   .sign{display:grid;grid-template-columns:1fr 1fr;gap:50px;margin-top:42px;text-align:center}
   .line{border-top:1px solid #777;padding-top:8px}
+  .signature-image{height:64px;display:flex;align-items:flex-end;justify-content:center;margin-bottom:3px}
+  .signature-image img{display:block;max-width:90%;max-height:62px;object-fit:contain}
   footer{border-top:1px solid #ddd;margin-top:28px;padding-top:8px;color:#6b7280;font-size:10px;text-align:center}
 `;
 
 export const buildSegurancaEletricaHtml = (
   execucao: SegurancaEletricaExecucao,
-  logoSrc: string
+  logoSrc: string,
+  assinaturas: AssinaturasDocumento = {}
 ) => {
   const numero = formatNumeroCertificadoSegurancaEletrica(
     execucao.numero_certificado
@@ -216,8 +220,8 @@ O resultado das medições apresentadas neste certificado refere-se ao resultado
     ${execucao.observacoes ? `<h2>7. Observações</h2><div class="note">${esc(execucao.observacoes)}</div>` : ""}
 
     <div class="sign">
-      <div class="line">${esc(execucao.tecnico_executor_nome)}<br>Técnico Executor</div>
-      <div class="line">${esc(execucao.responsavel_tecnico_nome)}<br>${esc(RESPONSAVEL_TECNICO_CREA)}<br>Responsável Técnico</div>
+      <div><div class="signature-image">${assinaturas.tecnico?.dataUrl ? `<img src="${assinaturas.tecnico.dataUrl}" alt="Assinatura do tecnico executor">` : ""}</div><div class="line">${esc(assinaturas.tecnico?.nome || execucao.tecnico_executor_nome)}<br>Técnico Executor</div></div>
+      <div><div class="signature-image">${assinaturas.responsavel?.dataUrl ? `<img src="${assinaturas.responsavel.dataUrl}" alt="Assinatura do responsavel tecnico">` : ""}</div><div class="line">${esc(assinaturas.responsavel?.nome || execucao.responsavel_tecnico_nome)}<br>${esc(RESPONSAVEL_TECNICO_CREA)}<br>Responsável Técnico</div></div>
     </div>
     <footer>${esc(FOOTER)}</footer>
   </main></body></html>`;

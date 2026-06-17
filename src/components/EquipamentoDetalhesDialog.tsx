@@ -271,6 +271,10 @@ const EquipamentoDetalhesDialog = ({
 
           <div className="space-y-4">
           <Section title="Dados do Equipamento">
+            <Field
+              label="Nº do equipamento"
+              value={String(equipamento.numero_cadastro).padStart(3, "0")}
+            />
             <Field label="Tipo" value={tipo} />
             <Field label="Status" value={getEquipamentoStatusLabel(equipamento)} />
             <Field label="Proprietário" value={getEmpresaNome(equipamento)} />

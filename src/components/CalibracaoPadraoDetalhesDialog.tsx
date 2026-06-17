@@ -1,4 +1,4 @@
-import { Download, FileText, Pencil, Trash2 } from "lucide-react";
+import { Download, FileText, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ModalActionsBar from "@/components/ModalActionsBar";
 import { toast } from "@/hooks/use-toast";
+import { useCalibracaoPadraoHistorico } from "@/hooks/useCalibracaoPadroes";
 import {
   CalibracaoPadrao,
   calibracaoPadroesService,
@@ -25,6 +26,7 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   padrao: CalibracaoPadrao | null;
   onEditar: (padrao: CalibracaoPadrao) => void;
+  onRenovar: (padrao: CalibracaoPadrao) => void;
   onDocumentos: (padrao: CalibracaoPadrao) => void;
   onDesativar: (padrao: CalibracaoPadrao) => void;
 }
@@ -61,9 +63,12 @@ const CalibracaoPadraoDetalhesDialog = ({
   onOpenChange,
   padrao,
   onEditar,
+  onRenovar,
   onDocumentos,
   onDesativar,
 }: Props) => {
+  const { data: historico = [] } = useCalibracaoPadraoHistorico(padrao?.id);
+
   if (!padrao) return null;
 
   const status = getStatusValidadePadrao(padrao.data_validade);
@@ -99,6 +104,9 @@ const CalibracaoPadraoDetalhesDialog = ({
         <ModalActionsBar>
           <Button variant="outline" size="sm" onClick={() => onEditar(padrao)}>
             <Pencil className="w-4 h-4 mr-2" /> Editar
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => onRenovar(padrao)}>
+            <RefreshCw className="w-4 h-4 mr-2" /> Renovar certificado
           </Button>
           <Button
             variant="outline"
@@ -193,6 +201,64 @@ const CalibracaoPadraoDetalhesDialog = ({
               </p>
             )}
           </section>
+
+          {historico.length > 1 && (
+            <section className="rounded-lg border p-4 space-y-3">
+              <h3 className="text-sm font-semibold">Historico de certificados</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[760px] text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/50">
+                      <th className="px-3 py-2 text-left font-medium">Certificado</th>
+                      <th className="px-3 py-2 text-left font-medium">Calibracao</th>
+                      <th className="px-3 py-2 text-left font-medium">Validade</th>
+                      <th className="px-3 py-2 text-left font-medium">Status</th>
+                      <th className="px-3 py-2 text-right font-medium">Documento</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historico.map((item) => {
+                      const itemStatus = getStatusValidadePadrao(item.data_validade);
+                      const itemCertificado = (item.documentos || []).find(
+                        (documento) => documento.tipo_documento === "Certificado"
+                      );
+                      return (
+                        <tr key={item.id} className="border-b last:border-0">
+                          <td className="px-3 py-2 font-medium">
+                            {item.numero_certificado}
+                            {item.id === padrao.id && (
+                              <Badge variant="outline" className="ml-2">Atual</Badge>
+                            )}
+                          </td>
+                          <td className="px-3 py-2">{formatDate(item.data_calibracao)}</td>
+                          <td className="px-3 py-2">{formatarDataPadrao(item.data_validade)}</td>
+                          <td className="px-3 py-2">
+                            <Badge variant="outline" className={statusClasses[itemStatus]}>
+                              {statusLabels[itemStatus]}
+                            </Badge>
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={!itemCertificado}
+                              onClick={async () => {
+                                if (!itemCertificado) return;
+                                const url = await calibracaoPadroesService.baixarDocumento(itemCertificado);
+                                window.open(url, "_blank", "noopener,noreferrer");
+                              }}
+                            >
+                              <Download className="mr-2 h-4 w-4" /> Baixar
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
 
           <section className="rounded-lg border p-4 space-y-3">
             <h3 className="text-sm font-semibold">Tabelas metrologicas</h3>

@@ -38,3 +38,27 @@ export const useAtualizarEquipamento = () => {
     },
   });
 };
+
+export const useCriarEquipamentosEmLote = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (inputs: EquipamentoFormInput[]) =>
+      equipamentosService.criarEmLote(inputs),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: EQUIPAMENTOS_QUERY_KEY });
+    },
+  });
+};
+
+export const useExcluirEquipamento = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => equipamentosService.excluir(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: EQUIPAMENTOS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+  });
+};

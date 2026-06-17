@@ -2,12 +2,18 @@ import { AlertCircle, FileText, Loader2 } from "lucide-react";
 import { ReactNode, useState } from "react";
 import LaudoObsolescenciaDetalhesDialog from "@/components/LaudoObsolescenciaDetalhesDialog";
 import OrcamentoDetalhesDialog from "@/components/OrcamentoDetalhesDialog";
+import OrcamentoFormDialog from "@/components/OrcamentoFormDialog";
 import OrdemServicoDetalhesDialog from "@/components/OrdemServicoDetalhesDialog";
+import OrdemServicoFormDialog, {
+  DialogMode as OrdemServicoDialogMode,
+} from "@/components/OrdemServicoFormDialog";
 import ProtocoloDetalhesDialog from "@/components/ProtocoloDetalhesDialog";
+import ProtocoloEntregaDialog from "@/components/ProtocoloEntregaDialog";
 import CalibracaoExecucaoDetalhesDialog from "@/components/CalibracaoExecucaoDetalhesDialog";
 import SegurancaEletricaDetalhesDialog from "@/components/SegurancaEletricaDetalhesDialog";
 import { useEquipamentoHistorico } from "@/hooks/useEquipamentoHistorico";
 import { toast } from "@/hooks/use-toast";
+import { useExcluirOrdemServico } from "@/hooks/useOrdensServico";
 import {
   LaudoObsolescenciaSupabase,
   laudosObsolescenciaService,
@@ -112,11 +118,22 @@ const HistoricoLink = ({
 const EquipamentoHistoricoSection = ({
   equipamentoId,
 }: EquipamentoHistoricoSectionProps) => {
-  const { data, isLoading, isError, error } =
+  const { data, isLoading, isError, error, refetch } =
     useEquipamentoHistorico(equipamentoId);
   const [ordemSelecionada, setOrdemSelecionada] =
     useState<OrdemServicoSupabase | null>(null);
   const [ordemDialogOpen, setOrdemDialogOpen] = useState(false);
+  const [ordemFormOpen, setOrdemFormOpen] = useState(false);
+  const [ordemFormMode, setOrdemFormMode] =
+    useState<OrdemServicoDialogMode>("create");
+  const [ordemEditando, setOrdemEditando] =
+    useState<OrdemServicoSupabase | null>(null);
+  const [entregaOpen, setEntregaOpen] = useState(false);
+  const [osEntrega, setOsEntrega] =
+    useState<OrdemServicoSupabase | null>(null);
+  const [orcamentoFormOpen, setOrcamentoFormOpen] = useState(false);
+  const [osOrcamento, setOsOrcamento] =
+    useState<OrdemServicoSupabase | null>(null);
   const [protocoloSelecionado, setProtocoloSelecionado] =
     useState<ProtocoloOSSupabase | null>(null);
   const [protocoloDialogOpen, setProtocoloDialogOpen] = useState(false);
@@ -133,6 +150,7 @@ const EquipamentoHistoricoSection = ({
     useState<SegurancaEletricaExecucao | null>(null);
   const [segurancaEletricaDialogOpen, setSegurancaEletricaDialogOpen] =
     useState(false);
+  const excluirOS = useExcluirOrdemServico();
 
   const handleAbrirOS = async (id: string) => {
     try {
@@ -216,6 +234,31 @@ const EquipamentoHistoricoSection = ({
       toast({
         title: "Erro ao abrir certificado",
         description: error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleExcluirOS = async (os: OrdemServicoSupabase) => {
+    const confirmado = window.confirm(
+      `Tem certeza que deseja excluir a OS ${os.numero}? Ela será ocultada da listagem, mas permanecerá no banco para histórico.`
+    );
+
+    if (!confirmado) return;
+
+    try {
+      await excluirOS.mutateAsync(os.id);
+      await refetch();
+
+      toast({
+        title: "OS excluída com sucesso.",
+        description: `A OS ${os.numero} foi ocultada da listagem.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Erro ao excluir OS",
+        description:
+          error instanceof Error ? error.message : "Erro inesperado ao excluir OS.",
         variant: "destructive",
       });
     }
@@ -636,6 +679,19 @@ const EquipamentoHistoricoSection = ({
         )}
       </SectionCard>
 
+      <OrdemServicoFormDialog
+        open={ordemFormOpen}
+        onOpenChange={(value) => {
+          setOrdemFormOpen(value);
+          if (!value) {
+            setOrdemEditando(null);
+            refetch();
+          }
+        }}
+        mode={ordemFormMode}
+        os={ordemEditando}
+      />
+
       <OrdemServicoDetalhesDialog
         open={ordemDialogOpen}
         onOpenChange={(value) => {
@@ -643,6 +699,51 @@ const EquipamentoHistoricoSection = ({
           if (!value) setOrdemSelecionada(null);
         }}
         os={ordemSelecionada}
+        onEdit={(ordem) => {
+          setOrdemDialogOpen(false);
+          setOrdemSelecionada(null);
+          setOrdemEditando(ordem);
+          setOrdemFormMode("edit");
+          setOrdemFormOpen(true);
+        }}
+        onDelete={(ordem) => {
+          setOrdemDialogOpen(false);
+          setOrdemSelecionada(null);
+          handleExcluirOS(ordem);
+        }}
+        onCriarOrcamento={(os) => {
+          setOsOrcamento(os);
+          setOrcamentoFormOpen(true);
+        }}
+        onProtocoloEntrega={(os) => {
+          setOsEntrega(os);
+          setEntregaOpen(true);
+        }}
+      />
+
+      <ProtocoloEntregaDialog
+        open={entregaOpen}
+        onOpenChange={(value) => {
+          setEntregaOpen(value);
+          if (!value) {
+            setOsEntrega(null);
+            refetch();
+          }
+        }}
+        os={osEntrega}
+      />
+
+      <OrcamentoFormDialog
+        open={orcamentoFormOpen}
+        onOpenChange={(value) => {
+          setOrcamentoFormOpen(value);
+          if (!value) {
+            setOsOrcamento(null);
+            refetch();
+          }
+        }}
+        mode="create"
+        fromOS={osOrcamento}
       />
 
       <ProtocoloDetalhesDialog

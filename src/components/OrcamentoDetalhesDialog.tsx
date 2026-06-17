@@ -12,6 +12,7 @@ import {
 import {
   OrcamentoStatus,
   OrcamentoSupabase,
+  orcamentosService,
 } from "@/services/orcamentosService";
 import { getEquipamentoLabel } from "@/utils/equipamentoDisplay";
 import { formatDescricaoPecaOrcamento } from "@/utils/orcamentoItens";
@@ -145,7 +146,12 @@ const OrcamentoDetalhesDialog = ({
             variant="outline"
             size="sm"
             onClick={async () => {
-              if (orcamento) await gerarPdfOrcamento(orcamento);
+              if (orcamento) {
+                const orcamentoCompleto = await orcamentosService.buscarPorId(
+                  orcamento.id
+                );
+                await gerarPdfOrcamento(orcamentoCompleto);
+              }
             }}
           >
             <FileText className="w-4 h-4 mr-2" />

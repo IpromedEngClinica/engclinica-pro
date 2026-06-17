@@ -409,7 +409,11 @@ export const preventivasService = {
     });
     const estadoFechado = await buscarEstadoFechado();
     const dataFechamento = input.dataFechamento
-      ? `${input.dataFechamento.slice(0, 10)}T00:00:00`
+      ? new Date(
+          input.dataFechamento.includes("T")
+            ? input.dataFechamento
+            : `${input.dataFechamento}T00:00:00`
+        ).toISOString()
       : new Date().toISOString();
 
     const { error: osError } = await supabase

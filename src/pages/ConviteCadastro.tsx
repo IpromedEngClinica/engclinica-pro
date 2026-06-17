@@ -124,7 +124,7 @@ const ConviteCadastro = () => {
           <div>
             <h1 className="text-xl font-semibold">Criar acesso</h1>
             <p className="text-sm text-muted-foreground">
-              Convite unico para acessar o EngClinica Pro.
+              Convite unico para acessar o Ipromed - Sistema de Gestão.
             </p>
           </div>
         </div>

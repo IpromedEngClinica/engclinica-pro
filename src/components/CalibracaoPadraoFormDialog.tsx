@@ -28,6 +28,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   useAtualizarCalibracaoPadrao,
   useCriarCalibracaoPadrao,
+  useRenovarCalibracaoPadrao,
   useSalvarCalibracaoPadraoTabelas,
   useUploadCalibracaoPadraoDocumento,
 } from "@/hooks/useCalibracaoPadroes";
@@ -50,6 +51,7 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   padrao?: CalibracaoPadrao | null;
+  renovacao?: boolean;
 }
 
 type FormDraft = {
@@ -88,7 +90,7 @@ const emptyForm: FormDraft = {
   observacoes: "",
   temperaturaAmbiente: "",
   incertezaTemperatura: "",
-  unidadeTemperatura: "°C",
+  unidadeTemperatura: "Â°C",
   umidadeRelativa: "",
   incertezaUmidade: "",
   unidadeUmidade: "%",
@@ -117,6 +119,7 @@ const novaTabela = (): CalibracaoPadraoTabelaDraft => ({
   nome: "Nova Tabela",
   grandeza: "",
   unidade: "",
+  resolucaoPadrao: "",
   pontos: [novoPonto()],
 });
 
@@ -124,6 +127,7 @@ const CalibracaoPadraoFormDialog = ({
   open,
   onOpenChange,
   padrao = null,
+  renovacao = false,
 }: Props) => {
   const [form, setForm] = useState<FormDraft>(emptyForm);
   const [tabelas, setTabelas] = useState<CalibracaoPadraoTabelaDraft[]>([]);
@@ -133,8 +137,16 @@ const CalibracaoPadraoFormDialog = ({
   const [saving, setSaving] = useState(false);
   const criarPadrao = useCriarCalibracaoPadrao();
   const atualizarPadrao = useAtualizarCalibracaoPadrao();
+  const renovarPadrao = useRenovarCalibracaoPadrao();
   const salvarTabelas = useSalvarCalibracaoPadraoTabelas();
   const uploadDocumento = useUploadCalibracaoPadraoDocumento();
+  const busy =
+    saving ||
+    criarPadrao.isPending ||
+    atualizarPadrao.isPending ||
+    renovarPadrao.isPending ||
+    salvarTabelas.isPending ||
+    uploadDocumento.isPending;
 
   useEffect(() => {
     if (!open) return;
@@ -153,6 +165,7 @@ const CalibracaoPadraoFormDialog = ({
       nome: tabela.nome,
       grandeza: tabela.grandeza,
       unidade: tabela.unidade,
+      resolucaoPadrao: formatDecimalPtBr(tabela.resolucao_padrao),
       pontos: (tabela.pontos || []).map((ponto) => ({
         key: ponto.id,
         id: ponto.id,
@@ -175,7 +188,7 @@ const CalibracaoPadraoFormDialog = ({
     }));
 
     setForm({
-      numeroCertificado: padrao.numero_certificado,
+      numeroCertificado: renovacao ? "" : padrao.numero_certificado,
       nomePadrao: padrao.nome_padrao,
       descricao: padrao.descricao || "",
       fabricante: padrao.fabricante || "",
@@ -184,12 +197,12 @@ const CalibracaoPadraoFormDialog = ({
       patrimonio: padrao.patrimonio || "",
       tag: padrao.tag || "",
       laboratorioCalibrador: padrao.laboratorio_calibrador,
-      dataCalibracao: padrao.data_calibracao,
-      dataValidade: padrao.data_validade,
+      dataCalibracao: renovacao ? "" : padrao.data_calibracao,
+      dataValidade: renovacao ? "" : padrao.data_validade,
       observacoes: padrao.observacoes || "",
       temperaturaAmbiente: formatDecimalPtBr(padrao.temperatura_ambiente),
       incertezaTemperatura: formatDecimalPtBr(padrao.incerteza_temperatura),
-      unidadeTemperatura: padrao.unidade_temperatura || "°C",
+      unidadeTemperatura: padrao.unidade_temperatura || "Â°C",
       umidadeRelativa: formatDecimalPtBr(padrao.umidade_relativa),
       incertezaUmidade: formatDecimalPtBr(padrao.incerteza_umidade),
       unidadeUmidade: padrao.unidade_umidade || "%",
@@ -197,7 +210,7 @@ const CalibracaoPadraoFormDialog = ({
     setTabelas(tabelasDraft);
     setDocumentos([]);
     setActiveTabela(tabelasDraft[0]?.key || "");
-  }, [open, padrao]);
+  }, [open, padrao, renovacao]);
 
   const updateForm = (field: keyof FormDraft, value: string) =>
     setForm((current) => ({ ...current, [field]: value }));
@@ -234,7 +247,7 @@ const CalibracaoPadraoFormDialog = ({
     key: string,
     field: keyof Pick<
       CalibracaoPadraoTabelaDraft,
-      "nome" | "grandeza" | "unidade"
+      "nome" | "grandeza" | "unidade" | "resolucaoPadrao"
     >,
     value: string
   ) =>
@@ -351,6 +364,7 @@ const CalibracaoPadraoFormDialog = ({
       nome: tabela.nome,
       grandeza: tabela.grandeza,
       unidade: tabela.unidade,
+      resolucaoPadrao: normalizeDecimalInput(tabela.resolucaoPadrao),
       ordem,
       pontos: tabela.pontos.map((ponto, pontoOrdem): CalibracaoPadraoPontoInput => {
         const veff = parseVeffInput(ponto.grausLiberdadeEfetivosVeff);
@@ -374,7 +388,7 @@ const CalibracaoPadraoFormDialog = ({
 
   const validarDecimalOpcional = (value: string, fieldName: string) => {
     if (value.trim() && normalizeDecimalInput(value) === null) {
-      throw new Error(`Valor inválido em "${fieldName}".`);
+      throw new Error(`Valor invÃ¡lido em "${fieldName}".`);
     }
   };
 
@@ -388,7 +402,7 @@ const CalibracaoPadraoFormDialog = ({
     if ((!value.trim() && obrigatorio) || normalizeDecimalInput(value) === null) {
       if (!value.trim() && !obrigatorio) return;
       throw new Error(
-        `Valor inválido na tabela "${tabelaNome}", linha ${linha}, campo "${fieldName}".`
+        `Valor invÃ¡lido na tabela "${tabelaNome}", linha ${linha}, campo "${fieldName}".`
       );
     }
   };
@@ -429,6 +443,10 @@ const CalibracaoPadraoFormDialog = ({
       if (!tabela.nome.trim() || !tabela.grandeza.trim() || !tabela.unidade.trim()) {
         throw new Error("Informe nome, grandeza e unidade de cada tabela.");
       }
+      validarDecimalOpcional(
+        tabela.resolucaoPadrao,
+        `Resolucao do padrao da tabela "${tabela.nome}"`
+      );
 
       tabela.pontos.forEach((ponto, index) => {
         const linha = index + 1;
@@ -443,9 +461,9 @@ const CalibracaoPadraoFormDialog = ({
           ponto.mediaValoresMedidos,
           tabela.nome,
           linha,
-          "Média dos valores medidos"
+          "MÃ©dia dos valores medidos"
         );
-        validarDecimalPonto(ponto.tendencia, tabela.nome, linha, "Tendência");
+        validarDecimalPonto(ponto.tendencia, tabela.nome, linha, "TendÃªncia");
         validarDecimalPonto(
           ponto.incertezaExpandida,
           tabela.nome,
@@ -466,14 +484,23 @@ const CalibracaoPadraoFormDialog = ({
       validar();
       setSaving(true);
       const input = buildPadraoInput();
-      const padraoSalvo = padrao
+      const tabelasInput = buildTabelasInput();
+      const padraoSalvo = renovacao && padrao
+        ? await renovarPadrao.mutateAsync({
+            padraoAnteriorId: padrao.id,
+            input,
+            tabelas: tabelasInput,
+          })
+        : padrao
         ? await atualizarPadrao.mutateAsync({ id: padrao.id, input })
         : await criarPadrao.mutateAsync(input);
 
-      await salvarTabelas.mutateAsync({
-        padraoId: padraoSalvo.id,
-        tabelas: buildTabelasInput(),
-      });
+      if (!renovacao) {
+        await salvarTabelas.mutateAsync({
+          padraoId: padraoSalvo.id,
+          tabelas: tabelasInput,
+        });
+      }
 
       for (const documento of documentos) {
         await uploadDocumento.mutateAsync({
@@ -485,7 +512,9 @@ const CalibracaoPadraoFormDialog = ({
       }
 
       toast({
-        title: padrao
+        title: renovacao
+          ? "Certificado do padrao renovado."
+          : padrao
           ? "Padrao de calibracao atualizado."
           : "Padrao de calibracao cadastrado.",
       });
@@ -506,11 +535,24 @@ const CalibracaoPadraoFormDialog = ({
       <DialogContent className="max-h-[94vh] gap-0 overflow-y-auto p-0 sm:max-w-[96vw] xl:max-w-[1500px]">
         <DialogHeader className="border-b bg-background px-6 py-4">
           <DialogTitle>
-            {padrao ? "Editar Padrao de Calibracao" : "Novo Padrao de Calibracao"}
+            {renovacao
+              ? "Renovar Certificado do Padrao"
+              : padrao
+                ? "Editar Padrao de Calibracao"
+                : "Novo Padrao de Calibracao"}
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 p-4 sm:p-6">
+          {renovacao && padrao && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              Informe os dados do novo certificado. O certificado anterior{" "}
+              <span className="font-semibold">{padrao.numero_certificado}</span>{" "}
+              sera mantido no historico e os procedimentos vinculados serao
+              atualizados para esta nova versao quando as tabelas forem salvas.
+            </div>
+          )}
+
           <div className="grid gap-4 xl:grid-cols-2">
             <Card>
               <CardHeader className="border-b bg-muted/40 px-4 py-3">
@@ -519,13 +561,13 @@ const CalibracaoPadraoFormDialog = ({
                 </CardTitle>
               </CardHeader>
               <CardContent className="grid gap-3 p-4 md:grid-cols-2">
-                <Field label="Numero do certificado *" value={form.numeroCertificado} onChange={(value) => updateForm("numeroCertificado", value)} disabled={saving} />
-                <Field label="Nome do padrao *" value={form.nomePadrao} onChange={(value) => updateForm("nomePadrao", value)} disabled={saving} />
-                <Field label="Fabricante" value={form.fabricante} onChange={(value) => updateForm("fabricante", value)} disabled={saving} />
-                <Field label="Modelo" value={form.modelo} onChange={(value) => updateForm("modelo", value)} disabled={saving} />
-                <Field label="Numero de serie" value={form.numeroSerie} onChange={(value) => updateForm("numeroSerie", value)} disabled={saving} />
-                <Field label="Patrimonio" value={form.patrimonio} onChange={(value) => updateForm("patrimonio", value)} disabled={saving} />
-                <Field label="TAG" value={form.tag} onChange={(value) => updateForm("tag", value)} disabled={saving} />
+                <Field label="Numero do certificado *" value={form.numeroCertificado} onChange={(value) => updateForm("numeroCertificado", value)} disabled={busy} />
+                <Field label="Nome do padrao *" value={form.nomePadrao} onChange={(value) => updateForm("nomePadrao", value)} disabled={busy} />
+                <Field label="Fabricante" value={form.fabricante} onChange={(value) => updateForm("fabricante", value)} disabled={busy} />
+                <Field label="Modelo" value={form.modelo} onChange={(value) => updateForm("modelo", value)} disabled={busy} />
+                <Field label="Numero de serie" value={form.numeroSerie} onChange={(value) => updateForm("numeroSerie", value)} disabled={busy} />
+                <Field label="Patrimonio" value={form.patrimonio} onChange={(value) => updateForm("patrimonio", value)} disabled={busy} />
+                <Field label="TAG" value={form.tag} onChange={(value) => updateForm("tag", value)} disabled={busy} />
               </CardContent>
             </Card>
 
@@ -536,12 +578,12 @@ const CalibracaoPadraoFormDialog = ({
                 </CardTitle>
               </CardHeader>
               <CardContent className="grid gap-3 p-4 md:grid-cols-2">
-                <Field type="date" label="Data da calibracao *" value={form.dataCalibracao} onChange={(value) => updateForm("dataCalibracao", value)} disabled={saving} />
-                <Field type="date" label="Data de validade *" value={form.dataValidade} onChange={(value) => updateForm("dataValidade", value)} disabled={saving} />
-                <Field className="md:col-span-2" label="Laboratorio calibrador *" value={form.laboratorioCalibrador} onChange={(value) => updateForm("laboratorioCalibrador", value)} disabled={saving} />
+                <Field type="date" label="Data da calibracao *" value={form.dataCalibracao} onChange={(value) => updateForm("dataCalibracao", value)} disabled={busy} />
+                <Field type="date" label="Data de validade *" value={form.dataValidade} onChange={(value) => updateForm("dataValidade", value)} disabled={busy} />
+                <Field className="md:col-span-2" label="Laboratorio calibrador *" value={form.laboratorioCalibrador} onChange={(value) => updateForm("laboratorioCalibrador", value)} disabled={busy} />
                 <div className="space-y-2 md:col-span-2">
                   <Label>Observacoes</Label>
-                  <Textarea value={form.observacoes} onChange={(event) => updateForm("observacoes", event.target.value)} rows={5} disabled={saving} />
+                  <Textarea value={form.observacoes} onChange={(event) => updateForm("observacoes", event.target.value)} rows={5} disabled={busy} />
                 </div>
               </CardContent>
             </Card>
@@ -554,18 +596,18 @@ const CalibracaoPadraoFormDialog = ({
               </CardTitle>
             </CardHeader>
             <CardContent className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-              <Field inputMode="decimal" label="Temperatura ambiente" value={form.temperaturaAmbiente} onChange={(value) => updateForm("temperaturaAmbiente", value)} disabled={saving} />
-              <Field inputMode="decimal" label="Inc. temperatura" value={form.incertezaTemperatura} onChange={(value) => updateForm("incertezaTemperatura", value)} disabled={saving} />
-              <Field label="Unidade" value={form.unidadeTemperatura} onChange={(value) => updateForm("unidadeTemperatura", value)} disabled={saving} />
-              <Field inputMode="decimal" label="Umidade relativa" value={form.umidadeRelativa} onChange={(value) => updateForm("umidadeRelativa", value)} disabled={saving} />
-              <Field inputMode="decimal" label="Inc. umidade" value={form.incertezaUmidade} onChange={(value) => updateForm("incertezaUmidade", value)} disabled={saving} />
-              <Field label="Unidade" value={form.unidadeUmidade} onChange={(value) => updateForm("unidadeUmidade", value)} disabled={saving} />
+              <Field inputMode="decimal" label="Temperatura ambiente" value={form.temperaturaAmbiente} onChange={(value) => updateForm("temperaturaAmbiente", value)} disabled={busy} />
+              <Field inputMode="decimal" label="Inc. temperatura" value={form.incertezaTemperatura} onChange={(value) => updateForm("incertezaTemperatura", value)} disabled={busy} />
+              <Field label="Unidade" value={form.unidadeTemperatura} onChange={(value) => updateForm("unidadeTemperatura", value)} disabled={busy} />
+              <Field inputMode="decimal" label="Umidade relativa" value={form.umidadeRelativa} onChange={(value) => updateForm("umidadeRelativa", value)} disabled={busy} />
+              <Field inputMode="decimal" label="Inc. umidade" value={form.incertezaUmidade} onChange={(value) => updateForm("incertezaUmidade", value)} disabled={busy} />
+              <Field label="Unidade" value={form.unidadeUmidade} onChange={(value) => updateForm("unidadeUmidade", value)} disabled={busy} />
             </CardContent>
           </Card>
 
           <CalibracaoPadraoDocumentosSection
             documentos={documentos}
-            disabled={saving}
+            disabled={busy}
             onAdicionar={adicionarDocumento}
             onAtualizar={updateDocumento}
             onRemover={(key) =>
@@ -590,25 +632,27 @@ const CalibracaoPadraoFormDialog = ({
                   <p className="text-sm text-muted-foreground">
                     Nenhuma tabela metrologica adicionada.
                   </p>
-                  <Button type="button" variant="outline" size="sm" onClick={adicionarTabela} disabled={saving}>
+                  <Button type="button" variant="outline" size="sm" onClick={adicionarTabela} disabled={busy}>
                     <Plus className="mr-2 h-4 w-4" /> Nova tabela
                   </Button>
                 </div>
               ) : (
                 <Tabs value={activeTabela} onValueChange={setActiveTabela}>
-                  <div className="flex items-end gap-2 overflow-x-auto border-b">
-                    <TabsList className="h-auto shrink-0 justify-start rounded-none bg-transparent p-0">
+                  <div className="flex flex-wrap items-end gap-2 border-b pb-1">
+                    <TabsList className="flex h-auto flex-wrap justify-start gap-1 rounded-none bg-transparent p-0">
                       {tabelas.map((tabela) => (
                         <TabsTrigger
                           key={tabela.key}
                           value={tabela.key}
-                          className="shrink-0 rounded-t-md rounded-b-none border border-b-0 px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                          className="min-h-9 max-w-[220px] whitespace-normal rounded-md border px-3 py-2 text-left leading-snug data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
                         >
-                          {tabela.nome || "Nova tabela"}
+                          <span className="line-clamp-2">
+                            {tabela.nome || "Nova tabela"}
+                          </span>
                         </TabsTrigger>
                       ))}
                     </TabsList>
-                    <Button type="button" variant="outline" size="sm" className="mb-1 shrink-0" onClick={adicionarTabela} disabled={saving}>
+                    <Button type="button" variant="outline" size="sm" className="mb-1 shrink-0" onClick={adicionarTabela} disabled={busy}>
                       <Plus className="mr-2 h-4 w-4" /> Nova tabela
                     </Button>
                   </div>
@@ -616,7 +660,7 @@ const CalibracaoPadraoFormDialog = ({
                     <TabsContent key={tabela.key} value={tabela.key} className="mt-0">
                       <CalibracaoPadraoTabelaEditor
                         tabela={tabela}
-                        disabled={saving}
+                        disabled={busy}
                         onAtualizarTabela={updateTabela}
                         onExcluirTabela={removerTabela}
                         onAdicionarPonto={adicionarPonto}
@@ -632,9 +676,9 @@ const CalibracaoPadraoFormDialog = ({
         </div>
 
         <DialogFooter className="sticky bottom-0 z-10 border-t bg-background/95 px-6 py-4 backdrop-blur">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
-          <Button type="button" onClick={handleSave} disabled={saving}>
-            {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>Cancelar</Button>
+          <Button type="button" onClick={handleSave} disabled={busy}>
+            {busy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
             Salvar Padrao
           </Button>
         </DialogFooter>

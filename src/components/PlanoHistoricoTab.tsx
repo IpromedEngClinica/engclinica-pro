@@ -13,13 +13,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { usePlanoHistorico } from "@/hooks/usePlanos";
 import type { PlanoCiclo } from "@/services/planosService";
+import { formatDateTimeValue } from "@/utils/planoDatas";
 
 type Props = {
   planoId: string;
 };
-
-const formatDate = (value?: string | null) =>
-  value ? new Date(`${value}T00:00:00`).toLocaleDateString("pt-BR") : "-";
 
 const statusLabel: Record<string, string> = {
   aberto: "Aberto",
@@ -80,8 +78,7 @@ const PlanoHistoricoTab = ({ planoId }: Props) => {
           <thead>
             <tr className="bg-muted/40">
               <Th>Ciclo</Th>
-              <Th>Data prevista</Th>
-              <Th>Abertura</Th>
+              <Th>Execucao</Th>
               <Th>Fechamento</Th>
               <Th>Total de itens</Th>
               <Th>Concluidos</Th>
@@ -96,9 +93,8 @@ const PlanoHistoricoTab = ({ planoId }: Props) => {
             {!isLoading && historico.map((ciclo) => (
               <tr key={ciclo.id} className="border-t">
                 <Td>{ciclo.titulo}</Td>
-                <Td>{formatDate(ciclo.data_prevista)}</Td>
-                <Td>{formatDate(ciclo.data_abertura)}</Td>
-                <Td>{formatDate(ciclo.data_fechamento_real || ciclo.data_fechamento_prevista)}</Td>
+                <Td>{formatDateTimeValue(ciclo.data_abertura)}</Td>
+                <Td>{formatDateTimeValue(ciclo.data_fechamento_real || ciclo.data_fechamento_prevista)}</Td>
                 <Td>{contar(ciclo)}</Td>
                 <Td>{contar(ciclo, "concluido")}</Td>
                 <Td>0</Td>

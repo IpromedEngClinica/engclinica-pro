@@ -27,5 +27,7 @@ export const gerarPdfVisitaExterna = async (
     fileName,
     save,
     orientation: "l",
+    marginMm: 5,
+    fontScale: 1.2,
   });
 };

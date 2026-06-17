@@ -203,7 +203,11 @@ const CalibracaoProcedimentoFormDialog = ({
   };
 
   const selecionarPadrao = (key: string, padraoId: string) => {
-    atualizarTabela(key, { padraoId, padraoTabelaId: "" });
+    atualizarTabela(key, {
+      padraoId,
+      padraoTabelaId: "",
+      resolucaoPadraoDefault: "",
+    });
   };
 
   const selecionarTabelaPadrao = (key: string, padraoTabelaId: string) => {
@@ -221,6 +225,9 @@ const CalibracaoProcedimentoFormDialog = ({
       padraoTabelaId,
       grandeza: tabelaPadrao?.grandeza || "",
       unidade: tabelaPadrao?.unidade || "",
+      resolucaoPadraoDefault: formatDecimalPtBr(
+        tabelaPadrao?.resolucao_padrao
+      ),
       ...(importar
         ? {
             pontos: tabelaPadrao?.pontos?.map((ponto) => ({

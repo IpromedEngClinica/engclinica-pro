@@ -68,6 +68,7 @@ const Calibracao = ({ section }: { section: CalibracaoSection }) => {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [documentosOpen, setDocumentosOpen] = useState(false);
   const [selected, setSelected] = useState<CalibracaoPadrao | null>(null);
+  const [renovacaoOpen, setRenovacaoOpen] = useState(false);
   const [listLimit, setListLimit] = useState(DEFAULT_LIST_LIMIT);
   const { data: padroes = [], isLoading, isError, error, refetch } =
     useCalibracaoPadroes();
@@ -114,6 +115,12 @@ const Calibracao = ({ section }: { section: CalibracaoSection }) => {
     setSelected(padrao);
     setDetailsOpen(false);
     setFormOpen(true);
+  };
+
+  const openRenovacao = (padrao: CalibracaoPadrao) => {
+    setSelected(padrao);
+    setDetailsOpen(false);
+    setRenovacaoOpen(true);
   };
 
   const openDetails = (padrao: CalibracaoPadrao) => {
@@ -185,6 +192,16 @@ const Calibracao = ({ section }: { section: CalibracaoSection }) => {
         padrao={selected}
       />
 
+      <CalibracaoPadraoFormDialog
+        open={renovacaoOpen}
+        onOpenChange={(value) => {
+          setRenovacaoOpen(value);
+          if (!value) setSelected(null);
+        }}
+        padrao={selected}
+        renovacao
+      />
+
       <CalibracaoPadraoDetalhesDialog
         open={detailsOpen}
         onOpenChange={(value) => {
@@ -193,6 +210,7 @@ const Calibracao = ({ section }: { section: CalibracaoSection }) => {
         }}
         padrao={selected}
         onEditar={openEdit}
+        onRenovar={openRenovacao}
         onDocumentos={openDocumentos}
         onDesativar={handleDesativar}
       />
@@ -291,6 +309,7 @@ const Calibracao = ({ section }: { section: CalibracaoSection }) => {
                                 <DropdownMenuContent align="end" className="w-52">
                                   <DropdownMenuItem onClick={() => openDetails(padrao)}><Eye className="w-4 h-4 mr-2" /> Visualizar</DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => openEdit(padrao)}><Pencil className="w-4 h-4 mr-2" /> Editar</DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => openRenovacao(padrao)}><FileText className="w-4 h-4 mr-2" /> Renovar certificado</DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => openDocumentos(padrao)}><FileText className="w-4 h-4 mr-2" /> Documentos</DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => baixarCertificado(padrao)}><Download className="w-4 h-4 mr-2" /> Baixar certificado</DropdownMenuItem>
                                   <DropdownMenuSeparator />

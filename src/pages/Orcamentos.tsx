@@ -82,6 +82,12 @@ const getEmpresaNome = (orcamento: OrcamentoSupabase) =>
   orcamento.empresa?.nome ||
   "Nao informado";
 
+const getNumeroOrdenacao = (numero?: string | null) => {
+  const digits = (numero || "").replace(/\D/g, "");
+  const value = Number(digits || numero || 0);
+  return Number.isFinite(value) ? value : 0;
+};
+
 const tipoLabel = (tipo?: string | null) => {
   const map: Record<string, string> = {
     servico: "Servico",
@@ -142,7 +148,7 @@ const statusOptions: Array<{ value: OrcamentoStatus; label: string }> = [
 
 const Orcamentos = () => {
   const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState("data");
+  const [sortKey, setSortKey] = useState("numero");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [listLimit, setListLimit] = useState(DEFAULT_LIST_LIMIT);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -279,7 +285,7 @@ const Orcamentos = () => {
   ]);
 
   const sortGetters: Record<string, (item: OrcamentoSupabase) => unknown> = {
-    numero: (o) => o.numero,
+    numero: (o) => getNumeroOrdenacao(o.numero),
     data: (o) => o.data_orcamento || o.created_at,
     cliente: getEmpresaNome,
     equipamento: (o) => o.identificador || getEquipamentoLabel(o.equipamento),

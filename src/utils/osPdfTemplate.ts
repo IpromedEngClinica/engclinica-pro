@@ -1,5 +1,6 @@
 import type { EmpresaSupabase } from "@/services/empresasService";
 import type { OrdemServicoSupabase } from "@/services/ordensServicoService";
+import type { AssinaturasDocumento } from "@/services/assinaturasService";
 
 const FOOTER_TEXT =
   "ACI Comércio LTDA - Assistência Técnica Hospitalar e Engenharia Clínica - Rua José Martins da Silva, 215 - Cerâmica - Juiz de Fora - MG Cep 36.080-370 - Pabx 32 3221-7944 - E-mail: acicomercio@yahoo.com.br - CNPJ: 71.208.094/0001-37";
@@ -285,13 +286,16 @@ const isPreventiva = (os: OrdemServicoSupabase) => {
 
 export const buildOrdemServicoHtml = (
   os: OrdemServicoSupabase,
-  logoSrc: string
+  logoSrc: string,
+  assinaturas: AssinaturasDocumento = {}
 ) => {
   const preventiva = isPreventiva(os);
   const checklistHtml = buildChecklistHtml(os);
-  const observacoesClass = os.observacoes?.trim()
-    ? "card observations"
-    : "card observations observations-empty";
+  const observacoes = os.observacoes?.trim() || "";
+  const observacaoSomentePlanoECiclo = /^Plano:\s*.+?\.\s*Ciclo:\s*.+?\.?$/i.test(
+    observacoes
+  );
+  const exibirObservacoes = Boolean(observacoes && !observacaoSomentePlanoECiclo);
 
   return `
 <!doctype html>
@@ -327,7 +331,7 @@ export const buildOrdemServicoHtml = (
       font-family: Arial, Helvetica, sans-serif;
       color: var(--text);
       background: #fff;
-      font-size: 8.8pt;
+      font-size: 7.9pt;
       line-height: 1.28;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
@@ -365,7 +369,7 @@ export const buildOrdemServicoHtml = (
 
     .header-info h1 {
       margin: 0 0 8px;
-      font-size: 16pt;
+      font-size: 14.4pt;
       line-height: 1.1;
       font-weight: 700;
       color: var(--text);
@@ -373,7 +377,7 @@ export const buildOrdemServicoHtml = (
 
     .header-info .meta {
       color: var(--muted);
-      font-size: 8.2pt;
+      font-size: 7.4pt;
       font-weight: 600;
       line-height: 1.45;
     }
@@ -388,7 +392,7 @@ export const buildOrdemServicoHtml = (
       margin: 0 0 6px;
       padding-bottom: 4px;
       border-bottom: 1px solid var(--border);
-      font-size: 11pt;
+      font-size: 9.9pt;
       font-weight: 700;
       color: var(--text);
       letter-spacing: 0;
@@ -426,7 +430,7 @@ export const buildOrdemServicoHtml = (
       display: block;
       margin-bottom: 1px;
       color: var(--muted);
-      font-size: 7.2pt;
+      font-size: 6.5pt;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.02em;
@@ -434,14 +438,14 @@ export const buildOrdemServicoHtml = (
 
     .field-value {
       color: var(--text);
-      font-size: 8.8pt;
+      font-size: 7.9pt;
       font-weight: 600;
       word-break: break-word;
     }
 
     .service-description {
       color: var(--text);
-      font-size: 8.8pt;
+      font-size: 7.9pt;
       font-weight: 400;
       word-break: break-word;
     }
@@ -469,14 +473,14 @@ export const buildOrdemServicoHtml = (
     }
 
     .checklist-title {
-      font-size: 10pt;
+      font-size: 9pt;
       font-weight: 700;
       color: var(--text);
     }
 
     .checklist-subtitle {
       margin-top: 1px;
-      font-size: 8pt;
+      font-size: 7.2pt;
       font-weight: 600;
       color: var(--muted);
     }
@@ -487,7 +491,7 @@ export const buildOrdemServicoHtml = (
       justify-content: center;
       border-radius: 999px;
       padding: 3px 8px;
-      font-size: 7.5pt;
+      font-size: 6.8pt;
       font-weight: 700;
       white-space: nowrap;
       line-height: 1.2;
@@ -525,7 +529,7 @@ export const buildOrdemServicoHtml = (
       border: 1px solid var(--border);
       border-radius: 6px;
       overflow: hidden;
-      font-size: 8.2pt;
+      font-size: 7.4pt;
       page-break-inside: auto;
     }
 
@@ -541,7 +545,7 @@ export const buildOrdemServicoHtml = (
     .check-table th {
       background: #F3F4F6;
       color: var(--text);
-      font-size: 7.4pt;
+      font-size: 6.7pt;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.02em;
@@ -617,7 +621,7 @@ export const buildOrdemServicoHtml = (
       margin-top: 8px;
       padding-top: 8px;
       border-top: 1px solid var(--border);
-      font-size: 8.2pt;
+      font-size: 7.4pt;
       color: var(--text);
       align-items: center;
     }
@@ -658,7 +662,7 @@ export const buildOrdemServicoHtml = (
       display: block;
       margin-bottom: 3px;
       color: var(--muted);
-      font-size: 7.4pt;
+      font-size: 6.7pt;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.02em;
@@ -667,7 +671,7 @@ export const buildOrdemServicoHtml = (
     .checklist-observation p {
       margin: 0;
       color: var(--text);
-      font-size: 10pt;
+      font-size: 9pt;
       font-weight: 500;
       white-space: pre-wrap;
     }
@@ -690,27 +694,27 @@ export const buildOrdemServicoHtml = (
 
     .accessory-item strong {
       display: block;
-      font-size: 8.9pt;
+      font-size: 8pt;
       color: var(--text);
     }
 
     .accessory-item p {
       margin: 2px 0 0;
       color: var(--muted);
-      font-size: 9pt;
+      font-size: 8.1pt;
     }
 
     .accessory-item span,
     .accessory-empty,
     .empty-state {
       color: var(--muted);
-      font-size: 9.5pt;
+      font-size: 8.6pt;
       font-weight: 700;
     }
 
     .signatures {
       display: grid;
-      grid-template-columns: 1fr 1fr 120px;
+      grid-template-columns: 1fr 1fr;
       column-gap: 26px;
       margin-top: 26px;
       align-items: start;
@@ -719,14 +723,29 @@ export const buildOrdemServicoHtml = (
     }
 
     .signature-block {
-      height: 58px;
+      min-height: 92px;
       display: flex;
       flex-direction: column;
       justify-content: flex-start;
       text-align: center;
       color: var(--muted);
-      font-size: 8pt;
+      font-size: 7.2pt;
       font-weight: 600;
+    }
+
+    .signature-image {
+      height: 48px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      margin-bottom: 2px;
+    }
+
+    .signature-image img {
+      display: block;
+      max-width: 92%;
+      max-height: 46px;
+      object-fit: contain;
     }
 
     .signature-line {
@@ -754,7 +773,7 @@ export const buildOrdemServicoHtml = (
       padding-bottom: 10px;
       border-top: 1px solid var(--border);
       color: #9CA3AF;
-      font-size: 8pt;
+      font-size: 7.2pt;
       line-height: 1.35;
       text-align: center;
       break-inside: avoid;
@@ -914,38 +933,42 @@ export const buildOrdemServicoHtml = (
 
     ${checklistHtml}
 
-    <section class="section">
-      <div class="section-title">4 - Observações</div>
-
-      <div class="${observacoesClass}">
-        ${escapeHtml(os.observacoes)}
-      </div>
-    </section>
+    ${exibirObservacoes ? `
+      <section class="section">
+        <div class="section-title">4 - Observações</div>
+        <div class="card observations">${escapeHtml(observacoes)}</div>
+      </section>
+    ` : ""}
 
     ${buildAcessoriosHtml(os)}
 
     <section class="signatures">
       <div class="signature-block">
+        <div class="signature-image">
+          ${assinaturas.solicitante?.dataUrl ? `<img src="${assinaturas.solicitante.dataUrl}" alt="Assinatura do cliente">` : ""}
+        </div>
         <div class="signature-line"></div>
-        <div class="signature-label">Assinatura do Cliente</div>
+        <div class="signature-label">
+          Assinatura do Cliente
+          ${assinaturas.solicitante?.nome ? `<span class="signature-name">${escapeHtml(assinaturas.solicitante.nome)}</span>` : ""}
+        </div>
       </div>
 
       <div class="signature-block">
+        <div class="signature-image">
+          ${(assinaturas.tecnico || assinaturas.responsavel)?.dataUrl ? `<img src="${(assinaturas.tecnico || assinaturas.responsavel)?.dataUrl}" alt="Assinatura do responsavel tecnico">` : ""}
+        </div>
         <div class="signature-line"></div>
         <div class="signature-label">
           Responsável Técnico
           ${
-            os.responsavel_texto
-              ? `<span class="signature-name">${escapeHtml(os.responsavel_texto)}</span>`
+            (assinaturas.tecnico || assinaturas.responsavel)?.nome || os.responsavel_texto
+              ? `<span class="signature-name">${escapeHtml((assinaturas.tecnico || assinaturas.responsavel)?.nome || os.responsavel_texto)}</span>`
               : ""
           }
         </div>
       </div>
 
-      <div class="signature-block">
-        <div class="signature-line"></div>
-        <div class="signature-label">Data</div>
-      </div>
     </section>
 
     <footer class="footer">

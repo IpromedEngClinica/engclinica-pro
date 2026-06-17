@@ -4,12 +4,14 @@ import {
   Copy,
   Loader2,
   Mail,
+  PenLine,
   RefreshCw,
   ShieldCheck,
   UserPlus,
   Users,
   XCircle,
 } from "lucide-react";
+import MinhaAssinaturaDialog from "@/components/MinhaAssinaturaDialog";
 import PageHeader from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -47,6 +49,7 @@ import {
   type PerfilConfiguravel,
   type PerfilUsuario,
 } from "@/services/usuariosPermissoesService";
+import { useAuth } from "@/contexts/AuthContext";
 
 const getEmpresaNome = (empresa?: {
   nome?: string | null;
@@ -66,8 +69,10 @@ const getDataLabel = (value?: string | null) =>
   value ? new Date(value).toLocaleDateString("pt-BR") : "-";
 
 const UsuariosPermissoes = () => {
+  const { usuario, usuarioLoading } = useAuth();
+  const isAdmin = usuario?.perfil === "admin";
   const { data, isLoading, isError, error, refetch, isFetching } =
-    useUsuariosPermissoesConfig();
+    useUsuariosPermissoesConfig(isAdmin);
   const atualizarPermissao = useAtualizarPermissaoPerfil();
   const criarConvite = useCriarConviteUsuario();
   const cancelarConvite = useCancelarConviteUsuario();
@@ -81,6 +86,7 @@ const UsuariosPermissoes = () => {
   });
   const [ultimoLink, setUltimoLink] = useState("");
   const [ultimoEmail, setUltimoEmail] = useState("");
+  const [assinaturaOpen, setAssinaturaOpen] = useState(false);
 
   const contagemPorPerfil = useMemo(() => {
     const contagem = new Map<string, number>();
@@ -186,13 +192,13 @@ const UsuariosPermissoes = () => {
 
   const emailHref = ultimoLink
     ? `mailto:${encodeURIComponent(ultimoEmail)}?subject=${encodeURIComponent(
-        "Convite de acesso ao EngClinica Pro"
+        "Convite de acesso ao Ipromed - Sistema de Gestão"
       )}&body=${encodeURIComponent(
-        `Voce recebeu um convite para acessar o EngClinica Pro.\n\nAcesse o link abaixo para cadastrar sua senha:\n${ultimoLink}\n\nEste link e unico e perde a validade apos o uso.`
+        `Voce recebeu um convite para acessar o Ipromed - Sistema de Gestão.\n\nAcesse o link abaixo para cadastrar sua senha:\n${ultimoLink}\n\nEste link e unico e perde a validade apos o uso.`
       )}`
     : "";
 
-  if (isLoading) {
+  if (usuarioLoading || !usuario || (isAdmin && isLoading)) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -200,7 +206,7 @@ const UsuariosPermissoes = () => {
     );
   }
 
-  if (isError) {
+  if (isAdmin && isError) {
     return (
       <div className="p-6 lg:p-8">
         <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive">
@@ -217,12 +223,50 @@ const UsuariosPermissoes = () => {
 
   const exigeCliente = perfilExigeCliente(conviteForm.perfil);
 
+  if (!isAdmin) {
+    return (
+      <div className="p-6 lg:p-8">
+        <PageHeader
+          title="Usuários e Permissões"
+          description="Gerencie os dados vinculados ao seu acesso."
+        />
+
+        <div className="max-w-2xl rounded-lg border bg-card p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <PenLine className="h-5 w-5 text-primary" />
+                <h2 className="text-base font-semibold">Minha assinatura</h2>
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Cadastre a assinatura usada automaticamente nas ordens de serviço e certificados vinculados ao seu usuário.
+              </p>
+            </div>
+            <Button onClick={() => setAssinaturaOpen(true)}>
+              <PenLine className="mr-2 h-4 w-4" />
+              Cadastrar assinatura
+            </Button>
+          </div>
+        </div>
+
+        <MinhaAssinaturaDialog
+          open={assinaturaOpen}
+          onOpenChange={setAssinaturaOpen}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 lg:p-8">
       <PageHeader
         title="Usuarios e Permissoes"
         description="Configure perfis e envie convites unicos para acesso autorizado."
       >
+        <Button onClick={() => setAssinaturaOpen(true)}>
+          <PenLine className="mr-2 h-4 w-4" />
+          Minha assinatura
+        </Button>
         <Button variant="outline" onClick={() => refetch()} disabled={isFetching}>
           {isFetching ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -500,6 +544,7 @@ const UsuariosPermissoes = () => {
                   <TableHead>E-mail</TableHead>
                   <TableHead>Perfil</TableHead>
                   <TableHead>Cliente vinculado</TableHead>
+                  <TableHead>Assinatura</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
@@ -510,13 +555,16 @@ const UsuariosPermissoes = () => {
                     <TableCell>{usuario.email}</TableCell>
                     <TableCell>{getPerfilLabel(usuario.perfil)}</TableCell>
                     <TableCell>{getEmpresaNome(usuario.empresa)}</TableCell>
+                    <TableCell>
+                      {usuario.assinatura_storage_path ? "Cadastrada" : "Pendente"}
+                    </TableCell>
                     <TableCell>{usuario.ativo ? "Ativo" : "Inativo"}</TableCell>
                   </TableRow>
                 ))}
                 {!data?.usuarios.length && (
                   <TableRow>
                     <TableCell
-                      colSpan={5}
+                      colSpan={6}
                       className="py-8 text-center text-muted-foreground"
                     >
                       Nenhum usuario encontrado.
@@ -600,6 +648,11 @@ const UsuariosPermissoes = () => {
           </div>
         </TabsContent>
       </Tabs>
+
+      <MinhaAssinaturaDialog
+        open={assinaturaOpen}
+        onOpenChange={setAssinaturaOpen}
+      />
     </div>
   );
 };

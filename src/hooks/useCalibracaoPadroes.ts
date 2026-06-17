@@ -4,6 +4,7 @@ import {
   CalibracaoPadraoFormInput,
   CalibracaoPadraoPontoInput,
   CalibracaoPadraoTabelaInput,
+  RenovarCalibracaoPadraoInput,
   UploadCalibracaoPadraoDocumentoInput,
   calibracaoPadroesService,
 } from "@/services/calibracaoPadroesService";
@@ -35,6 +36,13 @@ export const useCalibracaoPadrao = (id?: string) =>
     enabled: Boolean(id),
   });
 
+export const useCalibracaoPadraoHistorico = (id?: string) =>
+  useQuery({
+    queryKey: [...CALIBRACAO_PADRAO_QUERY_KEY, "historico", id],
+    queryFn: () => calibracaoPadroesService.listarHistoricoPadrao(id as string),
+    enabled: Boolean(id),
+  });
+
 export const useCriarCalibracaoPadrao = () => {
   const queryClient = useQueryClient();
   return useMutation({
@@ -54,6 +62,15 @@ export const useAtualizarCalibracaoPadrao = () => {
       id: string;
       input: CalibracaoPadraoFormInput;
     }) => calibracaoPadroesService.atualizarPadrao(id, input),
+    onSuccess: () => invalidatePadroes(queryClient),
+  });
+};
+
+export const useRenovarCalibracaoPadrao = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: RenovarCalibracaoPadraoInput) =>
+      calibracaoPadroesService.renovarPadrao(input),
     onSuccess: () => invalidatePadroes(queryClient),
   });
 };

@@ -30,6 +30,7 @@ import {
 import { equipamentosService } from "@/services/equipamentosService";
 import { mesValidadeAposMeses } from "@/utils/calibracaoValidade";
 import { formatDecimalPtBr, normalizeDecimalInput } from "@/utils/numberUtils";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Props {
   open: boolean;
@@ -57,12 +58,12 @@ const hoje = () => {
   return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, "0")}-${String(data.getDate()).padStart(2, "0")}`;
 };
 
-const vazio = () => ({
+const vazio = (tecnico = "") => ({
   empresaId: "", equipamentoId: "", procedimentoId: "",
   local: "dependencias_contratada", temperatura: "21,0", incertezaTemperatura: "0,5",
   umidade: "50", incertezaUmidade: "5", pressao: "", incertezaPressao: "",
   observacoes: "", dataCalibracao: hoje(), dataEmissao: hoje(),
-  validadeMes: mesValidadeAposMeses(new Date()), tecnico: "", registroTecnico: "",
+  validadeMes: mesValidadeAposMeses(new Date()), tecnico, registroTecnico: "",
   solicitante: "", criterioPadraoCliente: false,
 });
 
@@ -79,6 +80,7 @@ const CalibracaoExecucaoFormDialog = ({
   onSaved,
   onFinalizada,
 }: Props) => {
+  const { usuario } = useAuth();
   const [form, setForm] = useState(vazio);
   const [tabelas, setTabelas] = useState<CalibracaoExecucaoTabelaInput[]>([]);
   const [activeTabela, setActiveTabela] = useState("0");
@@ -95,6 +97,11 @@ const CalibracaoExecucaoFormDialog = ({
   const equipamento = equipamentos.find((item) => item.id === form.equipamentoId);
   const empresa = empresas.find((item) => item.id === form.empresaId);
   const possuiCriterio = tabelas.some((tabela) => tabela.incluirCriterio);
+  const possuiPadraoSemValidade = tabelas.some(
+    (tabela) =>
+      Boolean(tabela.padraoId) &&
+      !padroes.some((padrao) => padrao.id === tabela.padraoId)
+  );
 
   const procedimentosCompativeis = useMemo(() =>
     [...procedimentos]
@@ -114,7 +121,7 @@ const CalibracaoExecucaoFormDialog = ({
         ? procedimentos.find((item) => item.id === procedimentoInicialId)
         : null;
       setForm({
-        ...vazio(),
+        ...vazio(usuario?.nome || ""),
         empresaId: empresaInicialId || "",
         equipamentoId: equipamentoInicialId || "",
         procedimentoId: procedimentoInicial?.id || "",
@@ -139,7 +146,7 @@ const CalibracaoExecucaoFormDialog = ({
     });
     setTabelas(criarTabelasInputDaExecucao(execucao));
     setActiveTabela("0");
-  }, [dataEmissaoInicial, dataRealizacaoInicial, empresaInicialId, equipamentoInicialId, execucao, open, procedimentoInicialId, procedimentos]);
+  }, [dataEmissaoInicial, dataRealizacaoInicial, empresaInicialId, equipamentoInicialId, execucao, open, procedimentoInicialId, procedimentos, usuario?.nome]);
 
   useEffect(() => {
     if (!open || execucao || !equipamentoInicialId) return;
@@ -334,6 +341,15 @@ const CalibracaoExecucaoFormDialog = ({
           {empresa && <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm"><span className="block text-xs text-muted-foreground">Declaração de conformidade</span>{possuiCriterio ? "Aplicada nas tabelas marcadas" : "Não aplicada nesta calibração"}</div>}
         </CardContent></Card>
         <Card><Header title="4. Leituras da calibracao" /><CardContent className="p-2">
+          {possuiPadraoSemValidade && (
+            <div className="mb-3 flex gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                Existe tabela vinculada a um padrao sem certificado valido para a data da calibracao.
+                Renove o certificado do padrao ou selecione um padrao valido antes de executar.
+              </span>
+            </div>
+          )}
           {!tabelas.length ? <p className="text-sm text-muted-foreground">Selecione um procedimento para carregar as tabelas.</p> :
           <Tabs value={activeTabela} onValueChange={setActiveTabela}><TabsList className="flex h-auto w-full justify-start gap-1 overflow-x-auto rounded-none border-b bg-transparent p-0 pb-1">{tabelas.map((item, index) => <TabsTrigger className="bg-muted px-3 py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground" key={`${item.nome}-${index}`} value={String(index)}>{item.nome}</TabsTrigger>)}</TabsList>
             {tabelas.map((item, index) => <TabsContent className="mt-2" key={`${item.nome}-${index}`} value={String(index)}><CalibracaoExecucaoTabelaEditor tabela={item} padroes={padroes} onRemover={() => removerTabela(index)} onChange={(tabela) => setTabelas((current) => current.map((currentItem, itemIndex) => itemIndex === index ? tabela : currentItem))} /></TabsContent>)}
@@ -343,7 +359,7 @@ const CalibracaoExecucaoFormDialog = ({
       <DialogFooter className="sticky bottom-0 border-t bg-background/95 px-5 py-3">
         <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
         <Button variant="outline" disabled={saving} onClick={salvarRascunho}>Salvar rascunho</Button>
-        <Button disabled={saving} onClick={salvar}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />} Salvar calibracao</Button>
+        <Button disabled={saving || possuiPadraoSemValidade} onClick={salvar}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />} Salvar calibracao</Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>;

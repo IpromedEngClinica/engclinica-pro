@@ -14,6 +14,8 @@ import {
   AlertCircle,
   Loader2,
   Ruler,
+  CopyPlus,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,9 +40,22 @@ import ListLimitSelect, {
   DEFAULT_LIST_LIMIT,
 } from "@/components/ListLimitSelect";
 import PageHeader from "@/components/PageHeader";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useEquipamentos } from "@/hooks/useEquipamentos";
+import {
+  useEquipamentos,
+  useExcluirEquipamento,
+} from "@/hooks/useEquipamentos";
 import {
   EquipamentoSupabase,
   equipamentosService,
@@ -55,6 +70,7 @@ import { ToastAction } from "@/components/ui/toast";
 import EquipamentoFormDialog, {
   DialogMode,
 } from "@/components/EquipamentoFormDialog";
+import EquipamentosLoteDialog from "@/components/EquipamentosLoteDialog";
 import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
 import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import ProtocoloRecolhimentoDialog from "@/components/ProtocoloRecolhimentoDialog";
@@ -68,8 +84,12 @@ import OrdemServicoFormDialog, {
 import CalibracaoExecucaoFormDialog from "@/components/CalibracaoExecucaoFormDialog";
 import { sortByValue, type SortDirection } from "@/utils/sortUtils";
 import { getBloqueioCriacaoCalibracao } from "@/utils/equipamentoCalibracao";
+import { useAuth } from "@/contexts/AuthContext";
 
 const ALL = "__all__";
+
+const formatNumeroCadastro = (numero: number) =>
+  String(numero).padStart(3, "0");
 
 const getTipoEquipamento = (equipamento: EquipamentoSupabase) => {
   return (
@@ -116,13 +136,16 @@ const getEquipamentoStatusBadge = (equipamento: EquipamentoSupabase) => {
 
 const Equipamentos = () => {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+  const excluirEquipamento = useExcluirEquipamento();
   const [search, setSearch] = useState("");
   const [statusFiltro, setStatusFiltro] =
     useState<StatusEquipamentoFiltro>("ativos");
-  const [sortKey, setSortKey] = useState("tipo");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [sortKey, setSortKey] = useState("numero_cadastro");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [listLimit, setListLimit] = useState(DEFAULT_LIST_LIMIT);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [loteOpen, setLoteOpen] = useState(false);
   const [detalhesOpen, setDetalhesOpen] = useState(false);
   const [mode, setMode] = useState<DialogMode>("create");
   const [selected, setSelected] = useState<EquipamentoSupabase | null>(null);
@@ -150,6 +173,8 @@ const Equipamentos = () => {
     useState<EquipamentoSupabase | null>(null);
   const [calibracaoOpen, setCalibracaoOpen] = useState(false);
   const [equipamentoCalibracao, setEquipamentoCalibracao] =
+    useState<EquipamentoSupabase | null>(null);
+  const [equipamentoExclusao, setEquipamentoExclusao] =
     useState<EquipamentoSupabase | null>(null);
 
   const { data: equipamentos = [], isLoading, isError, error, refetch } =
@@ -202,6 +227,7 @@ const Equipamentos = () => {
         tipo.toLowerCase().includes(s) ||
         empresa.toLowerCase().includes(s) ||
         (e.fabricante || "").toLowerCase().includes(s) ||
+        e.id.toLowerCase().includes(s) ||
         (e.tag || "").toLowerCase().includes(s) ||
         (e.numero_serie || "").toLowerCase().includes(s) ||
         (e.patrimonio || "").toLowerCase().includes(s) ||
@@ -226,6 +252,7 @@ const Equipamentos = () => {
     Record<string, (item: EquipamentoSupabase) => unknown>
   >(
     () => ({
+      numero_cadastro: (e) => e.numero_cadastro,
       tipo: getTipoEquipamento,
       status: getEquipamentoStatusLabel,
       empresa: getEmpresaNome,
@@ -262,6 +289,22 @@ const Equipamentos = () => {
 
     setSortKey(key);
     setSortDirection("asc");
+  };
+
+  const handleExcluir = async () => {
+    if (!equipamentoExclusao) return;
+
+    try {
+      await excluirEquipamento.mutateAsync(equipamentoExclusao.id);
+      toast({ title: "Equipamento excluído com sucesso." });
+      setEquipamentoExclusao(null);
+    } catch (error) {
+      toast({
+        title: "Não foi possível excluir o equipamento",
+        description: error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    }
   };
 
   const activeFiltersCount = useMemo(() => {
@@ -469,10 +512,55 @@ const Equipamentos = () => {
         title="Equipamentos"
         description="Gerencie os equipamentos cadastrados no Supabase"
       >
-        <Button onClick={openCreate}>
-          <Plus className="w-4 h-4 mr-2" /> Novo Equipamento
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={() => setLoteOpen(true)}>
+            <CopyPlus className="mr-2 h-4 w-4" /> Adicionar múltiplos
+          </Button>
+          <Button onClick={openCreate}>
+            <Plus className="w-4 h-4 mr-2" /> Novo Equipamento
+          </Button>
+        </div>
       </PageHeader>
+
+      <EquipamentosLoteDialog open={loteOpen} onOpenChange={setLoteOpen} />
+
+      <AlertDialog
+        open={Boolean(equipamentoExclusao)}
+        onOpenChange={(open) => {
+          if (!open && !excluirEquipamento.isPending) {
+            setEquipamentoExclusao(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir equipamento definitivamente?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O equipamento Nº {equipamentoExclusao
+                ? formatNumeroCadastro(equipamentoExclusao.numero_cadastro)
+                : ""} ({equipamentoExclusao
+                ? getTipoEquipamento(equipamentoExclusao)
+                : ""}) será removido. A exclusão será bloqueada caso existam
+              documentos ou históricos vinculados.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={excluirEquipamento.isPending}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={excluirEquipamento.isPending}
+              onClick={(event) => {
+                event.preventDefault();
+                void handleExcluir();
+              }}
+            >
+              {excluirEquipamento.isPending ? "Excluindo..." : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <EquipamentoFormDialog
         open={dialogOpen}
@@ -768,6 +856,9 @@ const Equipamentos = () => {
               <thead>
                 <tr className="border-b bg-muted/50">
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
+                    <SortableTableHeader label="Nº" sortField="numero_cadastro" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
+                  </th>
+                  <th className="text-left px-5 py-3 font-medium text-muted-foreground">
                     <SortableTableHeader label="Tipo" sortField="tipo" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
@@ -811,6 +902,10 @@ const Equipamentos = () => {
                       key={e.id}
                       className="border-b last:border-0 hover:bg-muted/30 transition-colors"
                     >
+                      <td className="px-5 py-3 font-mono text-xs text-muted-foreground">
+                        {formatNumeroCadastro(e.numero_cadastro)}
+                      </td>
+
                       <td className="px-5 py-3 font-medium text-foreground">
                         <button
                           type="button"
@@ -918,6 +1013,19 @@ const Equipamentos = () => {
                                 <FileWarning className="w-4 h-4 mr-2" /> Criar
                                 Laudo de Obsolescência
                               </DropdownMenuItem>
+
+                              {hasPermission("equipamentos.gerenciar") && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onClick={() => setEquipamentoExclusao(e)}
+                                  >
+                                    <Trash2 className="w-4 h-4 mr-2" /> Excluir
+                                    equipamento
+                                  </DropdownMenuItem>
+                                </>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
@@ -929,7 +1037,7 @@ const Equipamentos = () => {
                 {filtered.length === 0 && (
                   <tr>
                     <td
-                      colSpan={10}
+                      colSpan={11}
                       className="px-5 py-8 text-center text-sm text-muted-foreground"
                     >
                       Nenhum equipamento encontrado com os filtros aplicados.

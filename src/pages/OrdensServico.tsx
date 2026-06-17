@@ -30,7 +30,8 @@ import ListLimitSelect, {
   DEFAULT_LIST_LIMIT,
 } from "@/components/ListLimitSelect";
 import PageHeader from "@/components/PageHeader";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   useAlterarEstadoOrdemServico,
   useExcluirOrdemServico,
@@ -62,6 +63,7 @@ import OrcamentoFormDialog from "@/components/OrcamentoFormDialog";
 import { gerarPdfOrdemServico } from "@/utils/gerarPdfOrdemServico";
 import { ordenarNomesEstadosOS } from "@/utils/ordemEstadosOS";
 import { sortByValue, type SortDirection } from "@/utils/sortUtils";
+import { useAuth } from "@/contexts/AuthContext";
 
 const ALL = "__all__";
 
@@ -110,6 +112,12 @@ const getTecnico = (os: OrdemServicoSupabase) => {
   return os.responsavel_texto || "—";
 };
 
+const getNumeroOrdenacao = (numero?: string | null) => {
+  const digits = (numero || "").replace(/\D/g, "");
+  const value = Number(digits || numero || 0);
+  return Number.isFinite(value) ? value : 0;
+};
+
 const formatDate = (iso: string | null) => {
   if (!iso) return "—";
 
@@ -147,8 +155,10 @@ const statusColor = (status: string) => {
 };
 
 const OrdensServico = () => {
+  const { usuario } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState("data");
+  const [sortKey, setSortKey] = useState("numero");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [listLimit, setListLimit] = useState(DEFAULT_LIST_LIMIT);
   const [open, setOpen] = useState(false);
@@ -255,7 +265,7 @@ const OrdensServico = () => {
   }, [ordensServico, search, hideClosed, filters]);
 
   const sortGetters: Record<string, (item: OrdemServicoSupabase) => unknown> = {
-    numero: (os) => os.numero,
+    numero: (os) => getNumeroOrdenacao(os.numero),
     data: (os) => os.data_abertura || os.created_at,
     empresa: getEmpresaNome,
     equipamento: getEquipamentoLabel,
@@ -300,6 +310,43 @@ const OrdensServico = () => {
 
     return n;
   }, [filters]);
+
+  useEffect(() => {
+    const osId = searchParams.get("os");
+    if (!osId) return;
+
+    let active = true;
+
+    const abrirOrdemServicoDaUrl = async () => {
+      try {
+        const ordem = await ordensServicoService.buscarPorId(osId);
+        if (!active) return;
+
+        setDetalhesOS(ordem);
+        setDetalhesOpen(true);
+        setSearchParams((current) => {
+          const next = new URLSearchParams(current);
+          next.delete("os");
+          return next;
+        }, { replace: true });
+      } catch (error) {
+        if (!active) return;
+
+        toast({
+          title: "Erro ao abrir OS",
+          description:
+            error instanceof Error ? error.message : "Erro inesperado.",
+          variant: "destructive",
+        });
+      }
+    };
+
+    abrirOrdemServicoDaUrl();
+
+    return () => {
+      active = false;
+    };
+  }, [searchParams, setSearchParams]);
 
   const openCreate = () => {
     setSelected(null);
@@ -450,7 +497,11 @@ const OrdensServico = () => {
   const handleGerarPdfOS = async (os: OrdemServicoSupabase) => {
     try {
       const osCompleta = await ordensServicoService.buscarPorId(os.id);
-      await gerarPdfOrdemServico(osCompleta);
+      await gerarPdfOrdemServico(
+        usuario?.perfil === "solicitante"
+          ? { ...osCompleta, descricao_servico: null }
+          : osCompleta
+      );
     } catch (error) {
       toast({
         title: "Erro ao gerar PDF",

@@ -1,4 +1,4 @@
-import { ArrowLeft, CalendarDays, CheckCircle2, History, Pencil, Plus } from "lucide-react";
+import { ArrowLeft, CalendarClock, CalendarDays, CheckCircle2, History, Pencil, Plus } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import PlanoCicloFormDialog from "@/components/PlanoCicloFormDialog";
@@ -23,6 +23,7 @@ const PlanoDetalhes = () => {
   const concluirCiclo = useConcluirCicloPlano();
   const [formOpen, setFormOpen] = useState(false);
   const [cicloOpen, setCicloOpen] = useState(false);
+  const [editandoCiclo, setEditandoCiclo] = useState(false);
   const [relatorioAnualOpen, setRelatorioAnualOpen] = useState(false);
   const [relatoriosAnuaisOpen, setRelatoriosAnuaisOpen] = useState(false);
   const [tab, setTab] = useState("dados");
@@ -55,12 +56,23 @@ const PlanoDetalhes = () => {
         <Button variant="outline" onClick={() => setRelatorioAnualOpen(true)}><CalendarDays className="mr-2 h-4 w-4" />Gerar relatorio anual</Button>
         <Button variant="outline" onClick={() => setRelatoriosAnuaisOpen(true)}><History className="mr-2 h-4 w-4" />Relatorios anuais</Button>
         <Button variant="outline" onClick={() => setFormOpen(true)}><Pencil className="mr-2 h-4 w-4" />Editar</Button>
-        <Button onClick={() => setCicloOpen(true)}><Plus className="mr-2 h-4 w-4" />Novo Ciclo</Button>
+        {cicloAtual && (
+          <Button variant="outline" onClick={() => { setEditandoCiclo(true); setCicloOpen(true); }}>
+            <CalendarClock className="mr-2 h-4 w-4" />Editar datas do ciclo
+          </Button>
+        )}
+        <Button onClick={() => { setEditandoCiclo(false); setCicloOpen(true); }}><Plus className="mr-2 h-4 w-4" />Novo Ciclo</Button>
         <Button variant="outline" disabled={concluirCiclo.isPending} onClick={handleConcluirCiclo}><CheckCircle2 className="mr-2 h-4 w-4" />Concluir Ciclo</Button>
       </PageHeader>
 
       <PlanoFormDialog open={formOpen} onOpenChange={setFormOpen} plano={plano} />
-      <PlanoCicloFormDialog open={cicloOpen} onOpenChange={setCicloOpen} plano={plano} onSaved={() => setTab("execucao")} />
+      <PlanoCicloFormDialog
+        open={cicloOpen}
+        onOpenChange={(open) => { setCicloOpen(open); if (!open) setEditandoCiclo(false); }}
+        plano={plano}
+        ciclo={editandoCiclo ? cicloAtual : null}
+        onSaved={() => setTab("execucao")}
+      />
       <PlanoRelatorioAnualDialog open={relatorioAnualOpen} onOpenChange={setRelatorioAnualOpen} planoId={plano.id} />
       <PlanoRelatoriosAnuaisDialog open={relatoriosAnuaisOpen} onOpenChange={setRelatoriosAnuaisOpen} planoId={plano.id} />
 

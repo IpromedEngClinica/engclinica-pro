@@ -14,15 +14,14 @@ import type { PlanoCicloDetalhes, PlanoCicloItem } from "@/services/planosServic
 import { gerarPdfCalibracaoCertificado } from "@/utils/gerarPdfCalibracaoCertificado";
 import { gerarPdfOrdemServico } from "@/utils/gerarPdfOrdemServico";
 import { gerarPdfRelatorioCicloPlano } from "@/utils/gerarPdfRelatorioCicloPlano";
+import { useAuth } from "@/contexts/AuthContext";
+import { formatDateTimeValue, formatDateValue } from "@/utils/planoDatas";
 
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   cicloId?: string | null;
 };
-
-const formatDate = (value?: string | null) =>
-  value ? new Date(value.includes("T") ? value : `${value}T00:00:00`).toLocaleDateString("pt-BR") : "-";
 
 const equipamentoNome = (item: PlanoCicloItem) =>
   [
@@ -51,6 +50,7 @@ const isPreventivaConforme = (item: PlanoCicloItem, detalhes: PlanoCicloDetalhes
 };
 
 const PlanoCicloDetalhesDialog = ({ cicloId, onOpenChange, open }: Props) => {
+  const { usuario } = useAuth();
   const { data: detalhes, isLoading } = usePlanoCicloDetalhes(open ? cicloId || undefined : undefined);
 
   const gerarRelatorio = async () => {
@@ -69,7 +69,11 @@ const PlanoCicloDetalhesDialog = ({ cicloId, onOpenChange, open }: Props) => {
   const abrirPdfOs = async (osId: string) => {
     const os = detalhes?.ordensPreventivas.find((item) => item.id === osId);
     if (!os) return;
-    await gerarPdfOrdemServico(os);
+    await gerarPdfOrdemServico(
+      usuario?.perfil === "solicitante"
+        ? { ...os, descricao_servico: null }
+        : os
+    );
   };
 
   const abrirPdfCalibracao = async (execucaoId: string) => {
@@ -105,9 +109,8 @@ const PlanoCicloDetalhesDialog = ({ cicloId, onOpenChange, open }: Props) => {
               <Info label="Cliente" value={detalhes.plano.empresa?.nome_fantasia || detalhes.plano.empresa?.nome || "-"} />
               <Info label="Ciclo" value={ciclo.titulo} />
               <Info label="Situacao" value={ciclo.status} />
-              <Info label="Data prevista" value={formatDate(ciclo.data_prevista)} />
-              <Info label="Abertura" value={formatDate(ciclo.data_abertura)} />
-              <Info label="Fechamento" value={formatDate(ciclo.data_fechamento_real || ciclo.data_fechamento_prevista)} />
+              <Info label="Execucao" value={formatDateTimeValue(ciclo.data_abertura)} />
+              <Info label="Fechamento" value={formatDateTimeValue(ciclo.data_fechamento_real || ciclo.data_fechamento_prevista)} />
               <Info label="Responsavel" value={detalhes.plano.responsavel?.nome || "-"} />
             </div>
 

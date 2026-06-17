@@ -2,13 +2,11 @@ import { Progress } from "@/components/ui/progress";
 import { usePlanoCicloAtual } from "@/hooks/usePlanos";
 import type { Plano } from "@/services/planosService";
 import { getPlanoFrequenciaLabel } from "@/utils/planoFrequencia";
+import { formatDateTimeValue, formatDateValue } from "@/utils/planoDatas";
 
 type Props = {
   plano: Plano;
 };
-
-const formatDate = (value?: string | null) =>
-  value ? new Date(`${value}T00:00:00`).toLocaleDateString("pt-BR") : "-";
 
 const PlanoDadosGeraisTab = ({ plano }: Props) => {
   const equipamentos = plano.equipamentos || [];
@@ -31,7 +29,7 @@ const PlanoDadosGeraisTab = ({ plano }: Props) => {
       <div className="grid gap-3 md:grid-cols-5">
         <Info label="Cliente" value={plano.empresa?.nome_fantasia || plano.empresa?.nome || "-"} />
         <Info label="Responsavel" value={plano.responsavel?.nome || "-"} />
-        <Info label="Data inicial" value={formatDate(plano.data_inicial)} />
+        <Info label="Data inicial" value={formatDateValue(plano.data_inicial)} />
         <Info label="Frequencia" value={getPlanoFrequenciaLabel(plano.frequencia)} />
         <Info label="Prazo" value={`${plano.prazo_execucao_dias} dia(s)`} />
       </div>
@@ -40,9 +38,9 @@ const PlanoDadosGeraisTab = ({ plano }: Props) => {
         <h3 className="mb-3 font-semibold">Ciclo atual</h3>
         {cicloAtual ? (
           <div className="grid gap-3 md:grid-cols-5">
-            <Info label="Inicia em" value={formatDate(cicloAtual.data_abertura)} />
+            <Info label="Inicia em" value={formatDateTimeValue(cicloAtual.data_abertura)} />
             <Info label="Prazo" value={`${plano.prazo_execucao_dias} dia(s)`} />
-            <Info label="Termina em" value={formatDate(cicloAtual.data_fechamento_prevista)} />
+            <Info label="Termina em" value={formatDateTimeValue(cicloAtual.data_fechamento_prevista)} />
             <Info label="Situacao" value={cicloAtual.status} />
             <Info label="Progresso" value={`${resolvidos} / ${itensCiclo.length} resolvidos`} />
           </div>

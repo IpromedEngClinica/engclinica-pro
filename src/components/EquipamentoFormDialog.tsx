@@ -31,6 +31,7 @@ import {
 import { useEmpresas } from "@/hooks/useEmpresas";
 import { useTiposEquipamento } from "@/hooks/useTiposEquipamento";
 import EquipamentoHistoricoSection from "@/components/EquipamentoHistoricoSection";
+import TipoEquipamentoQuickAddDialog from "@/components/TipoEquipamentoQuickAddDialog";
 
 export type DialogMode = "create" | "edit" | "view";
 
@@ -56,8 +57,6 @@ const emptyForm: EquipamentoFormInput = {
   setor: "",
   tag: "",
   status: "Ativo",
-  dataAquisicao: "",
-  dataInstalacao: "",
   dataUltimaPreventiva: "",
   dataProximaPreventiva: "",
   dataUltimaCalibracao: "",
@@ -99,6 +98,7 @@ const EquipamentoFormDialog = ({
   const { data: tiposEquipamento = [] } = useTiposEquipamento();
 
   const [form, setForm] = useState<EquipamentoFormInput>(emptyForm);
+  const [novoTipoOpen, setNovoTipoOpen] = useState(false);
 
   const readOnly = mode === "view";
   const saving = criarEquipamento.isPending || atualizarEquipamento.isPending;
@@ -174,8 +174,6 @@ const EquipamentoFormDialog = ({
         setor: equipamento.setor || "",
         tag: equipamento.tag || "",
         status: equipamento.status || "Ativo",
-        dataAquisicao: equipamento.data_aquisicao || "",
-        dataInstalacao: equipamento.data_instalacao || "",
         dataUltimaPreventiva: equipamento.data_ultima_preventiva || "",
         dataProximaPreventiva: equipamento.data_proxima_preventiva || "",
         dataUltimaCalibracao: equipamento.data_ultima_calibracao || "",
@@ -313,6 +311,7 @@ const EquipamentoFormDialog = ({
         : "Novo Equipamento";
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={
@@ -342,6 +341,8 @@ const EquipamentoFormDialog = ({
                   options={tipoOptions}
                   placeholder="Selecione o tipo"
                   emptyText="Nenhum tipo encontrado."
+                  onAddNew={() => setNovoTipoOpen(true)}
+                  addNewLabel="Cadastrar novo tipo"
                 />
               )}
             </div>
@@ -569,6 +570,18 @@ const EquipamentoFormDialog = ({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <TipoEquipamentoQuickAddDialog
+      open={novoTipoOpen}
+      onOpenChange={setNovoTipoOpen}
+      onCreated={(tipo) => {
+        setForm((current) => ({
+          ...current,
+          tipoEquipamentoId: tipo.id,
+          tipoTexto: "",
+        }));
+      }}
+    />
+    </>
   );
 };
 

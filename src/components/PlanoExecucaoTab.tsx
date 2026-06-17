@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Play, Search } from "lucide-react";
+import { Loader2, Play, Search } from "lucide-react";
 import CalibracaoExecucaoFormDialog from "@/components/CalibracaoExecucaoFormDialog";
+import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import PlanoNaoLocalizadoDialog from "@/components/PlanoNaoLocalizadoDialog";
 import PlanoResultadoLoteDialog from "@/components/PlanoResultadoLoteDialog";
 import PreventivaChecklistDialog from "@/components/PreventivaChecklistDialog";
@@ -8,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   useAbrirPreventivaItem,
@@ -20,12 +22,18 @@ import {
 } from "@/hooks/usePlanos";
 import { toast } from "@/hooks/use-toast";
 import type { CalibracaoExecucao } from "@/services/calibracaoExecucoesService";
+import {
+  equipamentosService,
+  type EquipamentoSupabase,
+} from "@/services/equipamentosService";
 import type {
   PlanoCicloItem,
   PlanoTipoServico,
+  ProgressoFinalizacaoPreventivasLote,
   ResultadoFinalizacaoPreventivasLote,
   ResultadoNaoLocalizados,
 } from "@/services/planosService";
+import { formatDateTimeValue } from "@/utils/planoDatas";
 
 type Props = {
   planoId: string;
@@ -106,6 +114,11 @@ const PlanoExecucaoTab = ({ planoId, onNovoCiclo }: Props) => {
   const [resultadoOpen, setResultadoOpen] = useState(false);
   const [resultadoTitulo, setResultadoTitulo] = useState("");
   const [resultadoLote, setResultadoLote] = useState<ResultadoFinalizacaoPreventivasLote | ResultadoNaoLocalizados | null>(null);
+  const [equipamentoDetalhes, setEquipamentoDetalhes] =
+    useState<EquipamentoSupabase | null>(null);
+  const [equipamentoDetalhesOpen, setEquipamentoDetalhesOpen] = useState(false);
+  const [progressoFinalizacao, setProgressoFinalizacao] =
+    useState<ProgressoFinalizacaoPreventivasLote | null>(null);
 
   useEffect(() => {
     setSelecionados(new Set());
@@ -259,13 +272,24 @@ const PlanoExecucaoTab = ({ planoId, onNovoCiclo }: Props) => {
 
   const finalizarSelecionadasComoConformes = async () => {
     if (!ciclo || !preventivasSelecionadasValidas.length) return;
+
+    const total = preventivasSelecionadasValidas.length;
+    setProgressoFinalizacao({
+      processados: 0,
+      total,
+      equipamentoDescricao: null,
+      resultado: "finalizado",
+    });
+
     try {
       const resultado = await finalizarConformes.mutateAsync({
         itemIds: preventivasSelecionadasValidas.map((item) => item.id),
         cicloId: ciclo.id,
         planoId,
         dataFechamento: ciclo.data_fechamento_prevista,
+        onProgress: setProgressoFinalizacao,
       });
+      await new Promise((resolve) => window.setTimeout(resolve, 350));
       setSelecionados(new Set());
       setResultadoTitulo("Preventivas finalizadas como conformes");
       setResultadoLote(resultado);
@@ -273,6 +297,24 @@ const PlanoExecucaoTab = ({ planoId, onNovoCiclo }: Props) => {
     } catch (error) {
       toast({
         title: "Erro ao finalizar preventivas",
+        description: error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    } finally {
+      setProgressoFinalizacao(null);
+    }
+  };
+
+  const abrirEquipamento = async (item: PlanoCicloItem) => {
+    try {
+      const equipamento = await equipamentosService.buscarPorId(
+        item.equipamento_id
+      );
+      setEquipamentoDetalhes(equipamento);
+      setEquipamentoDetalhesOpen(true);
+    } catch (error) {
+      toast({
+        title: "Erro ao abrir equipamento",
         description: error instanceof Error ? error.message : "Erro inesperado.",
         variant: "destructive",
       });
@@ -374,6 +416,14 @@ const PlanoExecucaoTab = ({ planoId, onNovoCiclo }: Props) => {
         titulo={resultadoTitulo}
         resultado={resultadoLote}
       />
+      <EquipamentoDetalhesDialog
+        open={equipamentoDetalhesOpen}
+        onOpenChange={(open) => {
+          setEquipamentoDetalhesOpen(open);
+          if (!open) setEquipamentoDetalhes(null);
+        }}
+        equipamento={equipamentoDetalhes}
+      />
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card p-4">
         <div>
           <h2 className="font-semibold">{ciclo.titulo}</h2>
@@ -420,7 +470,12 @@ const PlanoExecucaoTab = ({ planoId, onNovoCiclo }: Props) => {
               disabled={servico !== "preventiva" || preventivasSelecionadasValidas.length === 0 || mutacaoLotePendente}
               onClick={finalizarSelecionadasComoConformes}
             >
-              Finalizar selecionadas como conformes
+              {finalizarConformes.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              {finalizarConformes.isPending
+                ? "Finalizando preventivas..."
+                : "Finalizar selecionadas como conformes"}
             </Button>
             <Button
               size="sm"
@@ -451,6 +506,41 @@ const PlanoExecucaoTab = ({ planoId, onNovoCiclo }: Props) => {
           </div>
         </div>
 
+        {progressoFinalizacao && (
+          <div
+            className="space-y-3 border-b bg-muted/20 px-4 py-4"
+            role="status"
+            aria-live="polite"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                <span className="text-sm font-medium">
+                  Finalizando preventivas selecionadas
+                </span>
+              </div>
+              <span className="text-sm font-semibold tabular-nums">
+                {progressoFinalizacao.processados} de {progressoFinalizacao.total}
+              </span>
+            </div>
+            <Progress
+              value={
+                progressoFinalizacao.total
+                  ? (progressoFinalizacao.processados /
+                      progressoFinalizacao.total) *
+                    100
+                  : 0
+              }
+              className="h-2"
+            />
+            <p className="truncate text-xs text-muted-foreground">
+              {progressoFinalizacao.equipamentoDescricao
+                ? `${progressoFinalizacao.resultado === "finalizado" ? "Concluído" : "Ignorado"}: ${progressoFinalizacao.equipamentoDescricao}`
+                : "Preparando o processamento..."}
+            </p>
+          </div>
+        )}
+
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -461,7 +551,6 @@ const PlanoExecucaoTab = ({ planoId, onNovoCiclo }: Props) => {
                 <Th>Equipamento</Th>
                 <Th>N Serie</Th>
                 <Th>Patrimonio</Th>
-                <Th>Solicitante</Th>
                 <Th>Abertura</Th>
                 <Th>Previsao</Th>
                 <Th>Status</Th>
@@ -480,14 +569,19 @@ const PlanoExecucaoTab = ({ planoId, onNovoCiclo }: Props) => {
                   </Td>
                   <Td>{index + 1}</Td>
                   <Td>
-                    <p className="font-medium">{equipamentoNome(item)}</p>
+                    <button
+                      type="button"
+                      className="font-medium text-primary hover:underline"
+                      onClick={() => void abrirEquipamento(item)}
+                    >
+                      {equipamentoNome(item)}
+                    </button>
                     <p className="text-xs text-muted-foreground">{item.setor?.nome_snapshot || "Sem setor"}</p>
                   </Td>
                   <Td>{item.equipamento?.numero_serie || "-"}</Td>
                   <Td>{item.equipamento?.patrimonio || "-"}</Td>
-                  <Td>{ciclo.titulo}</Td>
-                  <Td>{ciclo.data_abertura}</Td>
-                  <Td>{ciclo.data_fechamento_prevista}</Td>
+                  <Td>{formatDateTimeValue(ciclo.data_abertura)}</Td>
+                  <Td>{formatDateTimeValue(ciclo.data_fechamento_prevista)}</Td>
                   <Td><Badge variant="outline">{statusLabel[item.status]}</Badge></Td>
                   <Td>{item.os_id ? "OS vinculada" : item.calibracao_execucao_id ? "Certificado vinculado" : "-"}</Td>
                 </tr>

@@ -196,6 +196,12 @@ export const equipamentoHistoricoService = {
   async buscarPorEquipamento(
     equipamentoId: string
   ): Promise<EquipamentoHistorico> {
+    const { data: perfil, error: perfilError } = await supabase.rpc("current_user_perfil");
+    if (perfilError) throw new Error(perfilError.message);
+    const selectOsPermitido = perfil === "solicitante"
+      ? selectOSHistorico.replace("  descricao_servico,\n", "")
+      : selectOSHistorico;
+
     const [
       ordensResult,
       protocolosResult,
@@ -207,7 +213,7 @@ export const equipamentoHistoricoService = {
       await Promise.all([
         supabase
           .from("ordens_servico")
-          .select(selectOSHistorico)
+          .select(selectOsPermitido)
           .eq("equipamento_id", equipamentoId)
           .eq("ativo", true)
           .order("created_at", { ascending: false }),

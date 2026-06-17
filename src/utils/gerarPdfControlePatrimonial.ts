@@ -27,5 +27,6 @@ export const gerarPdfControlePatrimonial = async (
     fileName,
     save,
     orientation: "l",
+    marginMm: 5,
   });
 };

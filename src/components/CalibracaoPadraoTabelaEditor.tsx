@@ -29,10 +29,11 @@ export type CalibracaoPadraoTabelaDraft = {
   nome: string;
   grandeza: string;
   unidade: string;
+  resolucaoPadrao: string;
   pontos: CalibracaoPadraoPontoDraft[];
 };
 
-type TabelaField = "nome" | "grandeza" | "unidade";
+type TabelaField = "nome" | "grandeza" | "unidade" | "resolucaoPadrao";
 type PontoField = Exclude<
   keyof CalibracaoPadraoPontoDraft,
   "key" | "id" | "tendenciaManual" | "veffInfinito"
@@ -67,7 +68,7 @@ const CalibracaoPadraoTabelaEditor = ({
   onAtualizarPonto,
 }: Props) => (
   <div className="space-y-4 rounded-b-lg border border-t-0 bg-background p-4">
-    <div className="grid gap-3 md:grid-cols-[minmax(240px,1fr)_220px_140px_auto]">
+    <div className="grid gap-3 md:grid-cols-[minmax(220px,1fr)_160px_96px_150px_auto]">
       <EditorField
         label="Nome da tabela *"
         value={tabela.nome}
@@ -85,6 +86,15 @@ const CalibracaoPadraoTabelaEditor = ({
         value={tabela.unidade}
         onChange={(value) => onAtualizarTabela(tabela.key, "unidade", value)}
         disabled={disabled}
+      />
+      <EditorField
+        label="Resolucao do padrao"
+        value={tabela.resolucaoPadrao}
+        onChange={(value) =>
+          onAtualizarTabela(tabela.key, "resolucaoPadrao", value)
+        }
+        disabled={disabled}
+        inputMode="decimal"
       />
       <div className="flex items-end">
         <Button
@@ -124,20 +134,20 @@ const CalibracaoPadraoTabelaEditor = ({
     </div>
 
     <div className="overflow-x-auto rounded-lg border">
-      <table className="w-full min-w-[1240px] text-sm">
+      <table className="w-full min-w-[1040px] table-fixed text-xs">
         <thead>
           <tr className="border-b bg-muted/50">
-            <Header className="w-[150px]">Valor nominal / referencia *</Header>
-            <Header className="w-[170px]">Media dos valores medidos</Header>
-            <Header className="w-[140px]">
+            <Header className="w-[120px]">Valor nominal / referencia *</Header>
+            <Header className="w-[135px]">Media dos valores medidos</Header>
+            <Header className="w-[115px]">
               Tendencia
-              <span className="block text-[11px] font-normal text-muted-foreground">
+              <span className="block text-[10px] font-normal text-muted-foreground">
                 Automatica, mas editavel
               </span>
             </Header>
-            <Header className="w-[170px]">Incerteza expandida</Header>
-            <Header className="w-[90px]">k</Header>
-            <Header className="w-[120px]">
+            <Header className="w-[130px]">Incerteza expandida</Header>
+            <Header className="w-[70px]">k</Header>
+            <Header className="w-[95px]">
               <span className="flex items-center gap-1">
                 veff
                 <TooltipProvider>
@@ -151,12 +161,12 @@ const CalibracaoPadraoTabelaEditor = ({
                   </Tooltip>
                 </TooltipProvider>
               </span>
-              <span className="block text-[11px] font-normal text-muted-foreground">
+              <span className="block text-[10px] font-normal text-muted-foreground">
                 Numero ou inf
               </span>
             </Header>
-            <Header className="w-[250px]">Observacoes</Header>
-            <Header className="w-[64px] text-right">Acoes</Header>
+            <Header className="w-[180px]">Observacoes</Header>
+            <Header className="w-[52px] text-right">Acoes</Header>
           </tr>
         </thead>
         <tbody>
@@ -257,8 +267,9 @@ const CalibracaoPadraoTabelaEditor = ({
                   )
                 }
                 disabled={disabled}
+                className="truncate"
               />
-              <td className="px-2 py-2 text-right">
+              <td className="px-1.5 py-1.5 text-right">
                 <Button
                   type="button"
                   variant="ghost"
@@ -283,15 +294,18 @@ const EditorField = ({
   value,
   onChange,
   disabled,
+  inputMode,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   disabled: boolean;
+  inputMode?: "decimal";
 }) => (
   <div className="space-y-2">
     <Label>{label}</Label>
     <Input
+      inputMode={inputMode}
       value={value}
       onChange={(event) => onChange(event.target.value)}
       disabled={disabled}
@@ -306,7 +320,7 @@ const Header = ({
   className?: string;
   children: React.ReactNode;
 }) => (
-  <th className={`px-3 py-2 text-left align-middle font-medium ${className || ""}`}>
+  <th className={`px-2 py-2 text-left align-middle font-medium ${className || ""}`}>
     {children}
   </th>
 );
@@ -328,9 +342,9 @@ const Cell = ({
   value: string;
   onChange: (value: string) => void;
 }) => (
-  <td className="px-2 py-2">
+  <td className="px-1.5 py-1.5">
     <Input
-      className={`h-9 min-w-[100px] ${className || ""}`}
+      className={`h-8 min-w-0 px-2 text-xs ${className || ""}`}
       inputMode={decimal ? "decimal" : undefined}
       placeholder={placeholder}
       title={title}

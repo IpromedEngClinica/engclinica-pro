@@ -5,8 +5,10 @@ import type {
   PlanoRelatorioCicloOpcoes,
 } from "@/services/planosService";
 import type { OrdemServicoSupabase } from "@/services/ordensServicoService";
+import { assinaturasService } from "@/services/assinaturasService";
 import { imageToDataUrl } from "@/utils/pdfImageUtils";
 import { renderHtmlToPdf } from "@/utils/pdfHtmlRenderer";
+import { calcularValidadeFimDoMes } from "@/utils/planoDatas";
 
 type PreventivaClassificada = {
   item: PlanoCicloItem;
@@ -145,12 +147,6 @@ const proximaVisita = (data: string, frequencia: string) => {
   return date.toISOString().slice(0, 10);
 };
 
-const addMonthsDateOnly = (dateIso: string, months: number) => {
-  const date = new Date(`${dateIso}T00:00:00`);
-  date.setMonth(date.getMonth() + months);
-  return date.toISOString().slice(0, 10);
-};
-
 const resultadoPreventiva = (item: PreventivaClassificada) =>
   item.conforme ? "Conforme" : "Nao conforme";
 
@@ -175,8 +171,17 @@ export const gerarPdfRelatorioCicloPlano = async (
   detalhes: PlanoCicloDetalhes,
   opcoes?: Partial<PlanoRelatorioCicloOpcoes> & { save?: boolean }
 ) => {
-  const logo = await imageToDataUrl(aciLogo);
   const { plano, ciclo, ordensPreventivas, ordensCorretivas, calibracoes } = detalhes;
+  const [logo, assinaturas] = await Promise.all([
+    imageToDataUrl(aciLogo),
+    assinaturasService.resolverDocumento({
+      tecnicoUsuarioId: plano.responsavel_id,
+      tecnicoNome: plano.responsavel?.nome,
+      responsavelNome: plano.responsavel?.nome,
+      empresaId: plano.empresa_id,
+    }),
+  ]);
+  const assinaturaResponsavel = assinaturas.responsavel || assinaturas.tecnico;
   const itens = ciclo.itens || [];
   const osPorId = new Map(ordensPreventivas.map((os) => [os.id, os]));
   const calibracoesPorId = new Map(calibracoes.map((execucao) => [execucao.id, execucao]));
@@ -208,7 +213,7 @@ export const gerarPdfRelatorioCicloPlano = async (
   const setores = Array.from(new Set(itens.map(setorNome))).sort((a, b) => a.localeCompare(b, "pt-BR"));
   const emitidoEmDate = opcoes?.emitidoEm || new Date().toISOString().slice(0, 10);
   const validadeMeses = Number(opcoes?.validadeMeses || ciclo.relatorio_validade_meses || 12);
-  const validadeAte = opcoes?.validadeAte || ciclo.relatorio_validade_ate || addMonthsDateOnly(emitidoEmDate, validadeMeses);
+  const validadeAte = calcularValidadeFimDoMes(ciclo.data_abertura, validadeMeses);
   const naoConformesTotal = naoConformes.length + corretivasNaoConformes.length;
 
   const resumoSetores = setores.map((setor) => {
@@ -240,7 +245,7 @@ export const gerarPdfRelatorioCicloPlano = async (
     item.item.equipamento?.patrimonio || "-",
     setorNome(item.item),
     item.os?.numero ? `OS ${item.os.numero}` : "-",
-    formatDate(item.os?.data_fechamento || item.item.concluido_em),
+    formatDateTime(ciclo.data_abertura),
     resultadoPreventiva(item),
   ]);
 
@@ -316,6 +321,23 @@ export const gerarPdfRelatorioCicloPlano = async (
     item.motivo_nao_localizado || "Equipamento nao localizado",
   ]);
 
+  let numeroSecao = 0;
+  const secao = (titulo: string, headers: string[], rows: string[][]) => {
+    if (!rows.length) return "";
+    numeroSecao += 1;
+    return renderSection(`${numeroSecao}. ${titulo}`, headers, rows);
+  };
+  const secoes = [
+    secao("Preventivas executadas", ["#", "Equipamento", "Fabricante / Modelo", "N Serie", "Patrimonio", "Setor", "OS", "Data de abertura", "Resultado"], preventivasRows),
+    secao("Manutencoes corretivas executadas", ["#", "Equipamento", "Fabricante / Modelo", "N Serie", "Setor", "OS", "Descricao do servico", "Data", "Resultado"], corretivasRows),
+    secao("Calibracoes executadas", ["#", "Equipamento", "Fabricante / Modelo", "N Serie", "Patrimonio", "Setor", "Certificado", "Data", "Validade", "Resultado"], calibracoesRows),
+    secao("Testes de seguranca eletrica executados", ["#", "Equipamento", "Fabricante / Modelo", "N Serie", "Patrimonio", "Setor", "Certificado", "Data", "Resultado"], segurancaRows),
+    secao("Equipamentos nao conformes", ["#", "Equipamento", "N Serie", "Setor", "Servico", "Documento", "Itens nao conformes", "Observacoes", "Aprovacao"], naoConformesRows),
+    secao("Equipamentos nao localizados", ["#", "Equipamento", "Fabricante / Modelo", "N Serie", "Patrimonio", "Setor", "Observacao"], naoLocalizadosRows),
+    secao("Resumo por setor", ["Setor", "Previstos", "Preventivas", "Corretivas", "Calibracoes", "Seguranca eletrica", "Nao conformes", "Nao localizados"], resumoSetores),
+  ].join("");
+  const numeroProximaVisita = numeroSecao + 1;
+
   const html = `
     <div class="document">
       <style>
@@ -346,6 +368,11 @@ export const gerarPdfRelatorioCicloPlano = async (
         th { text-align: left; background: #f3f4f6; color: #374151; padding: 7px; border-bottom: 1px solid #d1d5db; }
         td { vertical-align: top; padding: 7px; border-bottom: 1px solid #e5e7eb; color: #2f2f2f; }
         .empty { color: #6b7280; text-align: center; padding: 12px; }
+        .signature { width: 340px; margin: 34px auto 0; text-align: center; page-break-inside: avoid; }
+        .signature-image { height: 72px; display: flex; align-items: flex-end; justify-content: center; }
+        .signature-image img { max-width: 300px; max-height: 68px; object-fit: contain; }
+        .signature-line { border-top: 1px solid #9ca3af; padding-top: 7px; font-size: 12px; color: #374151; }
+        .signature-line strong { display: block; font-size: 13px; color: #1f2937; }
         .footer-note { margin-top: 24px; color: #666; font-size: 10px; text-align: center; }
       </style>
       <div class="topbar"></div>
@@ -362,9 +389,6 @@ export const gerarPdfRelatorioCicloPlano = async (
         <div><span class="label">Cliente</span><span class="value">${escapeHtml(plano.empresa?.nome_fantasia || plano.empresa?.nome)}</span></div>
         <div><span class="label">Unidade</span><span class="value">${escapeHtml(plano.empresa?.cidade || plano.empresa?.estado)}</span></div>
         <div><span class="label">Responsavel</span><span class="value">${escapeHtml(plano.responsavel?.nome)}</span></div>
-        <div><span class="label">Data prevista</span><span class="value">${formatDate(ciclo.data_prevista)}</span></div>
-        <div><span class="label">Abertura</span><span class="value">${formatDate(ciclo.data_abertura)}</span></div>
-        <div><span class="label">Fechamento</span><span class="value">${formatDate(ciclo.data_fechamento_real || ciclo.data_fechamento_prevista)}</span></div>
         <div><span class="label">Emissao</span><span class="value">${formatDate(emitidoEmDate)}</span></div>
         <div class="validity"><span class="label">Validade ate</span><span class="value">${formatDate(validadeAte)}</span></div>
         <div><span class="label">Frequencia</span><span class="value">${escapeHtml(plano.frequencia)}</span></div>
@@ -380,19 +404,21 @@ export const gerarPdfRelatorioCicloPlano = async (
         <div class="card orange"><span class="label">Nao localizados</span><strong>${naoLocalizadosPorEquipamento.length}</strong></div>
       </section>
 
-      ${renderSection("1. Preventivas executadas", ["#", "Equipamento", "Fabricante / Modelo", "N Serie", "Patrimonio", "Setor", "OS", "Data", "Resultado"], preventivasRows)}
-      ${renderSection("2. Manutencoes corretivas executadas", ["#", "Equipamento", "Fabricante / Modelo", "N Serie", "Setor", "OS", "Descricao do servico", "Data", "Resultado"], corretivasRows)}
-      ${renderSection("3. Calibracoes executadas", ["#", "Equipamento", "Fabricante / Modelo", "N Serie", "Patrimonio", "Setor", "Certificado", "Data", "Validade", "Resultado"], calibracoesRows)}
-      ${renderSection("4. Testes de seguranca eletrica executados", ["#", "Equipamento", "Fabricante / Modelo", "N Serie", "Patrimonio", "Setor", "Certificado", "Data", "Resultado"], segurancaRows)}
-      ${renderSection("5. Equipamentos nao conformes", ["#", "Equipamento", "N Serie", "Setor", "Servico", "Documento", "Itens nao conformes", "Observacoes", "Aprovacao"], naoConformesRows)}
-      ${renderSection("6. Equipamentos nao localizados", ["#", "Equipamento", "Fabricante / Modelo", "N Serie", "Patrimonio", "Setor", "Observacao"], naoLocalizadosRows)}
-      ${renderSection("7. Resumo por setor", ["Setor", "Previstos", "Preventivas", "Corretivas", "Calibracoes", "Seguranca eletrica", "Nao conformes", "Nao localizados"], resumoSetores)}
+      ${secoes}
 
-      <h2>8. Proxima visita</h2>
+      <h2>${numeroProximaVisita}. Proxima visita</h2>
       <section class="meta">
         <div><span class="label">Proxima visita prevista</span><span class="value">${formatDate(proximaVisita(ciclo.data_prevista, plano.frequencia))}</span></div>
         <div><span class="label">Frequencia do plano</span><span class="value">${escapeHtml(plano.frequencia)}</span></div>
         <div class="validity"><span class="label">Validade do relatorio</span><span class="value">${formatDate(validadeAte)}</span></div>
+      </section>
+
+      <section class="signature">
+        <div class="signature-image">${assinaturaResponsavel?.dataUrl ? `<img src="${assinaturaResponsavel.dataUrl}" alt="Assinatura do responsavel tecnico">` : ""}</div>
+        <div class="signature-line">
+          <strong>${escapeHtml(assinaturaResponsavel?.nome || plano.responsavel?.nome)}</strong>
+          Responsavel tecnico
+        </div>
       </section>
 
       <p class="footer-note">ACI Equipamentos Hospitalares - Gerado em ${formatDateTime(new Date().toISOString())}</p>

@@ -4,28 +4,58 @@ import { useNavigate } from "react-router-dom";
 import ListLimitSelect, {
   DEFAULT_LIST_LIMIT,
 } from "@/components/ListLimitSelect";
+import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
 import PlanoFormDialog from "@/components/PlanoFormDialog";
+import PlanosValidadesRelatorios from "@/components/PlanosValidadesRelatorios";
 import PageHeader from "@/components/PageHeader";
+import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useDesativarPlano, usePlanos, usePlanoUsuarios } from "@/hooks/usePlanos";
 import { toast } from "@/hooks/use-toast";
 import type { Plano } from "@/services/planosService";
+import {
+  empresasService,
+  type EmpresaSupabase,
+} from "@/services/empresasService";
 import { FREQUENCIAS_PLANO, getPlanoFrequenciaLabel } from "@/utils/planoFrequencia";
 import { sortByValue, type SortDirection } from "@/utils/sortUtils";
+import { formatDateTimeValue, formatDateValue } from "@/utils/planoDatas";
 
 const ALL = "__all__";
-type SortKey = "titulo" | "cliente" | "responsavel" | "inicio" | "previsao" | "situacao" | "frequencia" | "equipamentos";
+type SortKey = "progresso" | "titulo" | "cliente" | "responsavel" | "inicio" | "previsao" | "situacao" | "frequencia" | "equipamentos";
 
-const formatDate = (value?: string | null) =>
-  value ? new Date(`${value}T00:00:00`).toLocaleDateString("pt-BR") : "-";
 const cliente = (plano: Plano) => plano.empresa?.nome_fantasia || plano.empresa?.nome || "-";
 const cicloAtual = (plano: Plano) => plano.ciclos?.find((item) => item.status === "aberto") || null;
-const progresso = () => "0%";
+const todayDateOnly = () => {
+  const now = new Date();
+  return [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+  ].join("-");
+};
+const validadeRelatorioAtual = (plano: Plano) =>
+  [...(plano.ciclos || [])]
+    .map((ciclo) => ciclo.relatorio_validade_ate)
+    .filter((validade): validade is string => Boolean(validade))
+    .sort((a, b) => b.localeCompare(a))[0] || null;
+const getProgresso = (plano: Plano) => {
+  const itens = cicloAtual(plano)?.itens || [];
+  if (!itens.length) return 0;
+
+  const resolvidos = itens.filter((item) =>
+    ["concluido", "cancelado", "nao_localizado"].includes(item.status)
+  ).length;
+
+  return Math.round((resolvidos / itens.length) * 100);
+};
 const sortValue = (plano: Plano, key: SortKey) => ({
+  progresso: getProgresso(plano),
   titulo: plano.titulo,
   cliente: cliente(plano),
   responsavel: plano.responsavel?.nome || "",
@@ -43,6 +73,9 @@ const Planos = () => {
   const desativar = useDesativarPlano();
   const [formOpen, setFormOpen] = useState(false);
   const [selected, setSelected] = useState<Plano | null>(null);
+  const [empresaSelecionada, setEmpresaSelecionada] =
+    useState<EmpresaSupabase | null>(null);
+  const [empresaDetalhesOpen, setEmpresaDetalhesOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [empresa, setEmpresa] = useState(ALL);
@@ -97,6 +130,22 @@ const Planos = () => {
     }
   };
 
+  const abrirEmpresa = async (plano: Plano) => {
+    if (!plano.empresa_id) return;
+
+    try {
+      const empresaCompleta = await empresasService.buscarPorId(plano.empresa_id);
+      setEmpresaSelecionada(empresaCompleta);
+      setEmpresaDetalhesOpen(true);
+    } catch (err) {
+      toast({
+        title: "Erro ao abrir cliente",
+        description: err instanceof Error ? err.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="p-6 lg:p-8">
       <PageHeader title="Planos" description="Gerencie planos periodicos por cliente, setor e equipamento.">
@@ -107,7 +156,22 @@ const Planos = () => {
       </PageHeader>
 
       <PlanoFormDialog open={formOpen} onOpenChange={setFormOpen} plano={selected} onSaved={(plano, created) => created && navigate(`/planos/${plano.id}`)} />
+      <EmpresaDetalhesDialog
+        open={empresaDetalhesOpen}
+        onOpenChange={(open) => {
+          setEmpresaDetalhesOpen(open);
+          if (!open) setEmpresaSelecionada(null);
+        }}
+        empresa={empresaSelecionada}
+      />
 
+      <Tabs defaultValue="planos">
+        <TabsList className="mb-4">
+          <TabsTrigger value="planos">Planos</TabsTrigger>
+          <TabsTrigger value="validades">Validades dos relatorios</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="planos" className="mt-0">
       <div className="mb-4 rounded-lg border bg-card">
         <button className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium" onClick={() => setFiltersOpen(!filtersOpen)}>
           <span className="flex items-center gap-2"><SlidersHorizontal className="h-4 w-4" />Filtros avancados</span>
@@ -137,7 +201,7 @@ const Planos = () => {
           <thead>
             <tr className="bg-muted/40">
               {([
-                ["Progresso", null],
+                ["Progresso", "progresso"],
                 ["Titulo", "titulo"],
                 ["Cliente", "cliente"],
                 ["Responsavel", "responsavel"],
@@ -157,14 +221,35 @@ const Planos = () => {
           <tbody>
             {visiblePlanos.map((plano) => {
               const ciclo = cicloAtual(plano);
+              const percentual = getProgresso(plano);
+              const validade = validadeRelatorioAtual(plano);
+              const vencido = Boolean(validade && validade < todayDateOnly());
               return (
                 <tr key={plano.id} className="border-t">
-                  <Td>{progresso()}</Td>
+                  <Td>
+                    <PlanoProgressoCell
+                      cicloAberto={Boolean(ciclo)}
+                      percentual={percentual}
+                      validade={validade}
+                      vencido={vencido}
+                    />
+                  </Td>
                   <Td><button className="font-medium text-primary hover:underline" onClick={() => navigate(`/planos/${plano.id}`)}>{plano.titulo}</button></Td>
-                  <Td>{cliente(plano)}</Td>
+                  <Td>
+                    {plano.empresa_id ? (
+                      <button
+                        className="text-left text-primary hover:underline"
+                        onClick={() => abrirEmpresa(plano)}
+                      >
+                        {cliente(plano)}
+                      </button>
+                    ) : (
+                      cliente(plano)
+                    )}
+                  </Td>
                   <Td>{plano.responsavel?.nome || "-"}</Td>
-                  <Td>{formatDate(ciclo?.data_abertura || plano.data_inicial)}</Td>
-                  <Td>{formatDate(ciclo?.data_fechamento_prevista)}</Td>
+                  <Td>{ciclo ? formatDateTimeValue(ciclo.data_abertura) : formatDateValue(plano.data_inicial)}</Td>
+                  <Td>{formatDateTimeValue(ciclo?.data_fechamento_prevista)}</Td>
                   <Td><Badge variant="outline">{ciclo?.status || (plano.ativo ? "Ativo" : "Inativo")}</Badge></Td>
                   <Td>{getPlanoFrequenciaLabel(plano.frequencia)}</Td>
                   <Td>{plano.equipamentos?.length || 0}</Td>
@@ -187,6 +272,12 @@ const Planos = () => {
           </tbody>
         </table>
       </div>
+        </TabsContent>
+
+        <TabsContent value="validades" className="mt-0">
+          <PlanosValidadesRelatorios />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
@@ -200,6 +291,54 @@ const Filtro = ({ value, onChange, all, options }: { value: string; onChange: (v
     </SelectContent>
   </Select>
 );
+
+const PlanoProgressoCell = ({
+  cicloAberto,
+  percentual,
+  validade,
+  vencido,
+}: {
+  cicloAberto: boolean;
+  percentual: number;
+  validade: string | null;
+  vencido: boolean;
+}) => {
+  if (cicloAberto) {
+    return (
+      <div className="flex min-w-28 items-center gap-2">
+        <Progress value={percentual} className="h-2 w-16" />
+        <span className="text-xs font-medium tabular-nums">{percentual}%</span>
+      </div>
+    );
+  }
+
+  if (vencido) {
+    return (
+      <div className="flex min-w-44 flex-col gap-1">
+        <Badge variant="destructive" className="w-fit">
+          Renovar com cliente
+        </Badge>
+        <span className="text-xs text-muted-foreground">
+          Venceu em {formatDateValue(validade)}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex min-w-40 flex-col gap-1">
+      <Badge variant="secondary" className="w-fit">
+        Sem ciclo aberto
+      </Badge>
+      {validade && (
+        <span className="text-xs text-muted-foreground">
+          Valido ate {formatDateValue(validade)}
+        </span>
+      )}
+    </div>
+  );
+};
+
 const Th = ({ children }: { children?: React.ReactNode }) => <th className="whitespace-nowrap px-3 py-3 text-left font-medium">{children}</th>;
 const Td = ({ children }: { children?: React.ReactNode }) => <td className="whitespace-nowrap px-3 py-3">{children}</td>;
 

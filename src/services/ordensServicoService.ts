@@ -108,6 +108,7 @@ export type OrdemServicoFormInput = {
   tipoOsId?: string;
   estadoOsId?: string;
   tecnicoResponsavelId?: string;
+  dataAbertura?: string;
   solicitanteTexto?: string;
   responsavelTexto?: string;
   problemaRelatado?: string;
@@ -270,12 +271,23 @@ const selectOrdensServico = `
   )
 `;
 
+const getSelectOrdensServico = async () => {
+  const { data, error } = await supabase.rpc("current_user_perfil");
+
+  if (error) throw new Error(error.message);
+
+  return data === "solicitante"
+    ? selectOrdensServico.replace("  descricao_servico,\n", "")
+    : selectOrdensServico;
+};
+
 const toDatabasePayload = (input: OrdemServicoFormInput) => ({
   empresa_id: input.empresaId,
   equipamento_id: input.equipamentoId || null,
   tipo_os_id: input.tipoOsId || null,
   estado_os_id: input.estadoOsId || null,
   tecnico_responsavel_id: input.tecnicoResponsavelId || null,
+  ...(input.dataAbertura ? { data_abertura: input.dataAbertura } : {}),
   solicitante_texto: input.solicitanteTexto || null,
   responsavel_texto: input.responsavelTexto || null,
   problema_relatado: input.problemaRelatado || null,
@@ -584,9 +596,10 @@ const recalcularStatusEquipamentoPorOS = async (
 };
 
 const buscarOrdemServicoPorId = async (id: string) => {
+  const select = await getSelectOrdensServico();
   const { data, error } = await supabase
     .from("ordens_servico")
-    .select(selectOrdensServico)
+    .select(select)
     .eq("id", id)
     .single();
 
@@ -603,11 +616,13 @@ export const ordensServicoService = {
   },
 
   async listar() {
+    const select = await getSelectOrdensServico();
     const { data, error } = await supabase
       .from("ordens_servico")
-      .select(selectOrdensServico)
+      .select(select)
       .eq("ativo", true)
-      .order("data_abertura", { ascending: false });
+      .order("numero", { ascending: false })
+      .order("created_at", { ascending: false });
 
     if (error) {
       throw new Error(error.message);
@@ -809,6 +824,7 @@ export const ordensServicoService = {
     const dataFechamento =
       estado.finaliza_os || estado.cancela_os ? new Date().toISOString() : null;
 
+    const select = await getSelectOrdensServico();
     const { data, error } = await supabase
       .from("ordens_servico")
       .update({
@@ -817,7 +833,7 @@ export const ordensServicoService = {
         data_fechamento: dataFechamento,
       })
       .eq("id", id)
-      .select(selectOrdensServico)
+      .select(select)
       .single();
 
     if (error) {
@@ -881,9 +897,10 @@ export const ordensServicoService = {
 
     await recalcularStatusEquipamentoPorOS(osAtual.equipamento_id);
 
+    const select = await getSelectOrdensServico();
     const { data, error: selectError } = await supabase
       .from("ordens_servico")
-      .select(selectOrdensServico)
+      .select(select)
       .eq("id", id)
       .single();
 

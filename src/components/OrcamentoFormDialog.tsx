@@ -9,7 +9,9 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import SearchableSelect from "@/components/SearchableSelect";
-import PecaQuickCreateDialog from "@/components/PecaQuickCreateDialog";
+import PecaQuickCreateDialog, {
+  type PecaQuickCreateResult,
+} from "@/components/PecaQuickCreateDialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -183,6 +185,27 @@ const emptyServicoRelacao = (): ServicoRelacaoForm => ({
   valorUnitario: 0,
   garantia: "",
 });
+
+const DESCRITIVO_PREVENTIVA = `Serviços a serem executados:
+Testes de funcionamento com a utilização de padrões certificados
+Inspeção geral dos itens críticos de cada equipamentos
+Elaboração de cronograma de manutenção
+Emissão de laudo de manutenção preventiva com laudo de conformidade
+Testes de funcionamento nos equipamentos
+Limpeza externa e limpeza dos cabos dos sensores
+Ajustes finais
+
+Peças não inclusas. Caso seja necessário a execução de uma manutenção corretiva para a emissão dos certificados, será gerada uma nova proposta para a contratante. Apenas quando essa aprovar, a contratada irá executar o serviço de manutenção corretiva e emitir os laudos.`;
+
+const DESCRITIVO_CALIBRACAO = `Testes de funcionamento com a utilização de padrões certificados
+Emissão de laudo de manutenção preventiva com laudo de conformidade
+Emissão de certificado de calibração conforme ABNT NBR ISO/IEC 17025:2017
+Envio dos certificados até a rastreabilidade RBC
+Testes de funcionamento
+Limpeza externa e limpeza dos cabos e sensores
+Ajustes finais
+
+Peças não inclusas. Caso seja necessário a execução de uma manutenção corretiva para a emissão dos certificados, será  gerada uma nova proposta para a contratante. Apenas quando essa aprovar, a contratada irá executar o serviço de manutenção corretiva e emitir os laudos.`;
 
 const isFreteItem = (item: { tipo?: string | null; descricao?: string | null; peca_nome?: string | null }) =>
   item.tipo === "peca" &&
@@ -692,6 +715,15 @@ const OrcamentoFormDialog = ({
     );
   };
 
+  const appendDetalhesOrcamento = (texto: string) => {
+    setForm((current) => ({
+      ...current,
+      detalhesOrcamento: current.detalhesOrcamento.trim()
+        ? `${current.detalhesOrcamento.trimEnd()}\n\n${texto}`
+        : texto,
+    }));
+  };
+
   const removePeca = (index: number) => {
     setPecas((current) =>
       current.length === 1
@@ -1168,19 +1200,6 @@ const OrcamentoFormDialog = ({
                   size="sm"
                   variant="outline"
                   disabled={!incluiPecas || isView}
-                  onClick={() => {
-                    setQuickCreateIndex(Math.max(0, pecas.length - 1));
-                    setQuickCreateOpen(true);
-                  }}
-                >
-                  <Plus className="w-4 h-4 mr-1" />
-                  Nova peca
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={!incluiPecas || isView}
                   onClick={() => setPecas((current) => [...current, emptyPeca()])}
                 >
                   <Plus className="w-4 h-4 mr-1" />
@@ -1240,6 +1259,11 @@ const OrcamentoFormDialog = ({
                         options={pecaOptions}
                         placeholder="Selecione uma peça..."
                         emptyText="Nenhuma peça cadastrada."
+                        onAddNew={() => {
+                          setQuickCreateIndex(index);
+                          setQuickCreateOpen(true);
+                        }}
+                        addNewLabel="Cadastrar nova peça"
                       />
                     </div>
                     <div className="space-y-2 md:col-span-2">
@@ -2013,6 +2037,26 @@ const OrcamentoFormDialog = ({
               <CalendarDays className="w-4 h-4 text-primary" />
               <SectionTitle title="Detalhes do orçamento" />
             </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={isView}
+                onClick={() => appendDetalhesOrcamento(DESCRITIVO_PREVENTIVA)}
+              >
+                Descritivo Preventiva
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={isView}
+                onClick={() => appendDetalhesOrcamento(DESCRITIVO_CALIBRACAO)}
+              >
+                Descritivo Calibração
+              </Button>
+            </div>
             <Textarea
               placeholder="Descricao detalhada do orcamento..."
               rows={6}
@@ -2048,8 +2092,31 @@ const OrcamentoFormDialog = ({
     <PecaQuickCreateDialog
       open={quickCreateOpen}
       onOpenChange={setQuickCreateOpen}
-      onCreated={(peca) => {
+      onCreated={(peca, result?: PecaQuickCreateResult) => {
         const index = quickCreateIndex ?? Math.max(0, pecas.length - 1);
+        if (result?.fabricanteId || result?.modeloId) {
+          const baseItem = pecas[index] || emptyPeca();
+          updatePeca(index, {
+            pecaId: peca.id,
+            pecaNome: peca.nome,
+            pecaFabricanteId: result.fabricanteId || "",
+            pecaModeloId: result.modeloId || "",
+            fabricanteTexto: result.fabricanteNome || "",
+            modeloTexto: result.modeloNome || "",
+            mostrarFabricante: Boolean(result.fabricanteNome),
+            mostrarModelo: Boolean(result.modeloNome),
+            valorUnitarioEditadoManual: false,
+            ...buildPecaPatch(
+              baseItem,
+              peca,
+              result.fabricanteId || null,
+              result.modeloId || null,
+              true
+            ),
+          });
+          return;
+        }
+
         selecionarPecaNoItem(index, peca, true);
       }}
     />

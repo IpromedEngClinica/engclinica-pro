@@ -471,6 +471,13 @@ const Relatorios = () => {
     }));
   };
 
+  const setVisitaSepararPorSetor = (value: string) => {
+    setFiltrosVisita((current) => ({
+      ...current,
+      separarPorSetor: value !== "nao",
+    }));
+  };
+
   const gerarPdf = async (relatorio: RelatorioRegistro) => {
     setGerandoId(relatorio.id);
     try {
@@ -579,6 +586,7 @@ const Relatorios = () => {
       return [
         getListFiltroLabel(filtrosRelatorio.tipoEquipamentoLabels, "Todos tipos"),
         getListFiltroLabel(filtrosRelatorio.setorLabels, "Todos setores"),
+        filtrosRelatorio.separarPorSetor ? "Separado por setor" : "Lista única",
       ].join(" | ");
     }
 
@@ -713,6 +721,16 @@ const Relatorios = () => {
                     value: tipo,
                     label: tipo,
                   }))}
+                />
+                <SelectField
+                  includeBlank={false}
+                  label="Separar por setor"
+                  value={filtrosVisita.separarPorSetor ? "sim" : "nao"}
+                  onChange={setVisitaSepararPorSetor}
+                  options={[
+                    { value: "sim", label: "Sim" },
+                    { value: "nao", label: "N\u00e3o" },
+                  ]}
                 />
                 <SearchableMultiSelectField
                   disabled={loadingOptions || !visitaSetorOptions.length}

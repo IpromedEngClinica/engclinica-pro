@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   planosService,
+  type Plano,
   type PlanoAdicionarEquipamentosInput,
   type PlanoCicloInput,
   type PlanoEquipamentoInput,
@@ -9,6 +10,7 @@ import {
   type PlanoRelatorioCicloOpcoes,
   type PlanoSetorInput,
 } from "@/services/planosService";
+import type { OrdemServicoSupabase } from "@/services/ordensServicoService";
 import { gerarPdfCalibracaoCertificado } from "@/utils/gerarPdfCalibracaoCertificado";
 import { gerarPdfOrdemServico } from "@/utils/gerarPdfOrdemServico";
 import {
@@ -17,6 +19,7 @@ import {
 } from "@/utils/gerarPdfRelatorioCicloPlano";
 import { baixarPdfMesclado, mesclarPdfsPlano, type PdfAnexoPlano } from "@/utils/mesclarPdfsPlano";
 import { gerarPdfRelatorioAnualPlano, type GerarRelatorioAnualPlanoOptions } from "@/utils/gerarPdfRelatorioAnualPlano";
+import { calcularValidadeFimDoMes } from "@/utils/planoDatas";
 
 export const PLANOS_QUERY_KEY = ["planos"];
 export const PLANO_USUARIOS_QUERY_KEY = ["plano-usuarios"];
@@ -27,6 +30,7 @@ export const PLANO_CICLO_ITENS_QUERY_KEY = ["plano-ciclo-itens"];
 export const PLANO_HISTORICO_QUERY_KEY = ["plano-historico"];
 export const PLANO_CICLO_DETALHES_QUERY_KEY = ["plano-ciclo-detalhes"];
 export const PLANO_RELATORIOS_ANUAIS_QUERY_KEY = ["plano-relatorios-anuais"];
+export const PLANOS_VALIDADES_RELATORIOS_QUERY_KEY = ["planos-validades-relatorios"];
 
 const invalidatePlanos = (queryClient: ReturnType<typeof useQueryClient>) => {
   queryClient.invalidateQueries({ queryKey: PLANOS_QUERY_KEY });
@@ -88,6 +92,11 @@ export const useRelatoriosAnuaisPlano = (planoId?: string) => useQuery({
   queryKey: [...PLANO_RELATORIOS_ANUAIS_QUERY_KEY, planoId],
   queryFn: () => planosService.listarRelatoriosAnuaisPlano(planoId as string),
   enabled: Boolean(planoId),
+});
+
+export const useValidadesRelatoriosPlanos = () => useQuery({
+  queryKey: PLANOS_VALIDADES_RELATORIOS_QUERY_KEY,
+  queryFn: () => planosService.listarValidadesRelatoriosPlanos(),
 });
 
 export const useCriarPlano = () => {
@@ -259,12 +268,21 @@ export const useFinalizarPreventivasConformesEmLote = () => {
       cicloId,
       planoId,
       dataFechamento,
+      onProgress,
     }: {
       itemIds: string[];
       cicloId?: string;
       planoId?: string;
       dataFechamento?: string | null;
-    }) => planosService.finalizarPreventivasConformesEmLote({ itemIds, dataFechamento }),
+      onProgress?: Parameters<
+        typeof planosService.finalizarPreventivasConformesEmLote
+      >[0]["onProgress"];
+    }) =>
+      planosService.finalizarPreventivasConformesEmLote({
+        itemIds,
+        dataFechamento,
+        onProgress,
+      }),
     onSuccess: (_, variables) => invalidateCicloOperacional(queryClient, variables.cicloId, variables.planoId),
   });
 };
@@ -304,6 +322,65 @@ const ordenarAnexosPorEquipamento = <T,>(
     getCampos(a).join(" ").localeCompare(getCampos(b).join(" "), "pt-BR")
   );
 
+const executarComConcorrencia = async <T, R>(
+  itens: T[],
+  executar: (item: T, index: number) => Promise<R>,
+  limite = 2
+) => {
+  const resultados = new Array<R>(itens.length);
+  let proximoIndice = 0;
+
+  const worker = async () => {
+    while (proximoIndice < itens.length) {
+      const indice = proximoIndice;
+      proximoIndice += 1;
+      resultados[indice] = await executar(itens[indice], indice);
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(limite, itens.length) }, () => worker())
+  );
+
+  return resultados;
+};
+
+export const useAtualizarCicloPlano = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      cicloId,
+      planoId,
+      input,
+    }: {
+      cicloId: string;
+      planoId: string;
+      input: PlanoCicloInput;
+    }) => planosService.atualizarCicloPlano(cicloId, input),
+    onSuccess: (ciclo, variables) => {
+      invalidatePlanos(queryClient);
+      queryClient.invalidateQueries({ queryKey: [...PLANO_CICLOS_QUERY_KEY, variables.planoId] });
+      queryClient.invalidateQueries({ queryKey: [...PLANO_CICLO_ATUAL_QUERY_KEY, variables.planoId] });
+      queryClient.invalidateQueries({ queryKey: [...PLANO_CICLO_QUERY_KEY, ciclo.id] });
+      queryClient.invalidateQueries({ queryKey: [...PLANO_CICLO_DETALHES_QUERY_KEY, ciclo.id] });
+      queryClient.invalidateQueries({ queryKey: ["ordens-servico"] });
+    },
+  });
+};
+
+const normalizarOsParaRelatorioPlano = (
+  os: OrdemServicoSupabase,
+  plano: Pick<Plano, "titulo" | "responsavel_id" | "responsavel">
+): OrdemServicoSupabase => ({
+  ...os,
+  tecnico_responsavel_id: os.tecnico_responsavel_id || plano.responsavel_id,
+  responsavel_texto: os.responsavel_texto || plano.responsavel?.nome || null,
+  observacoes: os.observacoes?.replace(
+    /Plano:\s*[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,
+    `Plano: ${plano.titulo}`
+  ) || null,
+});
+
 export const useGerarRelatorioCompletoCiclo = () => {
   const queryClient = useQueryClient();
 
@@ -317,16 +394,21 @@ export const useGerarRelatorioCompletoCiclo = () => {
       opcoes: PlanoRelatorioCicloOpcoes;
       completo: boolean;
     }) => {
+      const detalhes = await planosService.buscarDadosRelatorioCiclo(cicloId);
+      const validadeAte = calcularValidadeFimDoMes(
+        detalhes.ciclo.data_abertura,
+        opcoes.validadeMeses
+      );
       await planosService.salvarValidadeRelatorioCiclo({
         cicloId,
         meses: opcoes.validadeMeses,
         emitidoEm: opcoes.emitidoEm || new Date().toISOString().slice(0, 10),
-        validadeAte: opcoes.validadeAte || new Date().toISOString().slice(0, 10),
+        validadeAte,
       });
 
-      const detalhes = await planosService.buscarDadosRelatorioCiclo(cicloId);
       const relatorioPrincipal = await gerarPdfRelatorioCicloPlano(detalhes, {
         ...opcoes,
+        validadeAte,
         save: !completo,
       });
 
@@ -335,73 +417,82 @@ export const useGerarRelatorioCompletoCiclo = () => {
       }
 
       const ressalvas: string[] = [];
-      const osPreventivas: PdfAnexoPlano[] = [];
-      const osCorretivas: PdfAnexoPlano[] = [];
-      const certificadosCalibracao: PdfAnexoPlano[] = [];
+      const trabalhos: Array<{
+        categoria: "preventiva" | "corretiva" | "calibracao";
+        nome: string;
+        gerar: () => Promise<Blob | ArrayBuffer | Uint8Array>;
+      }> = [];
       const certificadosSegurancaEletrica: PdfAnexoPlano[] = [];
 
       if (opcoes.incluirOsPreventivas !== false) {
-        for (const os of ordenarAnexosPorEquipamento(detalhes.ordensPreventivas, (item) => [
+        ordenarAnexosPorEquipamento(detalhes.ordensPreventivas, (item) => [
           item.equipamento?.setor,
           item.equipamento?.tipo_equipamento?.nome || item.equipamento?.tipo_texto,
           item.equipamento?.fabricante,
           item.equipamento?.modelo,
           item.equipamento?.numero_serie,
-        ])) {
-          try {
-            osPreventivas.push({
-              nome: `OS ${os.numero}`,
-              bytes: await gerarPdfOrdemServico(os, false),
-            });
-          } catch {
-            ressalvas.push(`OS ${os.numero || os.id}`);
-          }
-        }
+        ]).forEach((os) => trabalhos.push({
+          categoria: "preventiva",
+          nome: `OS ${os.numero || os.id}`,
+          gerar: () => gerarPdfOrdemServico(
+            normalizarOsParaRelatorioPlano(os, detalhes.plano),
+            false
+          ),
+        }));
       }
 
       if (opcoes.incluirOsCorretivas !== false) {
-        for (const os of ordenarAnexosPorEquipamento(detalhes.ordensCorretivas, (item) => [
+        ordenarAnexosPorEquipamento(detalhes.ordensCorretivas, (item) => [
           item.equipamento?.setor,
           item.equipamento?.tipo_equipamento?.nome || item.equipamento?.tipo_texto,
           item.equipamento?.fabricante,
           item.equipamento?.modelo,
           item.equipamento?.numero_serie,
-        ])) {
-          try {
-            osCorretivas.push({
-              nome: `OS ${os.numero}`,
-              bytes: await gerarPdfOrdemServico(os, false),
-            });
-          } catch {
-            ressalvas.push(`OS ${os.numero || os.id}`);
-          }
-        }
+        ]).forEach((os) => trabalhos.push({
+          categoria: "corretiva",
+          nome: `OS ${os.numero || os.id}`,
+          gerar: () => gerarPdfOrdemServico(
+            normalizarOsParaRelatorioPlano(os, detalhes.plano),
+            false
+          ),
+        }));
       }
 
       if (opcoes.incluirCertificadosCalibracao !== false) {
-        for (const execucao of ordenarAnexosPorEquipamento(detalhes.calibracoes, (item) => [
+        ordenarAnexosPorEquipamento(detalhes.calibracoes, (item) => [
           item.equipamento?.setor,
           item.equipamento?.tipo_equipamento?.nome || item.equipamento?.tipo_texto,
           item.equipamento?.fabricante,
           item.equipamento?.modelo,
           item.equipamento?.numero_serie,
-        ])) {
-          try {
-            certificadosCalibracao.push({
-              nome: `Certificado ${execucao.numero_certificado}`,
-              bytes: await gerarPdfCalibracaoCertificado(execucao, false),
-            });
-          } catch {
-            ressalvas.push(`Certificado ${execucao.numero_certificado || execucao.id}`);
-          }
-        }
+        ]).forEach((execucao) => trabalhos.push({
+          categoria: "calibracao",
+          nome: `Certificado ${execucao.numero_certificado || execucao.id}`,
+          gerar: () => gerarPdfCalibracaoCertificado(execucao, false),
+        }));
       }
+
+      const resultados = await executarComConcorrencia(trabalhos, async (trabalho) => {
+        try {
+          return {
+            categoria: trabalho.categoria,
+            anexo: { nome: trabalho.nome, bytes: await trabalho.gerar() } as PdfAnexoPlano,
+          };
+        } catch {
+          ressalvas.push(trabalho.nome);
+          return { categoria: trabalho.categoria, anexo: null };
+        }
+      });
+      const anexos = (categoria: (typeof trabalhos)[number]["categoria"]) =>
+        resultados
+          .filter((resultado) => resultado.categoria === categoria && resultado.anexo)
+          .map((resultado) => resultado.anexo as PdfAnexoPlano);
 
       const pdfFinal = await mesclarPdfsPlano({
         relatorioPrincipalBytes: relatorioPrincipal,
-        osPreventivas,
-        osCorretivas,
-        certificadosCalibracao,
+        osPreventivas: anexos("preventiva"),
+        osCorretivas: anexos("corretiva"),
+        certificadosCalibracao: anexos("calibracao"),
         certificadosSegurancaEletrica,
       });
 
@@ -416,6 +507,7 @@ export const useGerarRelatorioCompletoCiclo = () => {
       queryClient.invalidateQueries({ queryKey: [...PLANO_CICLO_QUERY_KEY, variables.cicloId] });
       queryClient.invalidateQueries({ queryKey: [...PLANO_CICLO_DETALHES_QUERY_KEY, variables.cicloId] });
       queryClient.invalidateQueries({ queryKey: PLANO_HISTORICO_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: PLANOS_VALIDADES_RELATORIOS_QUERY_KEY });
     },
   });
 };
@@ -444,6 +536,11 @@ export const useGerarRelatorioAnualPlano = () => {
       });
       dados.revisao = registro.revisao;
 
+      queryClient.invalidateQueries({ queryKey: PLANOS_VALIDADES_RELATORIOS_QUERY_KEY });
+      queryClient.invalidateQueries({
+        queryKey: [...PLANO_RELATORIOS_ANUAIS_QUERY_KEY, input.planoId],
+      });
+
       const cronograma = await gerarPdfRelatorioAnualPlano(dados, {
         ...opcoesPdf,
         save: input.tipoSaida === "cronograma",
@@ -458,52 +555,62 @@ export const useGerarRelatorioAnualPlano = () => {
         dataInicio: input.dataInicio,
         dataFim: input.dataFim,
       });
-      const relatoriosCiclos: PdfAnexoPlano[] = [];
-      const osPreventivas: PdfAnexoPlano[] = [];
-      const osCorretivas: PdfAnexoPlano[] = [];
-      const certificadosCalibracao: PdfAnexoPlano[] = [];
+      const trabalhos: Array<{
+        categoria: "relatorio" | "preventiva" | "corretiva" | "calibracao";
+        nome: string;
+        gerar: () => Promise<Blob | ArrayBuffer | Uint8Array>;
+      }> = [];
 
-      for (const detalhes of detalhesCiclos) {
+      detalhesCiclos.forEach((detalhes) => {
+        trabalhos.push({
+          categoria: "relatorio",
+          nome: `Relatorio do ciclo ${detalhes.ciclo.titulo}`,
+          gerar: () => gerarPdfRelatorioCicloPlano(detalhes, { save: false }),
+        });
+        detalhes.ordensPreventivas.forEach((os) => trabalhos.push({
+          categoria: "preventiva",
+          nome: `OS ${os.numero || os.id}`,
+          gerar: () => gerarPdfOrdemServico(
+            normalizarOsParaRelatorioPlano(os, dados.plano),
+            false
+          ),
+        }));
+        detalhes.ordensCorretivas.forEach((os) => trabalhos.push({
+          categoria: "corretiva",
+          nome: `OS ${os.numero || os.id}`,
+          gerar: () => gerarPdfOrdemServico(
+            normalizarOsParaRelatorioPlano(os, dados.plano),
+            false
+          ),
+        }));
+        detalhes.calibracoes.forEach((execucao) => trabalhos.push({
+          categoria: "calibracao",
+          nome: `Certificado ${execucao.numero_certificado || execucao.id}`,
+          gerar: () => gerarPdfCalibracaoCertificado(execucao, false),
+        }));
+      });
+
+      const resultados = await executarComConcorrencia(trabalhos, async (trabalho) => {
         try {
-          relatoriosCiclos.push({
-            nome: `Relatorio ${detalhes.ciclo.titulo}`,
-            bytes: await gerarPdfRelatorioCicloPlano(detalhes, { save: false }),
-          });
+          return {
+            categoria: trabalho.categoria,
+            anexo: { nome: trabalho.nome, bytes: await trabalho.gerar() } as PdfAnexoPlano,
+          };
         } catch {
-          ressalvas.push(`Relatorio do ciclo ${detalhes.ciclo.titulo}`);
+          ressalvas.push(trabalho.nome);
+          return { categoria: trabalho.categoria, anexo: null };
         }
-
-        for (const os of detalhes.ordensPreventivas) {
-          try {
-            osPreventivas.push({ nome: `OS ${os.numero}`, bytes: await gerarPdfOrdemServico(os, false) });
-          } catch {
-            ressalvas.push(`OS ${os.numero || os.id}`);
-          }
-        }
-        for (const os of detalhes.ordensCorretivas) {
-          try {
-            osCorretivas.push({ nome: `OS ${os.numero}`, bytes: await gerarPdfOrdemServico(os, false) });
-          } catch {
-            ressalvas.push(`OS ${os.numero || os.id}`);
-          }
-        }
-        for (const execucao of detalhes.calibracoes) {
-          try {
-            certificadosCalibracao.push({
-              nome: `Certificado ${execucao.numero_certificado}`,
-              bytes: await gerarPdfCalibracaoCertificado(execucao, false),
-            });
-          } catch {
-            ressalvas.push(`Certificado ${execucao.numero_certificado || execucao.id}`);
-          }
-        }
-      }
+      });
+      const anexos = (categoria: (typeof trabalhos)[number]["categoria"]) =>
+        resultados
+          .filter((resultado) => resultado.categoria === categoria && resultado.anexo)
+          .map((resultado) => resultado.anexo as PdfAnexoPlano);
 
       const pdfFinal = await mesclarPdfsPlano({
         relatorioPrincipalBytes: cronograma,
-        osPreventivas: [...relatoriosCiclos, ...osPreventivas],
-        osCorretivas,
-        certificadosCalibracao,
+        osPreventivas: [...anexos("relatorio"), ...anexos("preventiva")],
+        osCorretivas: anexos("corretiva"),
+        certificadosCalibracao: anexos("calibracao"),
       });
 
       baixarPdfMesclado(

@@ -116,6 +116,18 @@ export type OrcamentoSupabase = {
     id: string;
     nome: string;
     nome_fantasia: string | null;
+    cpf_cnpj: string | null;
+    cep: string | null;
+    rua: string | null;
+    numero: string | null;
+    complemento: string | null;
+    bairro: string | null;
+    cidade: string | null;
+    estado: string | null;
+    contato: string | null;
+    email: string | null;
+    celular: string | null;
+    telefone: string | null;
     ativo: boolean;
   } | null;
 
@@ -241,6 +253,18 @@ const selectOrcamentos = `
     id,
     nome,
     nome_fantasia,
+    cpf_cnpj,
+    cep,
+    rua,
+    numero,
+    complemento,
+    bairro,
+    cidade,
+    estado,
+    contato,
+    email,
+    celular,
+    telefone,
     ativo
   ),
   equipamento:equipamentos (
@@ -528,7 +552,8 @@ export const orcamentosService = {
       .from("orcamentos")
       .select(selectOrcamentos)
       .eq("ativo", true)
-      .order("data_orcamento", { ascending: false });
+      .order("numero", { ascending: false })
+      .order("created_at", { ascending: false });
 
     if (error) {
       throw new Error(error.message);

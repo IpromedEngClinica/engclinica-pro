@@ -8,6 +8,7 @@ import { imageToDataUrl } from "@/utils/pdfImageUtils";
 import { renderHtmlToPdf } from "@/utils/pdfHtmlRenderer";
 import { getPlanoFrequenciaLabel } from "@/utils/planoFrequencia";
 import { normalizeRelatorioPlanoFileName } from "@/utils/gerarPdfRelatorioCicloPlano";
+import { assinaturasService } from "@/services/assinaturasService";
 
 export type GerarRelatorioAnualPlanoOptions = {
   emitidoEm: string;
@@ -151,7 +152,16 @@ export const gerarPdfRelatorioAnualPlano = async (
   dados: PlanoRelatorioAnualDados,
   opcoes: GerarRelatorioAnualPlanoOptions
 ) => {
-  const logo = await imageToDataUrl(aciLogo);
+  const [logo, assinaturas] = await Promise.all([
+    imageToDataUrl(aciLogo),
+    assinaturasService.resolverDocumento({
+      tecnicoUsuarioId: dados.plano.responsavel_id,
+      tecnicoNome: dados.plano.responsavel?.nome,
+      responsavelNome: dados.plano.responsavel?.nome,
+      empresaId: dados.plano.empresa_id,
+    }),
+  ]);
+  const assinaturaResponsavel = assinaturas.responsavel || assinaturas.tecnico;
   const equipamentosOrdenados = [...dados.equipamentos].sort((a, b) => {
     const setorA = setorNome(a);
     const setorB = setorNome(b);
@@ -203,6 +213,11 @@ export const gerarPdfRelatorioAnualPlano = async (
         .nl { background: #ffedd5; color: #9a3412; }
         .legend { display: grid; grid-template-columns: repeat(5, auto); gap: 8px 16px; justify-content: start; margin-top: 14px; font-size: 11px; }
         .next { margin-top: 12px; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; background: #fafafa; font-size: 12px; }
+        .signature { width: 340px; margin: 26px auto 0; text-align: center; page-break-inside: avoid; }
+        .signature-image { height: 66px; display: flex; align-items: flex-end; justify-content: center; }
+        .signature-image img { max-width: 300px; max-height: 62px; object-fit: contain; }
+        .signature-line { border-top: 1px solid #9ca3af; padding-top: 6px; font-size: 11px; color: #374151; }
+        .signature-line strong { display: block; font-size: 12px; color: #1f2937; }
       </style>
       <div class="topbar"></div>
       <section class="header">
@@ -218,7 +233,6 @@ export const gerarPdfRelatorioAnualPlano = async (
         <div><span class="label">Setor ou unidade</span><span class="value">${escapeHtml(dados.plano.empresa?.cidade || dados.plano.empresa?.estado)}</span></div>
         <div><span class="label">Responsavel tecnico</span><span class="value">${escapeHtml(dados.plano.responsavel?.nome)}</span></div>
         <div><span class="label">Quantidade</span><span class="value">${dados.equipamentos.length}</span></div>
-        <div><span class="label">Revisao</span><span class="value">Revisao ${dados.revisao}</span></div>
         <div><span class="label">Data de emissao</span><span class="value">${formatDate(opcoes.emitidoEm)}</span></div>
         <div class="validity"><span class="label">Validade ate</span><span class="value">${formatDate(opcoes.validadeAte)}</span></div>
         <div><span class="label">Frequencia</span><span class="value">${escapeHtml(getPlanoFrequenciaLabel(dados.plano.frequencia))}</span></div>
@@ -239,6 +253,13 @@ export const gerarPdfRelatorioAnualPlano = async (
         <span><b>NL</b> = Nao localizado</span>
       </div>
       ${opcoes.exibirProximaVisita && proximaAposPeriodo ? `<div class="next"><b>Proxima visita prevista:</b> ${formatDate(proximaAposPeriodo)}</div>` : ""}
+      <section class="signature">
+        <div class="signature-image">${assinaturaResponsavel?.dataUrl ? `<img src="${assinaturaResponsavel.dataUrl}" alt="Assinatura do responsavel tecnico">` : ""}</div>
+        <div class="signature-line">
+          <strong>${escapeHtml(assinaturaResponsavel?.nome || dados.plano.responsavel?.nome)}</strong>
+          Responsavel tecnico
+        </div>
+      </section>
     </div>
   `;
 

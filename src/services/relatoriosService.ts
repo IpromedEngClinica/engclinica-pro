@@ -14,6 +14,7 @@ export type RelatorioVisitaExternaFiltros = {
   empresaIds: string[];
   tipoEquipamentoLabels: string[];
   setorLabels: string[];
+  separarPorSetor: boolean;
 };
 
 export type RelatorioFiltros =
@@ -137,6 +138,7 @@ export const FILTROS_VISITA_EXTERNA_PADRAO: RelatorioVisitaExternaFiltros = {
   empresaIds: [],
   tipoEquipamentoLabels: [],
   setorLabels: [],
+  separarPorSetor: true,
 };
 
 export const getTipoEquipamentoRelatorio = (
@@ -171,6 +173,7 @@ const normalizarFiltrosVisitaExterna = (
     ? filtros.tipoEquipamentoLabels
     : [],
   setorLabels: Array.isArray(filtros?.setorLabels) ? filtros.setorLabels : [],
+  separarPorSetor: filtros?.separarPorSetor ?? true,
 });
 
 const normalizarRelatorio = (relatorio: RelatorioRegistro): RelatorioRegistro => ({

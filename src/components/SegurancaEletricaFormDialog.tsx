@@ -38,6 +38,7 @@ import {
   formatDecimalSeguranca,
   type SegurancaEletricaResultadoInput,
 } from "@/utils/segurancaEletricaTemplate";
+import { useAuth } from "@/contexts/AuthContext";
 
 type DialogMode = "create" | "edit";
 
@@ -76,7 +77,7 @@ const addOneYear = (date: string) => {
   return base.toISOString().slice(0, 10);
 };
 
-const emptyForm = (): FormState => {
+const emptyForm = (tecnicoExecutorNome = ""): FormState => {
   const data = today();
 
   return {
@@ -91,7 +92,7 @@ const emptyForm = (): FormState => {
     dataTeste: data,
     dataEmissao: data,
     dataValidade: addOneYear(data),
-    tecnicoExecutorNome: "",
+    tecnicoExecutorNome,
     responsavelTecnicoNome: RESPONSAVEL_PADRAO,
     responsavelSolicitante: "",
     observacoes: "",
@@ -132,6 +133,7 @@ const SegurancaEletricaFormDialog = ({
   execucao = null,
   mode = "create",
 }: Props) => {
+  const { usuario } = useAuth();
   const { data: empresas = [] } = useEmpresas();
   const { data: equipamentos = [] } = useEquipamentos();
   const { data: padroes = [] } = useCalibracaoPadroes();
@@ -198,9 +200,9 @@ const SegurancaEletricaFormDialog = ({
       return;
     }
 
-    setForm(emptyForm());
+    setForm(emptyForm(usuario?.nome || ""));
     setResultados(criarResultadosSegurancaEletricaVazios());
-  }, [execucao, mode, open]);
+  }, [execucao, mode, open, usuario?.nome]);
 
   const updateResultado = (index: number, valor: string) => {
     setResultados((current) =>

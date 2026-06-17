@@ -24,6 +24,7 @@ import {
   getChecklistMarks,
 } from "@/utils/checklistPreventiva";
 import { formatarTipoHistorico } from "@/utils/historicoLabels";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface OrdemServicoDetalhesDialogProps {
   open: boolean;
@@ -232,9 +233,11 @@ const OrdemServicoDetalhesDialog = ({
   onProtocoloEntrega,
 }: OrdemServicoDetalhesDialogProps) => {
   const [checklistOpen, setChecklistOpen] = useState(false);
+  const { usuario } = useAuth();
 
   if (!os) return null;
 
+  const isSolicitante = usuario?.perfil === "solicitante";
   const estado = getEstado(os);
   const acessoriosUnicos = dedupeAcessoriosView(os.acessorios);
   const preventiva = isOSPreventiva(os);
@@ -278,7 +281,7 @@ const OrdemServicoDetalhesDialog = ({
           </div>
         </DialogHeader>
 
-        <ModalActionsBar>
+        <ModalActionsBar className="mt-0 px-6 py-3">
           {onEdit && (
             <Button size="sm" onClick={() => onEdit(os)}>
               <Pencil className="w-4 h-4 mr-2" />
@@ -294,7 +297,9 @@ const OrdemServicoDetalhesDialog = ({
             variant="outline"
             size="sm"
             onClick={async () => {
-              await gerarPdfOrdemServico(os);
+              await gerarPdfOrdemServico(
+                isSolicitante ? { ...os, descricao_servico: null } : os
+              );
             }}
           >
             <FileText className="w-4 h-4 mr-2" />
@@ -393,12 +398,14 @@ const OrdemServicoDetalhesDialog = ({
                 </>
               )}
 
-              <div>
-                <h4 className="text-sm font-medium text-muted-foreground mb-1">
-                  Descrição do serviço
-                </h4>
-                <TextBlock value={os.descricao_servico} />
-              </div>
+              {!isSolicitante && (
+                <div>
+                  <h4 className="text-sm font-medium text-muted-foreground mb-1">
+                    Descrição do serviço
+                  </h4>
+                  <TextBlock value={os.descricao_servico} />
+                </div>
+              )}
 
               <div>
                 <h4 className="text-sm font-medium text-muted-foreground mb-1">

@@ -26,6 +26,7 @@ export type EmpresaSupabase = {
   nome_fantasia: string | null;
   tipo_cliente: string | null;
   tipo_relacao: string;
+  representante_comercial_setor: string | null;
   cpf_cnpj: string | null;
   cep: string | null;
   rua: string | null;
@@ -65,6 +66,7 @@ export type EmpresaFormInput = {
   nomeFantasia?: string;
   tipoCliente?: string;
   tipoRelacao?: string;
+  representanteComercialSetor?: string;
   cpfCnpj?: string;
   cep?: string;
   rua?: string;
@@ -95,6 +97,7 @@ const selectEmpresas = `
   nome_fantasia,
   tipo_cliente,
   tipo_relacao,
+  representante_comercial_setor,
   cpf_cnpj,
   cep,
   rua,
@@ -237,7 +240,7 @@ export const empresasService = {
     let query = supabase
       .from("empresas")
       .select(selectEmpresas)
-      .order("nome", { ascending: true });
+      .order("created_at", { ascending: false });
 
     if (statusFiltro === "ativas") {
       query = query.eq("ativo", true);
@@ -291,6 +294,8 @@ export const empresasService = {
         nome_fantasia: input.nomeFantasia || null,
         tipo_cliente: input.tipoCliente || null,
         tipo_relacao: input.tipoRelacao || "cliente",
+        representante_comercial_setor:
+          input.representanteComercialSetor || null,
         cpf_cnpj: input.cpfCnpj || null,
         cep: input.cep || null,
         rua: input.rua || null,
@@ -330,6 +335,8 @@ export const empresasService = {
         nome_fantasia: input.nomeFantasia || null,
         tipo_cliente: input.tipoCliente || null,
         tipo_relacao: input.tipoRelacao || "cliente",
+        representante_comercial_setor:
+          input.representanteComercialSetor || null,
         cpf_cnpj: input.cpfCnpj || null,
         cep: input.cep || null,
         rua: input.rua || null,

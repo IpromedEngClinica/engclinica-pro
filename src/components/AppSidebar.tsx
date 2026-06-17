@@ -29,7 +29,7 @@ type SidebarItem = {
   icon: LucideIcon;
   label: string;
   path: string;
-  permission: string;
+  permission?: string;
 };
 
 const menuItems: SidebarItem[] = [
@@ -53,7 +53,7 @@ const menuItems: SidebarItem[] = [
   },
   {
     icon: ClipboardList,
-    label: "Ordens de Serviço",
+    label: "Ordem de Serviço",
     path: "/ordens-servico",
     permission: "os.visualizar",
   },
@@ -67,24 +67,6 @@ const menuItems: SidebarItem[] = [
 
 const menuItemsAfterCalibracao: SidebarItem[] = [
   {
-    icon: ShieldCheck,
-    label: "Segurança Elétrica",
-    path: "/seguranca-eletrica",
-    permission: "seguranca_eletrica.visualizar",
-  },
-  {
-    icon: BarChart3,
-    label: "Relatórios",
-    path: "/relatorios",
-    permission: "relatorios.visualizar",
-  },
-  {
-    icon: Users,
-    label: "Usuários e Permissões",
-    path: "/usuarios-permissoes",
-    permission: "usuarios.gerenciar",
-  },
-  {
     icon: CalendarDays,
     label: "Planos",
     path: "/planos",
@@ -97,6 +79,18 @@ const menuItemsAfterCalibracao: SidebarItem[] = [
     permission: "contratos.visualizar",
   },
   {
+    icon: BarChart3,
+    label: "Relatórios",
+    path: "/relatorios",
+    permission: "relatorios.visualizar",
+  },
+  {
+    icon: ShieldCheck,
+    label: "Segurança Elétrica",
+    path: "/seguranca-eletrica",
+    permission: "seguranca_eletrica.visualizar",
+  },
+  {
     icon: FileBox,
     label: "Protocolos",
     path: "/protocolos",
@@ -107,6 +101,11 @@ const menuItemsAfterCalibracao: SidebarItem[] = [
     label: "Laudo de Obsolescência",
     path: "/laudos-obsolescencia",
     permission: "laudos.visualizar",
+  },
+  {
+    icon: Users,
+    label: "Usuários e Permissões",
+    path: "/usuarios-permissoes",
   },
   {
     icon: CalendarCheck,
@@ -180,9 +179,8 @@ const AppSidebar = () => {
   const [calibracaoOpen, setCalibracaoOpen] = useState(
     location.pathname.startsWith("/calibracao")
   );
-
   const visibleMenuItems = useMemo(
-    () => menuItems.filter((item) => hasPermission(item.permission)),
+    () => menuItems.filter((item) => !item.permission || hasPermission(item.permission)),
     [hasPermission]
   );
   const visibleCalibracaoItems = useMemo(
@@ -191,8 +189,8 @@ const AppSidebar = () => {
   );
   const visibleAfterCalibracaoItems = useMemo(
     () =>
-      menuItemsAfterCalibracao.filter((item) =>
-        hasPermission(item.permission)
+      menuItemsAfterCalibracao.filter(
+        (item) => !item.permission || hasPermission(item.permission)
       ),
     [hasPermission]
   );
@@ -235,14 +233,16 @@ const AppSidebar = () => {
     >
       <div className="flex items-center gap-3 px-4 py-6 border-b border-sidebar-border">
         <div className="w-9 h-9 rounded-lg bg-sidebar-primary flex items-center justify-center shrink-0">
-          <Cpu className="w-5 h-5 text-sidebar-primary-foreground" />
+          <span className="text-xs font-bold tracking-wide text-sidebar-primary-foreground">
+            ACI
+          </span>
         </div>
         {!collapsed && (
           <div className="overflow-hidden">
             <h1 className="text-sm font-bold leading-tight text-sidebar-foreground">
-              EngClinica
+              Ipromed
             </h1>
-            <p className="text-xs text-sidebar-muted">Engenharia Clínica</p>
+            <p className="text-xs text-sidebar-muted">Sistema de Gestão · ACI</p>
           </div>
         )}
       </div>
@@ -337,6 +337,7 @@ const AppSidebar = () => {
           <ChevronLeft className="w-4 h-4" />
         )}
       </button>
+
     </aside>
   );
 };

@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { Session, User } from "@supabase/supabase-js";
@@ -39,19 +40,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [permissoes, setPermissoes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [usuarioLoading, setUsuarioLoading] = useState(false);
+  const usuarioRef = useRef<AuthUsuario | null>(null);
+  const sessionUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
 
-    const loadUsuario = async (currentSession: Session | null) => {
+    const loadUsuario = async (
+      currentSession: Session | null,
+      showLoading = true
+    ) => {
       if (!currentSession?.user) {
+        usuarioRef.current = null;
         setUsuario(null);
         setPermissoes([]);
         setUsuarioLoading(false);
         return;
       }
 
-      setUsuarioLoading(true);
+      const userId = currentSession.user.id;
+
+      if (showLoading) {
+        setUsuarioLoading(true);
+      }
 
       try {
         const { data, error } = await supabase
@@ -60,16 +71,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           .eq("id", currentSession.user.id)
           .maybeSingle();
 
-        if (!mounted) return;
+        if (!mounted || sessionUserIdRef.current !== userId) return;
 
         if (error) {
           console.error("Erro ao carregar usuario:", error.message);
-          setUsuario(null);
-          setPermissoes([]);
+          if (showLoading) {
+            usuarioRef.current = null;
+            setUsuario(null);
+            setPermissoes([]);
+          }
           return;
         }
 
         const usuarioData = (data as AuthUsuario | null) ?? null;
+        usuarioRef.current = usuarioData;
         setUsuario(usuarioData);
 
         if (!usuarioData) {
@@ -88,11 +103,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           .eq("perfil", usuarioData.perfil)
           .eq("permitido", true);
 
-        if (!mounted) return;
+        if (!mounted || sessionUserIdRef.current !== userId) return;
 
         if (permissoesError) {
           console.error("Erro ao carregar permissoes:", permissoesError.message);
-          setPermissoes([]);
+          if (showLoading) {
+            setPermissoes([]);
+          }
           return;
         }
 
@@ -102,7 +119,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           )
         );
       } finally {
-        if (mounted) setUsuarioLoading(false);
+        if (
+          mounted &&
+          showLoading &&
+          sessionUserIdRef.current === userId
+        ) {
+          setUsuarioLoading(false);
+        }
       }
     };
 
@@ -115,21 +138,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         console.error("Erro ao carregar sessao:", error.message);
       }
 
-      setSession(data.session ?? null);
-      setUsuarioLoading(Boolean(data.session?.user));
+      const initialSession = data.session ?? null;
+      sessionUserIdRef.current = initialSession?.user.id ?? null;
+      setSession(initialSession);
+      setUsuarioLoading(Boolean(initialSession?.user));
       setLoading(false);
-      void loadUsuario(data.session ?? null);
+      void loadUsuario(initialSession);
     };
 
     loadSession();
 
     const { data: listener } = supabase.auth.onAuthStateChange(
       (_event, newSession) => {
+        const sameUser = Boolean(
+          newSession?.user && usuarioRef.current?.id === newSession.user.id
+        );
+
+        sessionUserIdRef.current = newSession?.user.id ?? null;
         setSession(newSession);
-        setUsuarioLoading(Boolean(newSession?.user));
+        setUsuarioLoading(Boolean(newSession?.user) && !sameUser);
         setLoading(false);
         setTimeout(() => {
-          void loadUsuario(newSession);
+          void loadUsuario(newSession, !sameUser);
         }, 0);
       }
     );
@@ -155,6 +185,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    usuarioRef.current = null;
+    sessionUserIdRef.current = null;
     setUsuario(null);
     setPermissoes([]);
   };

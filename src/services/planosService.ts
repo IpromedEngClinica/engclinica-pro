@@ -13,6 +13,7 @@ import { preventivasService } from "@/services/preventivasService";
 import type { ChecklistPreventivaOsRespostaInput } from "@/services/preventivasService";
 import { marcarChecklistCompletoComoConforme } from "@/utils/checklistPreventiva";
 import { gerarDatasPrevistasNoPeriodo, type PlanoFrequencia } from "@/utils/planoFrequencia";
+import { localDateTimeToIso } from "@/utils/planoDatas";
 
 export type PlanoStatusCiclo = "aberto" | "concluido" | "cancelado";
 export type PlanoTipoServico = "preventiva" | "calibracao" | "seguranca_eletrica";
@@ -66,6 +67,7 @@ export type PlanoCicloResumo = {
   relatorio_validade_ate?: string | null;
   relatorio_validade_meses?: number;
   status: PlanoStatusCiclo;
+  itens?: PlanoCicloItem[];
 };
 
 export type PlanoCicloSetor = {
@@ -175,7 +177,7 @@ export type EquipamentoSelecionadoPlano = {
 
 export type PlanoCicloInput = {
   titulo: string;
-  dataPrevista: string;
+  dataPrevista?: string | null;
   dataAbertura: string;
   dataFechamentoPrevista: string;
   dataRealizacaoCalibracao?: string | null;
@@ -210,6 +212,13 @@ export type ResultadoFinalizacaoPreventivasLote = {
     equipamentoDescricao?: string | null;
     motivo: string;
   }>;
+};
+
+export type ProgressoFinalizacaoPreventivasLote = {
+  processados: number;
+  total: number;
+  equipamentoDescricao: string | null;
+  resultado: "finalizado" | "ignorado";
 };
 
 export type ResultadoNaoLocalizados = {
@@ -294,6 +303,20 @@ export type PlanoRelatorioAnual = {
   created_at: string;
 };
 
+export type PlanoValidadeRelatorio = {
+  id: string;
+  plano_id: string;
+  origem: "ciclo" | "anual";
+  referencia: string;
+  revisao: number | null;
+  emitido_em: string;
+  validade_ate: string;
+  created_at: string;
+  plano?: Pick<Plano, "id" | "titulo" | "ativo" | "empresa_id"> & {
+    empresa?: EmpresaSupabase | null;
+  };
+};
+
 export type PlanoRelatorioAnualInput = {
   planoId: string;
   cicloId?: string | null;
@@ -344,7 +367,12 @@ const selectPlano = `
   responsavel:usuarios!planos_responsavel_id_fkey (id, nome, email, perfil, ativo),
   setores:plano_setores (id, organizacao_id, plano_id, nome, unidade, ordem, ativo, created_at, updated_at),
   equipamentos:plano_equipamentos (${selectPlanoEquipamento}),
-  ciclos:plano_ciclos (id, titulo, data_prevista, data_abertura, data_fechamento_prevista, data_fechamento_real, relatorio_emitido_em, relatorio_validade_ate, relatorio_validade_meses, status)
+  ciclos:plano_ciclos (
+    id, titulo, data_prevista, data_abertura, data_fechamento_prevista,
+    data_fechamento_real, relatorio_emitido_em, relatorio_validade_ate,
+    relatorio_validade_meses, status,
+    itens:plano_ciclo_itens (id, status)
+  )
 `;
 
 const selectPlanoCicloSetor = `
@@ -398,9 +426,8 @@ const assertEquipamentoPlano = (input: Pick<PlanoEquipamentoInput, "executarPrev
 
 const assertCicloPlano = (input: PlanoCicloInput) => {
   if (!input.titulo.trim()) throw new Error("Informe o titulo do ciclo.");
-  if (!input.dataPrevista) throw new Error("Informe a data prevista.");
-  if (!input.dataAbertura) throw new Error("Informe a data de abertura.");
-  if (!input.dataFechamentoPrevista) throw new Error("Informe a data de fechamento prevista.");
+  if (!input.dataAbertura) throw new Error("Informe a data e hora da execucao.");
+  if (!input.dataFechamentoPrevista) throw new Error("Informe a data e hora do fechamento.");
 };
 
 const planoPayload = (input: PlanoInput) => ({
@@ -444,9 +471,9 @@ const ordenarCiclo = (ciclo: PlanoCiclo): PlanoCiclo => ({
 
 const cicloPayload = (input: PlanoCicloInput) => ({
   titulo: input.titulo.trim(),
-  data_prevista: input.dataPrevista,
-  data_abertura: input.dataAbertura,
-  data_fechamento_prevista: input.dataFechamentoPrevista,
+  data_prevista: input.dataPrevista || input.dataAbertura.slice(0, 10),
+  data_abertura: localDateTimeToIso(input.dataAbertura),
+  data_fechamento_prevista: localDateTimeToIso(input.dataFechamentoPrevista),
   data_realizacao_calibracao: input.dataRealizacaoCalibracao || null,
   data_emissao_calibracao: input.dataEmissaoCalibracao || null,
   observacoes: input.observacoes?.trim() || null,
@@ -790,6 +817,40 @@ export const planosService = {
     return this.buscarCicloPlano(ciclo.id);
   },
 
+  async atualizarCicloPlano(cicloId: string, input: PlanoCicloInput) {
+    assertCicloPlano(input);
+    const payload = cicloPayload(input);
+    const payloadAtualizacao = {
+      titulo: payload.titulo,
+      data_prevista: payload.data_prevista,
+      data_abertura: payload.data_abertura,
+      data_fechamento_prevista: payload.data_fechamento_prevista,
+      data_realizacao_calibracao: payload.data_realizacao_calibracao,
+      data_emissao_calibracao: payload.data_emissao_calibracao,
+      observacoes: payload.observacoes,
+    };
+    const { error } = await supabase
+      .from("plano_ciclos")
+      .update(payloadAtualizacao)
+      .eq("id", cicloId);
+    if (error) throw new Error(error.message);
+
+    const { error: aberturaError } = await supabase
+      .from("ordens_servico")
+      .update({ data_abertura: payload.data_abertura })
+      .eq("plano_ciclo_id", cicloId);
+    if (aberturaError) throw new Error(aberturaError.message);
+
+    const { error: fechamentoError } = await supabase
+      .from("ordens_servico")
+      .update({ data_fechamento: payload.data_fechamento_prevista })
+      .eq("plano_ciclo_id", cicloId)
+      .not("data_fechamento", "is", null);
+    if (fechamentoError) throw new Error(fechamentoError.message);
+
+    return this.buscarCicloPlano(cicloId);
+  },
+
   async listarCiclosPlano(planoId: string) {
     const { data, error } = await supabase
       .from("plano_ciclos")
@@ -857,24 +918,29 @@ export const planosService = {
     }
 
     const ciclo = await this.buscarCicloPlano(item.ciclo_id);
-    const tipoOS = await buscarTipoOSPreventiva();
-    const estadoAberto = await buscarEstadoOSAberto();
+    const [tipoOS, estadoAberto, plano] = await Promise.all([
+      buscarTipoOSPreventiva(),
+      buscarEstadoOSAberto(),
+      this.buscarPlanoPorId(ciclo.plano_id),
+    ]);
     const os = await ordensServicoService.criar({
       empresaId: item.equipamento.empresa_id,
       equipamentoId: item.equipamento_id,
       tipoOsId: tipoOS.id,
       estadoOsId: estadoAberto.id,
+      tecnicoResponsavelId: plano.responsavel_id || undefined,
+      dataAbertura: ciclo.data_abertura,
       solicitanteTexto: ciclo.titulo,
+      responsavelTexto: plano.responsavel?.nome || undefined,
       origemProblema: "Manutencao preventiva",
       descricaoServico: "Manutencao preventiva aberta pelo ciclo do plano.",
-      observacoes: `Plano: ${ciclo.plano_id}. Ciclo: ${ciclo.titulo}.`,
+      observacoes: `Plano: ${plano.titulo}. Ciclo: ${ciclo.titulo}.`,
       statusSistema: "aberta",
     });
 
     await supabase
       .from("ordens_servico")
       .update({
-        data_abertura: `${ciclo.data_abertura}T00:00:00`,
         plano_ciclo_id: ciclo.id,
       })
       .eq("id", os.id);
@@ -904,9 +970,11 @@ export const planosService = {
   async finalizarPreventivasConformesEmLote({
     itemIds,
     dataFechamento,
+    onProgress,
   }: {
     itemIds: string[];
     dataFechamento?: string | null;
+    onProgress?: (progresso: ProgressoFinalizacaoPreventivasLote) => void;
   }) {
     const resultado: ResultadoFinalizacaoPreventivasLote = {
       totalSelecionados: itemIds.length,
@@ -916,7 +984,13 @@ export const planosService = {
       ignorados: [],
     };
 
+    let processados = 0;
+
     for (const itemId of itemIds) {
+      let equipamentoProcessado: string | null = null;
+      let resultadoProcessamento: ProgressoFinalizacaoPreventivasLote["resultado"] =
+        "ignorado";
+
       try {
         const { data: itemData, error: itemError } = await supabase
           .from("plano_ciclo_itens")
@@ -929,6 +1003,7 @@ export const planosService = {
 
         const item = itemData as unknown as PlanoCicloItem;
         const descricao = equipamentoDescricao(item);
+        equipamentoProcessado = descricao;
 
         if (item.tipo_servico !== "preventiva") throw new Error("Item nao e preventiva");
         if (item.status === "concluido") throw new Error("Item ja concluido");
@@ -960,6 +1035,7 @@ export const planosService = {
           numeroOs: osConcluida.numero,
         });
         resultado.totalFinalizados += 1;
+        resultadoProcessamento = "finalizado";
       } catch (error) {
         const motivo = error instanceof Error ? error.message : "Erro inesperado";
         const item = await supabase
@@ -977,7 +1053,16 @@ export const planosService = {
           motivo,
         });
         resultado.totalIgnorados += 1;
+        equipamentoProcessado = item ? equipamentoDescricao(item) : null;
       }
+
+      processados += 1;
+      onProgress?.({
+        processados,
+        total: itemIds.length,
+        equipamentoDescricao: equipamentoProcessado,
+        resultado: resultadoProcessamento,
+      });
     }
 
     return resultado;
@@ -1482,6 +1567,67 @@ export const planosService = {
       .order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
     return (data || []) as PlanoRelatorioAnual[];
+  },
+
+  async listarValidadesRelatoriosPlanos() {
+    const planoSelect = `
+      id,
+      titulo,
+      ativo,
+      empresa_id,
+      empresa:empresas (
+        id,
+        nome,
+        nome_fantasia
+      )
+    `;
+    const [anuaisResult, ciclosResult] = await Promise.all([
+      supabase
+        .from("plano_relatorios_anuais")
+        .select(`
+          id, plano_id, revisao, emitido_em, validade_ate, created_at,
+          plano:planos (${planoSelect})
+        `)
+        .order("validade_ate", { ascending: true }),
+      supabase
+        .from("plano_ciclos")
+        .select(`
+          id, plano_id, titulo, relatorio_emitido_em,
+          relatorio_validade_ate, created_at,
+          plano:planos (${planoSelect})
+        `)
+        .not("relatorio_emitido_em", "is", null)
+        .not("relatorio_validade_ate", "is", null)
+        .order("relatorio_validade_ate", { ascending: true }),
+    ]);
+
+    if (anuaisResult.error) throw new Error(anuaisResult.error.message);
+    if (ciclosResult.error) throw new Error(ciclosResult.error.message);
+
+    const anuais = (anuaisResult.data || []).map((relatorio) => ({
+      id: relatorio.id,
+      plano_id: relatorio.plano_id,
+      origem: "anual" as const,
+      referencia: "Relatorio anual",
+      revisao: relatorio.revisao,
+      emitido_em: relatorio.emitido_em,
+      validade_ate: relatorio.validade_ate,
+      created_at: relatorio.created_at,
+      plano: relatorio.plano,
+    }));
+    const ciclos = (ciclosResult.data || []).map((ciclo) => ({
+      id: ciclo.id,
+      plano_id: ciclo.plano_id,
+      origem: "ciclo" as const,
+      referencia: ciclo.titulo,
+      revisao: null,
+      emitido_em: ciclo.relatorio_emitido_em as string,
+      validade_ate: ciclo.relatorio_validade_ate as string,
+      created_at: ciclo.created_at,
+      plano: ciclo.plano,
+    }));
+
+    return [...anuais, ...ciclos] as unknown as PlanoValidadeRelatorio[];
   },
 
   async listarDocumentosDosCiclosNoPeriodo({

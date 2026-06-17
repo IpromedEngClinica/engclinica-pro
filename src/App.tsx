@@ -29,7 +29,6 @@ import { DataProvider } from "./contexts/DataContext";
 import SupabaseTest from "./pages/SupabaseTest";
 import Login from "./pages/Login";
 import ProtectedRoute from "./components/ProtectedRoute";
-import AdminRoute from "./components/AdminRoute";
 import PermissionRoute from "./components/PermissionRoute";
 import { AuthProvider } from "./contexts/AuthContext";
 
@@ -192,11 +191,7 @@ const App = () => (
                   />
                   <Route
                     path="/usuarios-permissoes"
-                    element={
-                      <AdminRoute>
-                        <UsuariosPermissoes />
-                      </AdminRoute>
-                    }
+                    element={<UsuariosPermissoes />}
                   />
                   <Route
                     path="/procedimentos-preventiva"

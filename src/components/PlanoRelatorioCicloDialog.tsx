@@ -11,9 +11,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useGerarRelatorioCompletoCiclo } from "@/hooks/usePlanos";
+import { useGerarRelatorioCompletoCiclo, usePlanoCiclo } from "@/hooks/usePlanos";
 import { toast } from "@/hooks/use-toast";
 import type { PlanoRelatorioCicloOpcoes } from "@/services/planosService";
+import { calcularValidadeFimDoMes, formatDateValue } from "@/utils/planoDatas";
 
 type Props = {
   open: boolean;
@@ -23,14 +24,9 @@ type Props = {
 
 const hoje = () => new Date().toISOString().slice(0, 10);
 
-const addMeses = (data: string, meses: number) => {
-  const date = new Date(`${data}T00:00:00`);
-  date.setMonth(date.getMonth() + meses);
-  return date.toISOString().slice(0, 10);
-};
-
 const PlanoRelatorioCicloDialog = ({ cicloId, onOpenChange, open }: Props) => {
   const gerarRelatorio = useGerarRelatorioCompletoCiclo();
+  const { data: ciclo } = usePlanoCiclo(open ? cicloId || undefined : undefined);
   const [validadeModo, setValidadeModo] = useState("12");
   const [validadePersonalizada, setValidadePersonalizada] = useState("12");
   const [incluirOsPreventivas, setIncluirOsPreventivas] = useState(true);
@@ -57,7 +53,9 @@ const PlanoRelatorioCicloDialog = ({ cicloId, onOpenChange, open }: Props) => {
   }, [validadeModo, validadePersonalizada]);
 
   const emitidoEm = hoje();
-  const validadeAte = addMeses(emitidoEm, validadeMeses);
+  const validadeAte = ciclo
+    ? calcularValidadeFimDoMes(ciclo.data_abertura, validadeMeses)
+    : emitidoEm;
 
   const handleGerar = async () => {
     if (!cicloId) return;
@@ -131,8 +129,8 @@ const PlanoRelatorioCicloDialog = ({ cicloId, onOpenChange, open }: Props) => {
           </div>
 
           <div className="grid gap-3 rounded-md border bg-muted/20 p-3 text-sm sm:grid-cols-2">
-            <div><span className="text-muted-foreground">Data de emissao</span><p className="font-medium">{emitidoEm}</p></div>
-            <div><span className="text-muted-foreground">Validade ate</span><p className="font-medium">{validadeAte}</p></div>
+            <div><span className="text-muted-foreground">Data de emissao</span><p className="font-medium">{formatDateValue(emitidoEm)}</p></div>
+            <div><span className="text-muted-foreground">Validade ate</span><p className="font-medium">{formatDateValue(validadeAte)}</p></div>
           </div>
 
           <div className="space-y-3 rounded-md border p-3">

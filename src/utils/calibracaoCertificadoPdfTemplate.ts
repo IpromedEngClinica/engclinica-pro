@@ -1,4 +1,5 @@
 import type { CalibracaoExecucao } from "@/services/calibracaoExecucoesService";
+import type { AssinaturasDocumento } from "@/services/assinaturasService";
 import { formatNumeroCertificadoCalibracao } from "@/services/calibracaoExecucoesService";
 import { formatarDataPadrao, formatarLocalCalibracao, formatarMesAno } from "@/utils/calibracaoValidade";
 import { formatarNumeroComCasas, formatDecimalPtBr, obterCasasResolucaoEquipamento } from "@/utils/numberUtils";
@@ -40,13 +41,14 @@ const styles = `
   table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px;page-break-inside:auto} thead{display:table-header-group}
   tr{page-break-inside:avoid} th,td{border:1px solid #e5e7eb;padding:6px;text-align:left} th{background:#f3f4f6}
   .note{white-space:pre-wrap;border-left:3px solid #c5161d;background:#fff7f7;padding:10px;line-height:1.45}
-  .sign{display:grid;grid-template-columns:1fr 1fr;gap:50px;margin-top:42px;text-align:center}.line{border-top:1px solid #777;padding-top:8px}
+  .sign{display:grid;grid-template-columns:1fr 1fr;gap:50px;margin-top:42px;text-align:center}.line{border-top:1px solid #777;padding-top:8px}.signature-image{height:64px;display:flex;align-items:flex-end;justify-content:center;margin-bottom:3px}.signature-image img{display:block;max-width:90%;max-height:62px;object-fit:contain}
   footer{border-top:1px solid #ddd;margin-top:32px;padding-top:8px;color:#6b7280;font-size:10px;text-align:center}
 `;
 
 export const buildCalibracaoCertificadoHtml = (
   execucao: CalibracaoExecucao,
-  logoSrc: string
+  logoSrc: string,
+  assinaturas: AssinaturasDocumento = {}
 ) => {
   const empresa = execucao.empresa;
   const equipamento = execucao.equipamento;
@@ -100,7 +102,10 @@ export const buildCalibracaoCertificadoHtml = (
       <tbody>${(tabela.pontos || []).map((ponto) => `<tr><td>${esc(ponto.valor_nominal_texto_snapshot || decimal(ponto.valor_nominal))}</td><td>${formatarNumeroComCasas(ponto.media_valores_medidos, casasResolucaoEquipamento)}</td><td>${formatarNumeroComCasas(ponto.tendencia_corrigida ?? ponto.tendencia_bruta, casasResolucaoEquipamento)}</td><td>${incertezaReportada(ponto.incerteza_expandida_reportada ?? ponto.incerteza_expandida, ponto.casas_decimais_incerteza)}</td><td>${decimal(ponto.fator_abrangencia_k)}</td>${execucao.criterio_conformidade_aplicado ? `<td>${esc(ponto.resultado_conformidade)}</td>` : ""}</tr>`).join("")}</tbody></table>`;
     }).join("")}
     <h2>Resumo da Calibracao</h2><section class="grid">${field("Local", formatarLocalCalibracao(execucao.local_calibracao))}${field("Data da calibracao", date(execucao.data_calibracao))}${field("Emitido em", date(execucao.data_emissao))}${field("Valido ate", formatarMesAno(execucao.validade_mes || execucao.data_validade))}${field("Numero", numero)}${execucao.numero_revisao > 0 ? field("Revisao", execucao.numero_revisao) : ""}${execucao.criterio_conformidade_aplicado ? field("Resultado geral", execucao.resultado_geral) : ""}</section>
-    <div class="sign"><div class="line">${esc(execucao.tecnico_executor_nome)}<br>Tecnico Executor</div><div class="line">${esc(RESPONSAVEL_TECNICO)}<br>${esc(RESPONSAVEL_TECNICO_CREA)}<br>Responsavel Tecnico / Signatario Autorizado</div></div>
+    <div class="sign">
+      <div><div class="signature-image">${assinaturas.tecnico?.dataUrl ? `<img src="${assinaturas.tecnico.dataUrl}" alt="Assinatura do tecnico executor">` : ""}</div><div class="line">${esc(assinaturas.tecnico?.nome || execucao.tecnico_executor_nome)}<br>Tecnico Executor</div></div>
+      <div><div class="signature-image">${assinaturas.responsavel?.dataUrl ? `<img src="${assinaturas.responsavel.dataUrl}" alt="Assinatura do responsavel tecnico">` : ""}</div><div class="line">${esc(assinaturas.responsavel?.nome || execucao.responsavel_tecnico_nome || RESPONSAVEL_TECNICO)}<br>${esc(execucao.responsavel_tecnico_registro || RESPONSAVEL_TECNICO_CREA)}<br>Responsavel Tecnico / Signatario Autorizado</div></div>
+    </div>
     <footer>${esc(FOOTER)}</footer>
   </main></body></html>`;
 };

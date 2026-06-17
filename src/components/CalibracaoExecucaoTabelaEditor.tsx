@@ -1,4 +1,4 @@
-import { Minus, Plus, Trash2 } from "lucide-react";
+import { AlertCircle, Minus, Plus, Trash2 } from "lucide-react";
 import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -49,6 +49,7 @@ const CalibracaoExecucaoTabelaEditor = ({
 }: Props) => {
   const padrao = padroes.find((item) => item.id === tabela.padraoId);
   const tabelaPadrao = padrao?.tabelas?.find((item) => item.id === tabela.padraoTabelaId);
+  const padraoVinculadoSemValidade = Boolean(tabela.padraoId && !padrao);
   const mostrarResultado = tabela.incluirCriterio;
   const casasResolucaoEquipamento = obterCasasResolucaoEquipamento(
     tabela.resolucaoEquipamentoTexto,
@@ -143,6 +144,15 @@ const CalibracaoExecucaoTabelaEditor = ({
             <SelectField label="Padrao utilizado *" value={tabela.padraoId} disabled={disabled} options={padroes.map((item) => [item.id, `${item.nome_padrao} - ${item.numero_certificado}`])} onChange={(padraoId) => update({ padraoId, padraoTabelaId: "" })} />
             <SelectField label="Tabela do padrao *" value={tabela.padraoTabelaId} disabled={disabled || !padrao} options={(padrao?.tabelas || []).map((item) => [item.id, `${item.nome} - ${item.grandeza} (${item.unidade})`])} onChange={(padraoTabelaId) => update({ padraoTabelaId })} />
             <Info label="Validade do padrao" value={formatarDataPadrao(padrao?.data_validade)} />
+            {padraoVinculadoSemValidade && (
+              <div className="flex gap-2 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                  Nao existe certificado de padrao valido para esta tabela na data da calibracao.
+                  Renove o certificado do padrao ou selecione outro padrao valido.
+                </span>
+              </div>
+            )}
             <DecimalTexto label="Resolucao do equipamento" value={tabela.resolucaoEquipamentoTexto || ""} disabled={disabled} onChange={(resolucaoEquipamentoTexto) => update({ resolucaoEquipamentoTexto, resolucaoEquipamento: normalizeDecimalInput(resolucaoEquipamentoTexto) })} />
             {tabela.fatorModo === "manual_execucao" && <Decimal label="Fator k da execucao *" value={tabela.fatorK} disabled={disabled} onChange={(fatorK) => update({ fatorK })} />}
           </div>

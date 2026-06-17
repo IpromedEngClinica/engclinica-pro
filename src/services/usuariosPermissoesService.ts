@@ -72,6 +72,8 @@ export type UsuarioHierarquia = {
   cargo: string | null;
   perfil: PerfilUsuario;
   empresa_id: string | null;
+  assinatura_storage_path: string | null;
+  assinatura_atualizada_em: string | null;
   ativo: boolean;
   empresa?: {
     id: string;
@@ -135,6 +137,8 @@ const selectUsuarios = `
   cargo,
   perfil,
   empresa_id,
+  assinatura_storage_path,
+  assinatura_atualizada_em,
   ativo,
   empresa:empresas!usuarios_empresa_id_fkey (
     id,

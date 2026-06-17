@@ -7,10 +7,11 @@ import {
 
 export const USUARIOS_PERMISSOES_QUERY_KEY = ["usuarios-permissoes"];
 
-export const useUsuariosPermissoesConfig = () =>
+export const useUsuariosPermissoesConfig = (enabled = true) =>
   useQuery({
     queryKey: USUARIOS_PERMISSOES_QUERY_KEY,
     queryFn: () => usuariosPermissoesService.buscarConfig(),
+    enabled,
   });
 
 export const useAtualizarPermissaoPerfil = () => {

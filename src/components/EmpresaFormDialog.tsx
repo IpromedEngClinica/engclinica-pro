@@ -22,6 +22,7 @@ import {
 } from "@/services/empresasService";
 import { useAtualizarEmpresa, useCriarEmpresa } from "@/hooks/useEmpresas";
 import { consultarCep, onlyDigits, UFS_BRASIL } from "@/utils/brasil";
+import { useAuth } from "@/contexts/AuthContext";
 
 export type DialogMode = "create" | "edit" | "view";
 
@@ -43,11 +44,16 @@ const TIPOS_RELACAO = [
   { value: "ambos", label: "Ambos" },
 ];
 
+const REPRESENTANTES_COMERCIAIS = ["Dayvid", "Lauro", "Leandro", "Igor"];
+
+const EMPRESA_DRAFT_KEY = "engclinica:empresa-create-draft";
+
 const emptyForm: EmpresaFormInput = {
   nome: "",
   nomeFantasia: "",
   tipoCliente: "",
   tipoRelacao: "cliente",
+  representanteComercialSetor: "",
   cpfCnpj: "",
   cep: "",
   rua: "",
@@ -70,6 +76,7 @@ const empresaToForm = (empresa: EmpresaSupabase): EmpresaFormInput => ({
   nomeFantasia: empresa.nome_fantasia ?? "",
   tipoCliente: empresa.tipo_cliente ?? "",
   tipoRelacao: empresa.tipo_relacao ?? "cliente",
+  representanteComercialSetor: empresa.representante_comercial_setor ?? "",
   cpfCnpj: empresa.cpf_cnpj ?? "",
   cep: empresa.cep ?? "",
   rua: empresa.rua ?? "",
@@ -200,6 +207,7 @@ const EmpresaFormDialog = ({
 }: EmpresaFormDialogProps) => {
   const criarEmpresa = useCriarEmpresa();
   const atualizarEmpresa = useAtualizarEmpresa();
+  const { usuario } = useAuth();
 
   const [form, setForm] = useState<EmpresaFormInput>(emptyForm);
   const [buscandoCep, setBuscandoCep] = useState(false);
@@ -207,21 +215,71 @@ const EmpresaFormDialog = ({
     null
   );
   const [ultimoCepConsultado, setUltimoCepConsultado] = useState("");
+  const [draftReady, setDraftReady] = useState(false);
 
   const readOnly = mode === "view";
   const saving = criarEmpresa.isPending || atualizarEmpresa.isPending;
+  const showInternalFields = Boolean(
+    usuario?.perfil && usuario.perfil !== "solicitante"
+  );
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setDraftReady(false);
+      return;
+    }
 
     if (empresa && (mode === "edit" || mode === "view")) {
       setForm(empresaToForm(empresa));
       setUltimoCepConsultado(onlyDigits(empresa.cep ?? ""));
+      setDraftReady(false);
     } else {
-      setForm(emptyForm);
+      let nextForm: EmpresaFormInput = { ...emptyForm, setores: [] };
+
+      try {
+        const savedDraft = sessionStorage.getItem(EMPRESA_DRAFT_KEY);
+        if (savedDraft) {
+          const parsedDraft = JSON.parse(savedDraft) as Partial<EmpresaFormInput>;
+          nextForm = {
+            ...emptyForm,
+            ...parsedDraft,
+            setores: Array.isArray(parsedDraft.setores) ? parsedDraft.setores : [],
+          };
+          toast.info("Rascunho do cadastro recuperado.");
+        }
+      } catch {
+        sessionStorage.removeItem(EMPRESA_DRAFT_KEY);
+      }
+
+      setForm(nextForm);
       setUltimoCepConsultado("");
+
+      const timer = window.setTimeout(() => setDraftReady(true), 0);
+      return () => window.clearTimeout(timer);
     }
   }, [open, empresa, mode]);
+
+  useEffect(() => {
+    if (!open || mode !== "create" || readOnly || !draftReady) return;
+
+    const timer = window.setTimeout(() => {
+      sessionStorage.setItem(EMPRESA_DRAFT_KEY, JSON.stringify(form));
+    }, 250);
+
+    return () => window.clearTimeout(timer);
+  }, [open, mode, readOnly, draftReady, form]);
+
+  const clearCreateDraft = () => {
+    if (mode === "create") {
+      sessionStorage.removeItem(EMPRESA_DRAFT_KEY);
+    }
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen && saving) return;
+    if (!nextOpen) clearCreateDraft();
+    onOpenChange(nextOpen);
+  };
 
   const preencherCep = async (cep: string) => {
     if (readOnly) return;
@@ -472,6 +530,7 @@ const EmpresaFormDialog = ({
         toast.success("Empresa cadastrada com sucesso!");
       }
 
+      clearCreateDraft();
       onOpenChange(false);
     } catch (error) {
       const message =
@@ -491,7 +550,7 @@ const EmpresaFormDialog = ({
         : "Nova Empresa / Cliente";
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
@@ -943,6 +1002,30 @@ const EmpresaFormDialog = ({
         <div className="rounded-lg border p-4 space-y-4">
           <h3 className="text-sm font-semibold text-foreground">Observações</h3>
 
+          {showInternalFields && (
+            <div className="space-y-1.5">
+              <Label>Representante comercial do setor</Label>
+              <Select
+                value={form.representanteComercialSetor || undefined}
+                onValueChange={(value) =>
+                  handleChange("representanteComercialSetor", value)
+                }
+                disabled={readOnly || saving}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o representante" />
+                </SelectTrigger>
+                <SelectContent>
+                  {REPRESENTANTES_COMERCIAIS.map((representante) => (
+                    <SelectItem key={representante} value={representante}>
+                      {representante}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <Label>Observações internas</Label>
             <Textarea
@@ -956,7 +1039,7 @@ const EmpresaFormDialog = ({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+          <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={saving}>
             {readOnly ? "Fechar" : "Cancelar"}
           </Button>
 

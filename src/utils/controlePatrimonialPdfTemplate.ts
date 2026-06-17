@@ -95,28 +95,28 @@ export const buildControlePatrimonialHtml = (
     <style>
       * { box-sizing: border-box; }
       body { margin: 0; font-family: Arial, Helvetica, sans-serif; color: #243b53; background: #fff; }
-      .document { width: 1123px; min-height: 794px; padding: 24px 28px 34px; background: #fff; }
+      .document { width: 1588px; min-height: 1123px; padding: 20px 22px 28px; background: #fff; }
       .header { display: flex; align-items: flex-start; justify-content: space-between; border-bottom: 1px solid #d9e2ec; padding-bottom: 14px; }
       .logo { width: 180px; height: auto; display: block; }
       .title { text-align: right; }
-      .title h1 { margin: 4px 0 8px; font-size: 24px; font-weight: 600; letter-spacing: 0; color: #334e68; }
-      .title p { margin: 0; font-size: 10px; color: #627d98; line-height: 1.5; }
+      .title h1 { margin: 4px 0 8px; font-size: 26px; font-weight: 600; letter-spacing: 0; color: #334e68; }
+      .title p { margin: 0; font-size: 11px; color: #627d98; line-height: 1.5; }
       .metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 18px 0; }
       .metric { border: 1px solid #d9e2ec; border-radius: 6px; padding: 10px 12px; background: #fbfdff; }
-      .metric span { display: block; font-size: 9px; color: #627d98; text-transform: uppercase; }
-      .metric strong { display: block; margin-top: 4px; font-size: 18px; color: #102a43; }
+      .metric span { display: block; font-size: 10px; color: #627d98; text-transform: uppercase; }
+      .metric strong { display: block; margin-top: 4px; font-size: 20px; color: #102a43; }
       .summary { margin-bottom: 18px; }
-      .summary h2, .company h2 { margin: 0 0 8px; font-size: 14px; font-weight: 700; color: #334e68; }
-      .summary-table { width: 100%; border-collapse: collapse; font-size: 10px; border: 1px solid #d9e2ec; }
-      .summary-table th { background: #f1f5f9; color: #334e68; text-align: left; padding: 7px 8px; font-size: 9px; text-transform: uppercase; }
-      .summary-table td { border-top: 1px solid #e4e7eb; padding: 7px 8px; }
+      .summary h2, .company h2 { margin: 0 0 8px; font-size: 15px; font-weight: 700; color: #334e68; }
+      .summary-table { width: 100%; border-collapse: collapse; font-size: 11px; border: 1px solid #d9e2ec; }
+      .summary-table th { background: #f1f5f9; color: #334e68; text-align: left; padding: 7px 8px; font-size: 10px; text-transform: uppercase; }
+      .summary-table td { border-top: 1px solid #e4e7eb; padding: 8px; }
       .summary-table th:last-child, .summary-table td:last-child { width: 120px; text-align: right; }
       .company { margin-top: 20px; page-break-inside: avoid; }
       .company-title { display: flex; align-items: baseline; justify-content: space-between; border-bottom: 1px solid #cbd2d9; padding-bottom: 6px; margin-bottom: 8px; }
       .company-title h2 { margin: 0; }
-      .company-title span { font-size: 10px; color: #627d98; }
-      .equip-list { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 9px; }
-      .equip-list th { background: #f8fafc; color: #52606d; text-align: left; padding: 7px 6px; font-size: 8px; text-transform: uppercase; border-top: 1px solid #d9e2ec; border-bottom: 1px solid #d9e2ec; }
+      .company-title span { font-size: 11px; color: #627d98; }
+      .equip-list { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 10px; }
+      .equip-list th { background: #f8fafc; color: #52606d; text-align: left; padding: 7px 6px; font-size: 9px; text-transform: uppercase; border-top: 1px solid #d9e2ec; border-bottom: 1px solid #d9e2ec; }
       .equip-list td { padding: 8px 6px; border-bottom: 1px solid #e4e7eb; vertical-align: top; word-break: break-word; }
       .equip-list tr:nth-child(even) td { background: #fbfdff; }
       .equip-list th:nth-child(1), .equip-list td:nth-child(1) { width: 4%; text-align: center; }
@@ -126,10 +126,10 @@ export const buildControlePatrimonialHtml = (
       .equip-list th:nth-child(5) { width: 10%; }
       .equip-list th:nth-child(6) { width: 11%; }
       .equip-list th:nth-child(7) { width: 25%; }
-      .equip-list td strong { display: block; font-size: 9px; color: #102a43; }
+      .equip-list td strong { display: block; font-size: 10px; color: #102a43; }
       .equip-list td span { display: block; margin-top: 2px; color: #627d98; }
       .index { color: #627d98; font-weight: 700; }
-      .status { display: inline-block; border-radius: 999px; padding: 3px 8px; font-size: 8px; font-weight: 700; white-space: nowrap; }
+      .status { display: inline-block; border-radius: 999px; padding: 3px 8px; font-size: 9px; font-weight: 700; white-space: nowrap; }
       .status.active { background: #e8f5e9; color: #256029; }
       .status.maintenance { background: #fff7e6; color: #8a4b00; }
       .status.inactive { background: #fdecea; color: #b42318; }

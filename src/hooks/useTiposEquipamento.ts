@@ -94,7 +94,16 @@ export const useCriarTipoEquipamento = () => {
 
       return data as TipoEquipamentoSupabase;
     },
-    onSuccess: () => invalidateTiposEquipamento(queryClient),
+    onSuccess: (novoTipo) => {
+      queryClient.setQueryData<TipoEquipamentoSupabase[]>(
+        TIPOS_EQUIPAMENTO_QUERY_KEY,
+        (tipos = []) =>
+          [...tipos.filter((tipo) => tipo.id !== novoTipo.id), novoTipo].sort(
+            (a, b) => a.nome.localeCompare(b.nome, "pt-BR")
+          )
+      );
+      invalidateTiposEquipamento(queryClient);
+    },
   });
 };
 

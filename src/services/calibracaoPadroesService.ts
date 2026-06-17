@@ -44,6 +44,7 @@ export type CalibracaoPadraoTabela = {
   nome: string;
   grandeza: string;
   unidade: string;
+  resolucao_padrao: number | null;
   ordem: number;
   ativo: boolean;
   pontos?: CalibracaoPadraoPonto[];
@@ -70,6 +71,10 @@ export type CalibracaoPadrao = {
   umidade_relativa: number | null;
   incerteza_umidade: number | null;
   unidade_umidade: string | null;
+  padrao_base_id: string | null;
+  certificado_anterior_id: string | null;
+  renovado_por_id: string | null;
+  renovado_em: string | null;
   ativo: boolean;
   created_at: string;
   updated_at: string;
@@ -103,6 +108,7 @@ export type CalibracaoPadraoTabelaInput = {
   nome: string;
   grandeza: string;
   unidade: string;
+  resolucaoPadrao?: number | null;
   ordem?: number;
   ativo?: boolean;
   pontos?: CalibracaoPadraoPontoInput[];
@@ -128,6 +134,12 @@ export type UploadCalibracaoPadraoDocumentoInput = {
   tipoDocumento: CalibracaoPadraoTipoDocumento;
   file: File;
   observacoes?: string | null;
+};
+
+export type RenovarCalibracaoPadraoInput = {
+  padraoAnteriorId: string;
+  input: CalibracaoPadraoFormInput;
+  tabelas: CalibracaoPadraoTabelaInput[];
 };
 
 export type CalibracaoPadraoStatusValidade =
@@ -173,6 +185,7 @@ const selectTabela = `
   nome,
   grandeza,
   unidade,
+  resolucao_padrao,
   ordem,
   ativo,
   pontos:calibracao_padrao_pontos (
@@ -201,6 +214,10 @@ const selectPadrao = `
   umidade_relativa,
   incerteza_umidade,
   unidade_umidade,
+  padrao_base_id,
+  certificado_anterior_id,
+  renovado_por_id,
+  renovado_em,
   ativo,
   created_at,
   updated_at,
@@ -274,6 +291,7 @@ const toTabelaPayload = (input: CalibracaoPadraoTabelaInput) => ({
   nome: input.nome.trim(),
   grandeza: input.grandeza.trim(),
   unidade: input.unidade.trim(),
+  resolucao_padrao: input.resolucaoPadrao ?? null,
   ordem: input.ordem ?? 0,
   ativo: input.ativo ?? true,
 });
@@ -341,6 +359,7 @@ export const calibracaoPadroesService = {
       .from("calibracao_padroes")
       .select(selectPadrao)
       .eq("ativo", true)
+      .is("renovado_por_id", null)
       .order("data_validade", { ascending: true });
 
     if (error) throw new Error(error.message);
@@ -356,6 +375,19 @@ export const calibracaoPadroesService = {
 
     if (error) throw new Error(error.message);
     return normalizePadrao(data as unknown as CalibracaoPadrao);
+  },
+
+  async listarHistoricoPadrao(padraoId: string) {
+    const atual = await this.buscarPadraoPorId(padraoId);
+    const baseId = atual.padrao_base_id || atual.id;
+    const { data, error } = await supabase
+      .from("calibracao_padroes")
+      .select(selectPadrao)
+      .or(`id.eq.${baseId},padrao_base_id.eq.${baseId}`)
+      .order("data_calibracao", { ascending: false });
+
+    if (error) throw new Error(error.message);
+    return ((data || []) as unknown as CalibracaoPadrao[]).map(normalizePadrao);
   },
 
   async criarPadrao(input: CalibracaoPadraoFormInput) {
@@ -386,6 +418,83 @@ export const calibracaoPadroesService = {
 
     if (error) throw new Error(error.message);
     return normalizePadrao(data as unknown as CalibracaoPadrao);
+  },
+
+  async renovarPadrao({
+    padraoAnteriorId,
+    input,
+    tabelas,
+  }: RenovarCalibracaoPadraoInput) {
+    validarPadrao(input);
+    if (!tabelas.length) {
+      throw new Error("Adicione ao menos uma tabela metrologica ao novo certificado.");
+    }
+
+    const anterior = await this.buscarPadraoPorId(padraoAnteriorId);
+    const organizacaoId = await buscarOrganizacaoAtual();
+    const baseId = anterior.padrao_base_id || anterior.id;
+
+    const { data, error } = await supabase
+      .from("calibracao_padroes")
+      .insert({
+        organizacao_id: organizacaoId,
+        ...toPadraoPayload(input),
+        padrao_base_id: baseId,
+        certificado_anterior_id: anterior.id,
+        ativo: true,
+      })
+      .select(selectPadrao)
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    const novoPadrao = normalizePadrao(data as unknown as CalibracaoPadrao);
+
+    await this.salvarTabelasPadrao(novoPadrao.id, tabelas);
+    const novoCompleto = await this.buscarPadraoPorId(novoPadrao.id);
+
+    const tabelaNovaPorTabelaAnterior = new Map<string, string>();
+    tabelas.forEach((tabelaInput, index) => {
+      if (!tabelaInput.id) return;
+      const tabelaNova = novoCompleto.tabelas?.[index];
+      if (tabelaNova) tabelaNovaPorTabelaAnterior.set(tabelaInput.id, tabelaNova.id);
+    });
+
+    for (const [tabelaAnteriorId, tabelaNovaId] of tabelaNovaPorTabelaAnterior) {
+      const { error: procedimentoError } = await supabase
+        .from("calibracao_procedimento_tabelas")
+        .update({
+          padrao_id: novoCompleto.id,
+          padrao_tabela_id: tabelaNovaId,
+        })
+        .eq("padrao_id", anterior.id)
+        .eq("padrao_tabela_id", tabelaAnteriorId);
+
+      if (procedimentoError) throw new Error(procedimentoError.message);
+
+      const { error: compativelError } = await supabase
+        .from("calibracao_procedimento_padrao_compativel")
+        .update({
+          padrao_id: novoCompleto.id,
+          padrao_tabela_id: tabelaNovaId,
+        })
+        .eq("padrao_id", anterior.id)
+        .eq("padrao_tabela_id", tabelaAnteriorId);
+
+      if (compativelError) throw new Error(compativelError.message);
+    }
+
+    const { error: anteriorError } = await supabase
+      .from("calibracao_padroes")
+      .update({
+        renovado_por_id: novoCompleto.id,
+        renovado_em: new Date().toISOString(),
+      })
+      .eq("id", anterior.id);
+
+    if (anteriorError) throw new Error(anteriorError.message);
+
+    return this.buscarPadraoPorId(novoCompleto.id);
   },
 
   async desativarPadrao(id: string) {

@@ -12,12 +12,26 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
-import { PecaSupabase, useCriarPeca } from "@/hooks/usePecas";
+import {
+  PecaSupabase,
+  useCriarFabricantePeca,
+  useCriarModeloPeca,
+  useCriarPeca,
+  useCriarVariacaoPeca,
+} from "@/hooks/usePecas";
+
+export type PecaQuickCreateResult = {
+  fabricanteId?: string;
+  fabricanteNome?: string;
+  modeloId?: string;
+  modeloNome?: string;
+  variacaoId?: string;
+};
 
 type PecaQuickCreateDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreated: (peca: PecaSupabase) => void;
+  onCreated: (peca: PecaSupabase, result?: PecaQuickCreateResult) => void;
 };
 
 const PecaQuickCreateDialog = ({
@@ -26,14 +40,21 @@ const PecaQuickCreateDialog = ({
   onCreated,
 }: PecaQuickCreateDialogProps) => {
   const criar = useCriarPeca();
+  const criarFabricante = useCriarFabricantePeca();
+  const criarModelo = useCriarModeloPeca();
+  const criarVariacao = useCriarVariacaoPeca();
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
   const [precoPadrao, setPrecoPadrao] = useState("");
+  const [fabricante, setFabricante] = useState("");
+  const [modelo, setModelo] = useState("");
 
   const reset = () => {
     setNome("");
     setDescricao("");
     setPrecoPadrao("");
+    setFabricante("");
+    setModelo("");
   };
 
   const handleSubmit = async () => {
@@ -48,7 +69,46 @@ const PecaQuickCreateDialog = ({
         descricao: descricao.trim() || null,
         precoPadrao: precoPadrao ? Number(precoPadrao) : null,
       });
-      onCreated(peca);
+
+      const fabricanteCriado = fabricante.trim()
+        ? await criarFabricante.mutateAsync({
+            pecaId: peca.id,
+            nome: fabricante.trim(),
+          })
+        : null;
+      const modeloCriado = modelo.trim()
+        ? await criarModelo.mutateAsync({
+            pecaId: peca.id,
+            nome: modelo.trim(),
+          })
+        : null;
+      const variacaoCriada =
+        fabricanteCriado || modeloCriado
+          ? await criarVariacao.mutateAsync({
+              pecaId: peca.id,
+              pecaFabricanteId: fabricanteCriado?.id || null,
+              pecaModeloId: modeloCriado?.id || null,
+              fabricanteTexto: fabricanteCriado?.nome || null,
+              modeloTexto: modeloCriado?.nome || null,
+              precoPadrao: precoPadrao ? Number(precoPadrao) : null,
+            })
+          : null;
+
+      onCreated(
+        {
+          ...peca,
+          fabricantes: fabricanteCriado ? [fabricanteCriado] : peca.fabricantes,
+          modelos: modeloCriado ? [modeloCriado] : peca.modelos,
+          variacoes: variacaoCriada ? [variacaoCriada] : peca.variacoes,
+        },
+        {
+          fabricanteId: fabricanteCriado?.id,
+          fabricanteNome: fabricanteCriado?.nome,
+          modeloId: modeloCriado?.id,
+          modeloNome: modeloCriado?.nome,
+          variacaoId: variacaoCriada?.id,
+        }
+      );
       reset();
       onOpenChange(false);
     } catch (error) {
@@ -93,6 +153,24 @@ const PecaQuickCreateDialog = ({
               placeholder="Preco opcional"
             />
           </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Fabricante</Label>
+              <Input
+                value={fabricante}
+                onChange={(event) => setFabricante(event.target.value)}
+                placeholder="Opcional"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Modelo</Label>
+              <Input
+                value={modelo}
+                onChange={(event) => setModelo(event.target.value)}
+                placeholder="Opcional"
+              />
+            </div>
+          </div>
           <div className="space-y-2">
             <Label>Descricao</Label>
             <Textarea
@@ -107,7 +185,15 @@ const PecaQuickCreateDialog = ({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button onClick={handleSubmit} disabled={criar.isPending}>
+          <Button
+            onClick={handleSubmit}
+            disabled={
+              criar.isPending ||
+              criarFabricante.isPending ||
+              criarModelo.isPending ||
+              criarVariacao.isPending
+            }
+          >
             <Save className="w-4 h-4 mr-2" />
             Salvar peca
           </Button>

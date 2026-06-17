@@ -45,6 +45,8 @@ import {
 
 const ALL = "__all__";
 
+const formatListIndex = (index: number) => String(index + 1).padStart(3, "0");
+
 const Empresas = () => {
   const [search, setSearch] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -417,6 +419,9 @@ const Empresas = () => {
               <thead>
                 <tr className="border-b bg-muted/50">
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
+                    Nº
+                  </th>
+                  <th className="text-left px-5 py-3 font-medium text-muted-foreground">
                     Nome
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
@@ -447,11 +452,15 @@ const Empresas = () => {
               </thead>
 
               <tbody>
-                {visibleEmpresas.map((e) => (
+                {visibleEmpresas.map((e, index) => (
                   <tr
                     key={e.id}
                     className="border-b last:border-0 hover:bg-muted/30 transition-colors"
                   >
+                    <td className="px-5 py-3 font-mono text-xs text-muted-foreground">
+                      {formatListIndex(index)}
+                    </td>
+
                     <td className="px-5 py-3 font-medium text-foreground">
                       <button
                         type="button"
@@ -524,7 +533,7 @@ const Empresas = () => {
                 {filtered.length === 0 && (
                   <tr>
                     <td
-                      colSpan={9}
+                      colSpan={10}
                       className="px-5 py-8 text-center text-sm text-muted-foreground"
                     >
                       Nenhuma empresa cadastrada no Supabase.
