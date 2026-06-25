@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ListarOrdensServicoPaginadoFiltros,
   OrdemServicoFormInput,
+  OrdensServicoPaginadoResult,
   OrdemServicoSupabase,
   ordensServicoService,
 } from "@/services/ordensServicoService";
@@ -20,6 +22,16 @@ export const useOrdensServico = () => {
   return useQuery<OrdemServicoSupabase[]>({
     queryKey: ORDENS_SERVICO_QUERY_KEY,
     queryFn: ordensServicoService.listar,
+  });
+};
+
+export const useOrdensServicoPaginadas = (
+  filtros: ListarOrdensServicoPaginadoFiltros
+) => {
+  return useQuery<OrdensServicoPaginadoResult>({
+    queryKey: [...ORDENS_SERVICO_QUERY_KEY, "paginado", filtros],
+    queryFn: () => ordensServicoService.listarPaginado(filtros),
+    placeholderData: (previousData) => previousData,
   });
 };
 

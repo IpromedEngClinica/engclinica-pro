@@ -1,7 +1,10 @@
 import aciLogo from "@/assets/aci-logo-hd.png";
 import type { CalibracaoExecucao } from "@/services/calibracaoExecucoesService";
 import { formatNomeArquivoCertificadoCalibracao } from "@/services/calibracaoExecucoesService";
-import { buildCalibracaoCertificadoHtml } from "@/utils/calibracaoCertificadoPdfTemplate";
+import {
+  buildCalibracaoCertificadoHtml,
+  CALIBRACAO_CERTIFICADO_FOOTER,
+} from "@/utils/calibracaoCertificadoPdfTemplate";
 import { renderHtmlToPdf } from "@/utils/pdfHtmlRenderer";
 import { imageToDataUrl } from "@/utils/pdfImageUtils";
 import { assinaturasService } from "@/services/assinaturasService";
@@ -23,5 +26,7 @@ export const gerarPdfCalibracaoCertificado = async (
     html: buildCalibracaoCertificadoHtml(execucao, logo, assinaturas),
     fileName: formatNomeArquivoCertificadoCalibracao(execucao),
     save,
+    footerText: CALIBRACAO_CERTIFICADO_FOOTER,
+    footerHeightMm: 16,
   });
 };

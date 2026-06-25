@@ -4,7 +4,7 @@ import { formatNumeroCertificadoCalibracao } from "@/services/calibracaoExecucoe
 import { formatarDataPadrao, formatarLocalCalibracao, formatarMesAno } from "@/utils/calibracaoValidade";
 import { formatarNumeroComCasas, formatDecimalPtBr, obterCasasResolucaoEquipamento } from "@/utils/numberUtils";
 
-const FOOTER =
+export const CALIBRACAO_CERTIFICADO_FOOTER =
   "ACI Comercio LTDA - Assistencia Tecnica Hospitalar e Engenharia Clinica - Rua Jose Martins da Silva, 215 - Ceramica - Juiz de Fora - MG - CEP 36.080-370 - PABX: (32) 3221-7944 - E-mail: acicomercio@yahoo.com.br - CNPJ: 71.208.094/0001-37";
 const RESPONSAVEL_TECNICO = "Ícaro Heitor Piris Rezende";
 const RESPONSAVEL_TECNICO_CREA = "CREA: 142085302-3";
@@ -31,6 +31,17 @@ const condicaoAmbiental = (
 const field = (label: string, value?: string | number | null) =>
   `<div><small>${esc(label)}</small><strong>${esc(value)}</strong></div>`;
 
+const resultadoCalibracao = (value?: string | null) => {
+  const map: Record<string, string> = {
+    conforme: "Conforme",
+    nao_conforme: "Nao conforme",
+    sem_criterio: "-",
+    sem_declaracao_conformidade: "-",
+  };
+
+  return value ? map[value] || value : "-";
+};
+
 const styles = `
   *{box-sizing:border-box} body{margin:0;background:#fff;color:#1f2937;font:13px Arial,sans-serif}
   .document{width:1123px;min-height:1588px;padding:42px;background:#fff}
@@ -41,8 +52,10 @@ const styles = `
   table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px;page-break-inside:auto} thead{display:table-header-group}
   tr{page-break-inside:avoid} th,td{border:1px solid #e5e7eb;padding:6px;text-align:left} th{background:#f3f4f6}
   .note{white-space:pre-wrap;border-left:3px solid #c5161d;background:#fff7f7;padding:10px;line-height:1.45}
+  .result-block{break-inside:avoid;page-break-inside:avoid;margin-top:10px}
+  .result-block h3{margin:0 0 6px;font-size:14px;page-break-after:avoid}
+  .division{margin:0 0 6px;color:#374151}
   .sign{display:grid;grid-template-columns:1fr 1fr;gap:50px;margin-top:42px;text-align:center}.line{border-top:1px solid #777;padding-top:8px}.signature-image{height:64px;display:flex;align-items:flex-end;justify-content:center;margin-bottom:3px}.signature-image img{display:block;max-width:90%;max-height:62px;object-fit:contain}
-  footer{border-top:1px solid #ddd;margin-top:32px;padding-top:8px;color:#6b7280;font-size:10px;text-align:center}
 `;
 
 export const buildCalibracaoCertificadoHtml = (
@@ -97,15 +110,17 @@ export const buildCalibracaoCertificadoHtml = (
         tabela.resolucao_equipamento_texto_snapshot,
         tabela.resolucao_equipamento_snapshot
       );
-      return `<h3>${esc(tabela.nome_snapshot)}</h3><div>Valor de uma divisao: ${esc(tabela.resolucao_equipamento_texto_snapshot || decimal(tabela.resolucao_equipamento_snapshot))} ${esc(tabela.unidade_snapshot)}</div>
+      return `<section class="result-block"><h3>${esc(tabela.nome_snapshot)}</h3><div class="division">Valor de uma divisao: ${esc(tabela.resolucao_equipamento_texto_snapshot || decimal(tabela.resolucao_equipamento_snapshot))} ${esc(tabela.unidade_snapshot)}</div>
       <table><thead><tr><th>Valor nominal/referencia</th><th>Media dos valores medidos</th><th>Tendencia</th><th>Incerteza expandida</th><th>k</th>${execucao.criterio_conformidade_aplicado ? "<th>Resultado</th>" : ""}</tr></thead>
-      <tbody>${(tabela.pontos || []).map((ponto) => `<tr><td>${esc(ponto.valor_nominal_texto_snapshot || decimal(ponto.valor_nominal))}</td><td>${formatarNumeroComCasas(ponto.media_valores_medidos, casasResolucaoEquipamento)}</td><td>${formatarNumeroComCasas(ponto.tendencia_corrigida ?? ponto.tendencia_bruta, casasResolucaoEquipamento)}</td><td>${incertezaReportada(ponto.incerteza_expandida_reportada ?? ponto.incerteza_expandida, ponto.casas_decimais_incerteza)}</td><td>${decimal(ponto.fator_abrangencia_k)}</td>${execucao.criterio_conformidade_aplicado ? `<td>${esc(ponto.resultado_conformidade)}</td>` : ""}</tr>`).join("")}</tbody></table>`;
+      <tbody>${(tabela.pontos || []).map((ponto) => {
+        const casasResultado = ponto.casas_decimais_incerteza ?? casasResolucaoEquipamento;
+        return `<tr><td>${esc(ponto.valor_nominal_texto_snapshot || decimal(ponto.valor_nominal))}</td><td>${formatarNumeroComCasas(ponto.media_valores_medidos, casasResolucaoEquipamento)}</td><td>${formatarNumeroComCasas(ponto.tendencia_corrigida ?? ponto.tendencia_bruta, casasResultado)}</td><td>${incertezaReportada(ponto.incerteza_expandida_reportada ?? ponto.incerteza_expandida, ponto.casas_decimais_incerteza)}</td><td>${decimal(ponto.fator_abrangencia_k)}</td>${execucao.criterio_conformidade_aplicado ? `<td>${esc(resultadoCalibracao(ponto.resultado_conformidade))}</td>` : ""}</tr>`;
+      }).join("")}</tbody></table></section>`;
     }).join("")}
-    <h2>Resumo da Calibracao</h2><section class="grid">${field("Local", formatarLocalCalibracao(execucao.local_calibracao))}${field("Data da calibracao", date(execucao.data_calibracao))}${field("Emitido em", date(execucao.data_emissao))}${field("Valido ate", formatarMesAno(execucao.validade_mes || execucao.data_validade))}${field("Numero", numero)}${execucao.numero_revisao > 0 ? field("Revisao", execucao.numero_revisao) : ""}${execucao.criterio_conformidade_aplicado ? field("Resultado geral", execucao.resultado_geral) : ""}</section>
+    <h2>Resumo da Calibracao</h2><section class="grid">${field("Local", formatarLocalCalibracao(execucao.local_calibracao))}${field("Data da calibracao", date(execucao.data_calibracao))}${field("Emitido em", date(execucao.data_emissao))}${field("Valido ate", formatarMesAno(execucao.validade_mes || execucao.data_validade))}${field("Numero", numero)}${execucao.numero_revisao > 0 ? field("Revisao", execucao.numero_revisao) : ""}${execucao.criterio_conformidade_aplicado ? field("Resultado geral", resultadoCalibracao(execucao.resultado_geral)) : ""}</section>
     <div class="sign">
       <div><div class="signature-image">${assinaturas.tecnico?.dataUrl ? `<img src="${assinaturas.tecnico.dataUrl}" alt="Assinatura do tecnico executor">` : ""}</div><div class="line">${esc(assinaturas.tecnico?.nome || execucao.tecnico_executor_nome)}<br>Tecnico Executor</div></div>
       <div><div class="signature-image">${assinaturas.responsavel?.dataUrl ? `<img src="${assinaturas.responsavel.dataUrl}" alt="Assinatura do responsavel tecnico">` : ""}</div><div class="line">${esc(assinaturas.responsavel?.nome || execucao.responsavel_tecnico_nome || RESPONSAVEL_TECNICO)}<br>${esc(execucao.responsavel_tecnico_registro || RESPONSAVEL_TECNICO_CREA)}<br>Responsavel Tecnico / Signatario Autorizado</div></div>
     </div>
-    <footer>${esc(FOOTER)}</footer>
   </main></body></html>`;
 };

@@ -57,7 +57,7 @@ const campos: Array<{
 }> = [
   { key: "empresa", label: "Proprietário *", width: "min-w-[250px]" },
   { key: "tipo", label: "Tipo *", width: "min-w-[210px]" },
-  { key: "fabricante", label: "Fabricante *", width: "min-w-[180px]" },
+  { key: "fabricante", label: "Fabricante", width: "min-w-[180px]" },
   { key: "modelo", label: "Modelo", width: "min-w-[170px]" },
   { key: "tag", label: "TAG", width: "min-w-[150px]" },
   { key: "numeroSerie", label: "Nº de série", width: "min-w-[170px]" },
@@ -379,13 +379,6 @@ const EquipamentosLoteDialog = ({
         return;
       }
 
-      if (!equipamento.fabricante?.trim()) {
-        toast({
-          title: `Informe o fabricante na linha ${linha}.`,
-          variant: "destructive",
-        });
-        return;
-      }
     }
 
     const duplicado =

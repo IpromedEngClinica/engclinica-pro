@@ -134,7 +134,7 @@ const OrdemServicoFormDialog = ({
   const criarOS = useCriarOrdemServico();
   const atualizarOS = useAtualizarOrdemServico();
 
-  const { data: empresas = [] } = useEmpresas("ativas");
+  const { data: empresas = [] } = useEmpresas({ statusFiltro: "ativas" });
   const { data: equipamentos = [] } = useEquipamentos();
   const { data: tiposOS = [] } = useTiposOS();
   const { data: estadosOS = [] } = useEstadosOS();

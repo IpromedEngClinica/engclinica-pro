@@ -58,9 +58,9 @@ describe("calibracaoCertificadoPdfTemplate", () => {
     expect(html).toContain("50 ± 5 %");
     expect(html).toContain("Ícaro Heitor Piris Rezende");
     expect(html).toContain("CREA: 142085302-3");
-    expect(html).toContain("30 - 01 - 2027");
+    expect(html).toContain("30/01/2027");
     expect(html).toContain("Valor de uma divisao: 0,10");
-    expect(html).toContain("<td>10,00</td><td>10,00</td><td>0,04</td>");
+    expect(html).toContain("<td>10,00</td><td>10,00</td><td>0,0</td>");
     expect(html).toContain("<td>0,2</td>");
     expect(html).not.toContain("REGISTRO-NAO-EXIBIR");
     expect(html).not.toContain("0,183746");

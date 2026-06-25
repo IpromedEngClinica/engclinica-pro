@@ -26,6 +26,7 @@ import {
   useUploadContratoDocumento,
 } from "@/hooks/useContratos";
 import { toast } from "@/hooks/use-toast";
+import { CONTRATO_VENDEDORES } from "@/services/contratosService";
 import type {
   ContratoFormInput,
   ContratoSupabase,
@@ -83,8 +84,17 @@ const emptyForm = {
   termosAditivosLimite: "",
   periodicidadeVisita: "",
   vendedor: "",
+  valorPrevisto: "",
+  mesUltimaVisita: "",
   objeto: "",
   observacoes: "",
+};
+
+const parseCurrency = (value: string) => {
+  const normalized = value.replace(/\./g, "").replace(",", ".").trim();
+  if (!normalized) return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
 };
 
 const getEmpresaLabel = (empresa: {
@@ -146,6 +156,13 @@ const ContratoFormDialog = ({
             : String(contrato.termos_aditivos_limite),
         periodicidadeVisita: contrato.periodicidade_visita || "",
         vendedor: contrato.vendedor || "",
+        valorPrevisto:
+          contrato.valor_previsto === null || contrato.valor_previsto === undefined
+            ? ""
+            : String(contrato.valor_previsto).replace(".", ","),
+        mesUltimaVisita: contrato.mes_ultima_visita
+          ? contrato.mes_ultima_visita.slice(0, 7)
+          : "",
         objeto: contrato.objeto || "",
         observacoes: contrato.observacoes || "",
       });
@@ -186,6 +203,8 @@ const ContratoFormDialog = ({
       : null,
     periodicidadeVisita: form.periodicidadeVisita || null,
     vendedor: form.vendedor,
+    valorPrevisto: parseCurrency(form.valorPrevisto),
+    mesUltimaVisita: form.mesUltimaVisita || null,
     objeto: form.objeto,
     observacoes: form.observacoes,
   });
@@ -399,7 +418,7 @@ const ContratoFormDialog = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="space-y-2">
               <Label>Periodicidade de visita</Label>
               <Select
@@ -424,14 +443,47 @@ const ContratoFormDialog = ({
 
             <div className="space-y-2">
               <Label>Vendedor</Label>
+              <Select
+                value={form.vendedor || NONE}
+                onValueChange={(value) =>
+                  update("vendedor", value === NONE ? "" : value)
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>Nao informado</SelectItem>
+                  {CONTRATO_VENDEDORES.map((vendedor) => (
+                    <SelectItem key={vendedor} value={vendedor}>
+                      {vendedor}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Valor previsto</Label>
               <Input
-                value={form.vendedor}
-                onChange={(event) => update("vendedor", event.target.value)}
-                placeholder="Ex: Lauro"
+                value={form.valorPrevisto}
+                onChange={(event) => update("valorPrevisto", event.target.value)}
+                placeholder="Ex: 1.500,00"
               />
             </div>
 
-            <div className="flex items-end">
+            <div className="space-y-2">
+              <Label>Mes da ultima visita</Label>
+              <Input
+                type="month"
+                value={form.mesUltimaVisita}
+                onChange={(event) =>
+                  update("mesUltimaVisita", event.target.value)
+                }
+              />
+            </div>
+
+            <div className="flex items-end md:col-span-4">
               <label className="flex items-center gap-2 text-sm font-medium">
                 <Checkbox
                   checked={form.contratoOuTaNaPasta}

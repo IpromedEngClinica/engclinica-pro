@@ -102,6 +102,7 @@ const EquipamentoFormDialog = ({
 
   const readOnly = mode === "view";
   const saving = criarEquipamento.isPending || atualizarEquipamento.isPending;
+  const statusLocadoAutomatico = form.status === "Locado";
 
   const empresasDisponiveis = useMemo(
     () =>
@@ -252,14 +253,6 @@ const EquipamentoFormDialog = ({
       return;
     }
 
-    if (!form.fabricante?.trim()) {
-      toast({
-        title: "Informe o fabricante do equipamento.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     try {
       const payload: EquipamentoFormInput = {
         ...form,
@@ -348,7 +341,7 @@ const EquipamentoFormDialog = ({
             </div>
 
             <div className="space-y-2">
-              <Label className="text-sm">Fabricante *</Label>
+              <Label className="text-sm">Fabricante</Label>
               <Input
                 placeholder="Ex: Philips"
                 value={form.fabricante}
@@ -369,7 +362,7 @@ const EquipamentoFormDialog = ({
 
             <div className="space-y-2">
               <Label className="text-sm">{readOnly ? "Status" : "Estado"}</Label>
-              {readOnly ? (
+              {readOnly || statusLocadoAutomatico ? (
                 <Input
                   value={getEquipamentoStatusLabel(equipamento, form.status)}
                   disabled

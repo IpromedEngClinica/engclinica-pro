@@ -9,6 +9,10 @@ import { assinaturasService } from "@/services/assinaturasService";
 import { imageToDataUrl } from "@/utils/pdfImageUtils";
 import { renderHtmlToPdf } from "@/utils/pdfHtmlRenderer";
 import { calcularValidadeFimDoMes } from "@/utils/planoDatas";
+import { getPlanoFrequenciaLabel } from "@/utils/planoFrequencia";
+
+const PLANO_RELATORIO_FOOTER =
+  "ACI Comercio LTDA - Assistencia Tecnica Hospitalar e Engenharia Clinica - Rua Jose Martins da Silva, 215 - Ceramica - Juiz de Fora - MG - CEP 36.080-370 - PABX: (32) 3221-7944 - E-mail: acicomercio@yahoo.com.br - CNPJ: 71.208.094/0001-37";
 
 type PreventivaClassificada = {
   item: PlanoCicloItem;
@@ -61,6 +65,9 @@ const fabricanteModelo = (item: PlanoCicloItem) =>
 
 const setorNome = (item: PlanoCicloItem) => item.setor?.nome_snapshot || "Sem setor";
 
+const frequenciaLabel = (value?: string | null) =>
+  getPlanoFrequenciaLabel(value);
+
 const getChecklist = (os: OrdemServicoSupabase | null) => {
   const checklist = os?.checklist_preventiva;
   if (Array.isArray(checklist)) return checklist[0] || null;
@@ -73,6 +80,17 @@ const formatAprovacao = (value?: string | null) => {
     nao_aprovado: "Nao aprovado",
     aprovado_com_restricao: "Aprovado com restricao",
   };
+  return value ? map[value] || value : "-";
+};
+
+const formatResultadoCalibracao = (value?: string | null) => {
+  const map: Record<string, string> = {
+    conforme: "Conforme",
+    nao_conforme: "Nao conforme",
+    sem_declaracao_conformidade: "-",
+    sem_criterio: "-",
+  };
+
   return value ? map[value] || value : "-";
 };
 
@@ -214,6 +232,7 @@ export const gerarPdfRelatorioCicloPlano = async (
   const emitidoEmDate = opcoes?.emitidoEm || new Date().toISOString().slice(0, 10);
   const validadeMeses = Number(opcoes?.validadeMeses || ciclo.relatorio_validade_meses || 12);
   const validadeAte = calcularValidadeFimDoMes(ciclo.data_abertura, validadeMeses);
+  const frequenciaPlanoLabel = frequenciaLabel(plano.frequencia);
   const naoConformesTotal = naoConformes.length + corretivasNaoConformes.length;
 
   const resumoSetores = setores.map((setor) => {
@@ -271,7 +290,7 @@ export const gerarPdfRelatorioCicloPlano = async (
     execucao?.numero_certificado || "-",
     formatDate(execucao?.data_calibracao || item.concluido_em),
     formatDate(execucao?.data_validade || execucao?.validade_mes || null),
-    execucao?.resultado_geral || "Executada",
+    formatResultadoCalibracao(execucao?.resultado_geral),
   ]);
 
   const segurancaRows = segurancasEletricas.map((item, index) => [
@@ -373,7 +392,6 @@ export const gerarPdfRelatorioCicloPlano = async (
         .signature-image img { max-width: 300px; max-height: 68px; object-fit: contain; }
         .signature-line { border-top: 1px solid #9ca3af; padding-top: 7px; font-size: 12px; color: #374151; }
         .signature-line strong { display: block; font-size: 13px; color: #1f2937; }
-        .footer-note { margin-top: 24px; color: #666; font-size: 10px; text-align: center; }
       </style>
       <div class="topbar"></div>
       <section class="header">
@@ -391,7 +409,7 @@ export const gerarPdfRelatorioCicloPlano = async (
         <div><span class="label">Responsavel</span><span class="value">${escapeHtml(plano.responsavel?.nome)}</span></div>
         <div><span class="label">Emissao</span><span class="value">${formatDate(emitidoEmDate)}</span></div>
         <div class="validity"><span class="label">Validade ate</span><span class="value">${formatDate(validadeAte)}</span></div>
-        <div><span class="label">Frequencia</span><span class="value">${escapeHtml(plano.frequencia)}</span></div>
+        <div><span class="label">Frequencia</span><span class="value">${escapeHtml(frequenciaPlanoLabel)}</span></div>
       </section>
 
       <section class="cards">
@@ -409,7 +427,7 @@ export const gerarPdfRelatorioCicloPlano = async (
       <h2>${numeroProximaVisita}. Proxima visita</h2>
       <section class="meta">
         <div><span class="label">Proxima visita prevista</span><span class="value">${formatDate(proximaVisita(ciclo.data_prevista, plano.frequencia))}</span></div>
-        <div><span class="label">Frequencia do plano</span><span class="value">${escapeHtml(plano.frequencia)}</span></div>
+        <div><span class="label">Frequencia do plano</span><span class="value">${escapeHtml(frequenciaPlanoLabel)}</span></div>
         <div class="validity"><span class="label">Validade do relatorio</span><span class="value">${formatDate(validadeAte)}</span></div>
       </section>
 
@@ -421,7 +439,6 @@ export const gerarPdfRelatorioCicloPlano = async (
         </div>
       </section>
 
-      <p class="footer-note">ACI Equipamentos Hospitalares - Gerado em ${formatDateTime(new Date().toISOString())}</p>
     </div>
   `;
 
@@ -429,5 +446,7 @@ export const gerarPdfRelatorioCicloPlano = async (
     html,
     fileName: `relatorio_plano_${normalizeRelatorioPlanoFileName(plano.titulo)}_${normalizeRelatorioPlanoFileName(ciclo.titulo)}.pdf`,
     save: opcoes?.save ?? true,
+    footerText: `${PLANO_RELATORIO_FOOTER} - Gerado em ${formatDateTime(new Date().toISOString())}`,
+    footerHeightMm: 16,
   });
 };

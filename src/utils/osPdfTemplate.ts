@@ -2,7 +2,7 @@ import type { EmpresaSupabase } from "@/services/empresasService";
 import type { OrdemServicoSupabase } from "@/services/ordensServicoService";
 import type { AssinaturasDocumento } from "@/services/assinaturasService";
 
-const FOOTER_TEXT =
+export const ORDEM_SERVICO_FOOTER_TEXT =
   "ACI Comércio LTDA - Assistência Técnica Hospitalar e Engenharia Clínica - Rua José Martins da Silva, 215 - Cerâmica - Juiz de Fora - MG Cep 36.080-370 - Pabx 32 3221-7944 - E-mail: acicomercio@yahoo.com.br - CNPJ: 71.208.094/0001-37";
 
 const escapeHtml = (value?: string | number | null) => {
@@ -767,18 +767,6 @@ export const buildOrdemServicoHtml = (
       line-height: 1.25;
     }
 
-    .footer {
-      margin-top: 22px;
-      padding-top: 8px;
-      padding-bottom: 10px;
-      border-top: 1px solid var(--border);
-      color: #9CA3AF;
-      font-size: 7.2pt;
-      line-height: 1.35;
-      text-align: center;
-      break-inside: avoid;
-      page-break-inside: avoid;
-    }
   </style>
 </head>
 
@@ -970,10 +958,6 @@ export const buildOrdemServicoHtml = (
       </div>
 
     </section>
-
-    <footer class="footer">
-      ${escapeHtml(FOOTER_TEXT)}
-    </footer>
   </main>
 </body>
 </html>

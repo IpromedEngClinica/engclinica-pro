@@ -4,7 +4,7 @@ import CalibracaoProcedimentoTabelaEditor, {
   type CalibracaoProcedimentoPontoDraft,
   type CalibracaoProcedimentoTabelaDraft,
 } from "@/components/CalibracaoProcedimentoTabelaEditor";
-import SearchableSelect from "@/components/SearchableSelect";
+import SearchableMultiSelect from "@/components/SearchableMultiSelect";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -45,14 +45,14 @@ interface Props {
 
 type FormDraft = {
   nome: string;
-  tipoEquipamentoId: string;
+  tipoEquipamentoIds: string[];
   metodoReferencia: string;
   observacoes: string;
 };
 
 const emptyForm: FormDraft = {
   nome: "",
-  tipoEquipamentoId: "",
+  tipoEquipamentoIds: [],
   metodoReferencia: "",
   observacoes: "",
 };
@@ -75,8 +75,6 @@ const novaTabela = (): CalibracaoProcedimentoTabelaDraft => ({
   padraoId: "",
   padraoTabelaId: "",
   modoPreenchimento: "manual",
-  quantidadeLeituras: 1,
-  tipoMedida: "",
   resolucaoPadraoDefault: "",
   resolucaoEquipamentoDefault: "",
   faixaUsoMin: "",
@@ -111,12 +109,9 @@ const CalibracaoProcedimentoFormDialog = ({
   const [saving, setSaving] = useState(false);
 
   const tipoOptions = useMemo(
-    () => tiposEquipamento.map((tipo) => tipo.nome),
+    () => tiposEquipamento.map((tipo) => ({ value: tipo.id, label: tipo.nome })),
     [tiposEquipamento]
   );
-  const tipoSelecionado =
-    tiposEquipamento.find((tipo) => tipo.id === form.tipoEquipamentoId)?.nome ||
-    "";
 
   useEffect(() => {
     if (!open) return;
@@ -137,8 +132,6 @@ const CalibracaoProcedimentoFormDialog = ({
       padraoId: tabela.padrao_id || "",
       padraoTabelaId: tabela.padrao_tabela_id || "",
       modoPreenchimento: "manual",
-      quantidadeLeituras: tabela.quantidade_leituras,
-      tipoMedida: tabela.tipo_medida || "",
       resolucaoPadraoDefault: formatDecimalPtBr(tabela.resolucao_padrao_default),
       resolucaoEquipamentoDefault: formatDecimalPtBr(
         tabela.resolucao_equipamento_default
@@ -168,7 +161,9 @@ const CalibracaoProcedimentoFormDialog = ({
 
     setForm({
       nome: procedimento.nome,
-      tipoEquipamentoId: procedimento.tipo_equipamento_id || "",
+      tipoEquipamentoIds:
+        procedimento.tipos_equipamento?.map((tipo) => tipo.id) ||
+        (procedimento.tipo_equipamento_id ? [procedimento.tipo_equipamento_id] : []),
       metodoReferencia: procedimento.metodo_referencia || "",
       observacoes: procedimento.observacoes || "",
     });
@@ -275,78 +270,92 @@ const CalibracaoProcedimentoFormDialog = ({
   };
 
   const buildTabelasInput = (): CalibracaoProcedimentoTabelaInput[] =>
-    tabelas.map((tabela, ordem) => ({
-      id: tabela.id,
-      nome: tabela.nome,
-      grandeza: tabela.grandeza,
-      unidade: tabela.unidade,
-      padraoId: tabela.padraoId,
-      padraoTabelaId: tabela.padraoTabelaId,
-      ordem,
-      modoPreenchimento: "manual",
-      quantidadeLeituras: tabela.quantidadeLeituras,
-      tipoMedida: tabela.tipoMedida,
-      resolucaoPadraoDefault: parseOpcional(
-        tabela.resolucaoPadraoDefault,
-        tabela.nome,
-        "Resolucao do padrao"
-      ),
-      resolucaoEquipamentoDefault: parseOpcional(
-        tabela.resolucaoEquipamentoDefault,
-        tabela.nome,
-        "Resolucao do equipamento"
-      ),
-      faixaUsoMin: parseOpcional(
-        tabela.faixaUsoMin,
-        tabela.nome,
-        "Faixa de uso minima"
-      ),
-      faixaUsoMax: parseOpcional(
-        tabela.faixaUsoMax,
-        tabela.nome,
-        "Faixa de uso maxima"
-      ),
-      capacidadeMin: parseOpcional(
-        tabela.capacidadeMin,
-        tabela.nome,
-        "Capacidade minima"
-      ),
-      capacidadeMax: parseOpcional(
-        tabela.capacidadeMax,
-        tabela.nome,
-        "Capacidade maxima"
-      ),
-      fatorConfiabilidadeModo: tabela.fatorConfiabilidadeModo,
-      fatorKFixo: parseOpcional(tabela.fatorKFixo, tabela.nome, "k fixo"),
-      incluirCriterioAceitacao: tabela.incluirCriterioAceitacao,
-      criterioAceitacaoTipo: tabela.incluirCriterioAceitacao
-        ? tabela.criterioAceitacaoTipo
-        : null,
-      criterioAceitacaoValorMaximo: parseOpcional(
+    tabelas.map((tabela, ordem) => {
+      const criterioValorMaximo = parseOpcional(
         tabela.criterioAceitacaoValorMaximo,
         tabela.nome,
         "Criterio maximo"
-      ),
-      criterioAceitacaoValorMinimo: parseOpcional(
+      );
+      const criterioValorMinimo = parseOpcional(
         tabela.criterioAceitacaoValorMinimo,
         tabela.nome,
         "Criterio minimo"
-      ),
-      corrigirErroSistematico: tabela.corrigirErroSistematico,
-      pontos: tabela.pontos.map((ponto, pontoOrdem) => ({
-        id: ponto.id,
-        ordem: pontoOrdem,
-        valorNominal: requireDecimal(
-          ponto.valorNominal,
-          `"VN/VR" da tabela "${tabela.nome}", linha ${pontoOrdem + 1}`
+      );
+      const criterioConfigurado =
+        criterioValorMaximo !== null &&
+        (tabela.criterioAceitacaoTipo !== "faixa" ||
+          criterioValorMinimo !== null);
+
+      return {
+        id: tabela.id,
+        nome: tabela.nome,
+        grandeza: tabela.grandeza,
+        unidade: tabela.unidade,
+        padraoId: tabela.padraoId,
+        padraoTabelaId: tabela.padraoTabelaId,
+        ordem,
+        modoPreenchimento: "manual",
+        quantidadeLeituras: 1,
+        tipoMedida: null,
+        resolucaoPadraoDefault: parseOpcional(
+          tabela.resolucaoPadraoDefault,
+          tabela.nome,
+          "Resolucao do padrao"
         ),
-        valorNominalTexto: ponto.valorNominal.trim() || null,
-      })),
-    }));
+        resolucaoEquipamentoDefault: parseOpcional(
+          tabela.resolucaoEquipamentoDefault,
+          tabela.nome,
+          "Resolucao do equipamento"
+        ),
+        faixaUsoMin: parseOpcional(
+          tabela.faixaUsoMin,
+          tabela.nome,
+          "Faixa de uso minima"
+        ),
+        faixaUsoMax: parseOpcional(
+          tabela.faixaUsoMax,
+          tabela.nome,
+          "Faixa de uso maxima"
+        ),
+        capacidadeMin: parseOpcional(
+          tabela.capacidadeMin,
+          tabela.nome,
+          "Capacidade minima"
+        ),
+        capacidadeMax: parseOpcional(
+          tabela.capacidadeMax,
+          tabela.nome,
+          "Capacidade maxima"
+        ),
+        fatorConfiabilidadeModo: tabela.fatorConfiabilidadeModo,
+        fatorKFixo: parseOpcional(tabela.fatorKFixo, tabela.nome, "k fixo"),
+        incluirCriterioAceitacao: criterioConfigurado,
+        criterioAceitacaoTipo: criterioConfigurado
+          ? tabela.criterioAceitacaoTipo
+          : null,
+        criterioAceitacaoValorMaximo: criterioConfigurado
+          ? criterioValorMaximo
+          : null,
+        criterioAceitacaoValorMinimo:
+          criterioConfigurado && tabela.criterioAceitacaoTipo === "faixa"
+            ? criterioValorMinimo
+            : null,
+        corrigirErroSistematico: tabela.corrigirErroSistematico,
+        pontos: tabela.pontos.map((ponto, pontoOrdem) => ({
+          id: ponto.id,
+          ordem: pontoOrdem,
+          valorNominal: requireDecimal(
+            ponto.valorNominal,
+            `"VN/VR" da tabela "${tabela.nome}", linha ${pontoOrdem + 1}`
+          ),
+          valorNominalTexto: ponto.valorNominal.trim() || null,
+        })),
+      };
+    });
 
   const validar = () => {
-    if (!form.nome.trim() || !form.tipoEquipamentoId) {
-      throw new Error("Preencha nome e tipo de equipamento.");
+    if (!form.nome.trim() || !form.tipoEquipamentoIds.length) {
+      throw new Error("Preencha nome e ao menos um tipo de equipamento.");
     }
     if (!tabelas.length) throw new Error("Adicione ao menos uma tabela.");
 
@@ -361,11 +370,6 @@ const CalibracaoProcedimentoFormDialog = ({
       if (!padrao.tabelas?.some((item) => item.id === tabela.padraoTabelaId)) {
         throw new Error(
           `Selecione a tabela metrologica do padrao na tabela "${tabela.nome}".`
-        );
-      }
-      if (tabela.quantidadeLeituras < 1) {
-        throw new Error(
-          `A tabela "${tabela.nome}" deve possuir ao menos uma leitura.`
         );
       }
       if (!tabela.pontos.length) {
@@ -389,20 +393,28 @@ const CalibracaoProcedimentoFormDialog = ({
         );
       }
       if (
-        tabela.incluirCriterioAceitacao &&
+        tabela.criterioAceitacaoValorMaximo.trim() &&
         normalizeDecimalInput(tabela.criterioAceitacaoValorMaximo) === null
       ) {
         throw new Error(
-          `Informe o valor maximo do criterio na tabela "${tabela.nome}".`
+          `Valor maximo do criterio invalido na tabela "${tabela.nome}".`
         );
       }
       if (
-        tabela.incluirCriterioAceitacao &&
-        tabela.criterioAceitacaoTipo === "faixa" &&
+        tabela.criterioAceitacaoValorMinimo.trim() &&
         normalizeDecimalInput(tabela.criterioAceitacaoValorMinimo) === null
       ) {
         throw new Error(
-          `Informe o valor minimo do criterio na tabela "${tabela.nome}".`
+          `Valor minimo do criterio invalido na tabela "${tabela.nome}".`
+        );
+      }
+      if (
+        tabela.criterioAceitacaoTipo === "faixa" &&
+        tabela.criterioAceitacaoValorMaximo.trim() &&
+        !tabela.criterioAceitacaoValorMinimo.trim()
+      ) {
+        throw new Error(
+          `Informe o valor minimo do criterio de faixa na tabela "${tabela.nome}".`
         );
       }
     }
@@ -415,7 +427,7 @@ const CalibracaoProcedimentoFormDialog = ({
       setSaving(true);
       const input: CalibracaoProcedimentoFormInput = {
         nome: form.nome,
-        tipoEquipamentoId: form.tipoEquipamentoId,
+        tipoEquipamentoIds: form.tipoEquipamentoIds,
         metodoReferencia: form.metodoReferencia,
         observacoes: form.observacoes,
       };
@@ -470,19 +482,15 @@ const CalibracaoProcedimentoFormDialog = ({
                 onChange={(nome) => setForm((current) => ({ ...current, nome }))}
               />
               <div className="space-y-2 md:col-span-2">
-                <Label>Tipo de equipamento *</Label>
-                <SearchableSelect
-                  value={tipoSelecionado}
+                <Label>Tipos de equipamento *</Label>
+                <SearchableMultiSelect
+                  value={form.tipoEquipamentoIds}
                   options={tipoOptions}
-                  placeholder="Selecione o tipo"
+                  placeholder="Selecione os tipos"
                   emptyText="Nenhum tipo encontrado."
-                  onValueChange={(label) =>
-                    setForm((current) => ({
-                      ...current,
-                      tipoEquipamentoId:
-                        tiposEquipamento.find((tipo) => tipo.nome === label)
-                          ?.id || "",
-                    }))
+                  disabled={saving}
+                  onValueChange={(tipoEquipamentoIds) =>
+                    setForm((current) => ({ ...current, tipoEquipamentoIds }))
                   }
                 />
               </div>

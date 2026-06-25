@@ -12,6 +12,7 @@ import { useMemo, useState } from "react";
 import ListLimitSelect, {
   DEFAULT_LIST_LIMIT,
 } from "@/components/ListLimitSelect";
+import ListPagination from "@/components/ListPagination";
 import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
 import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import PageHeader from "@/components/PageHeader";
@@ -26,6 +27,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { usePaginatedList } from "@/hooks/usePaginatedList";
 import { useSegurancaEletrica } from "@/hooks/useSegurancaEletrica";
 import {
   formatNumeroCertificadoSegurancaEletrica,
@@ -92,10 +94,10 @@ const SegurancaEletrica = () => {
     );
   }, [execucoes, search]);
 
-  const visible = useMemo(
-    () => filtered.slice(0, listLimit),
-    [filtered, listLimit]
-  );
+  const {
+    paginatedItems: visible,
+    ...segurancaEletricaPagination
+  } = usePaginatedList(filtered, listLimit);
 
   const openCreate = () => {
     setSelected(null);
@@ -347,6 +349,10 @@ const SegurancaEletrica = () => {
                 ))}
               </tbody>
             </table>
+            <ListPagination
+              {...segurancaEletricaPagination}
+              onPageChange={segurancaEletricaPagination.setPage}
+            />
 
             {visible.length === 0 && (
               <div className="px-5 py-10 text-center text-sm text-muted-foreground">

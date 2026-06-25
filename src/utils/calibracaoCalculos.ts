@@ -102,6 +102,25 @@ export const arredondarParaCasas = (valor: number, casas: number) => {
   return Math.round((valor + Number.EPSILON) * fator) / fator;
 };
 
+export const obterCasasDecimaisAlgarismosSignificativos = (
+  valor: number,
+  algarismosSignificativos = 2
+) => {
+  if (!Number.isFinite(valor) || valor === 0) return 0;
+  const expoente = Math.floor(Math.log10(Math.abs(valor)));
+  return Math.max(0, algarismosSignificativos - 1 - expoente);
+};
+
+export const arredondarParaAlgarismosSignificativos = (
+  valor: number,
+  algarismosSignificativos = 2
+) => {
+  if (!Number.isFinite(valor) || valor === 0) return valor;
+  const expoente = Math.floor(Math.log10(Math.abs(valor)));
+  const fator = Math.pow(10, algarismosSignificativos - 1 - expoente);
+  return Math.round((valor + Number.EPSILON) * fator) / fator;
+};
+
 export const obterCasasDecimaisIncerteza = (
   valorTexto?: string | null,
   valorFallback?: number | null
@@ -171,6 +190,25 @@ export const encontrarPontoPadraoExato = (
   pontos: PontoPadraoCalculo[]
 ) => pontos.find((ponto) => Math.abs(ponto.valorNominal - valorNominal) < 1e-10);
 
+export const encontrarPontoPadraoMaisProximo = (
+  valorNominal: number,
+  pontos: PontoPadraoCalculo[]
+) => {
+  if (!pontos.length) return undefined;
+  return [...pontos].sort(
+    (a, b) =>
+      Math.abs(a.valorNominal - valorNominal) -
+      Math.abs(b.valorNominal - valorNominal)
+  )[0];
+};
+
+export const selecionarPontoPadraoReferencia = (
+  valorNominal: number,
+  pontos: PontoPadraoCalculo[]
+) =>
+  encontrarPontoPadraoExato(valorNominal, pontos) ??
+  encontrarPontoPadraoMaisProximo(valorNominal, pontos);
+
 const calcularLimiteCriterio = (
   valorNominal: number,
   criterio: CriterioAceitacaoCalculo
@@ -223,10 +261,10 @@ export const avaliarConformidade = ({
 export const calcularPontoCalibracao = (input: CalcularPontoInput) => {
   if (!input.leituras.length) throw new Error("Informe ao menos uma leitura.");
   if (input.pontoPadrao.incertezaExpandida == null) {
-    throw new Error("O ponto correspondente do padrao nao possui incerteza expandida.");
+    throw new Error("O ponto de referencia do padrao nao possui incerteza expandida.");
   }
   if (!input.pontoPadrao.fatorAbrangenciaK) {
-    throw new Error("O ponto correspondente do padrao nao possui fator k valido.");
+    throw new Error("O ponto de referencia do padrao nao possui fator k valido.");
   }
 
   const media = calcularMedia(input.leituras) as number;
@@ -267,7 +305,9 @@ export const calcularPontoCalibracao = (input: CalcularPontoInput) => {
       incertezaPadrao: uPadrao,
       grausLiberdade: input.pontoPadrao.grausLiberdade,
       infinito: input.pontoPadrao.veffInfinito ?? !input.pontoPadrao.grausLiberdade,
-      origem: "Certificado do padrao",
+      origem: `Certificado do padrao - ponto de referencia ${
+        input.pontoPadrao.valorNominalTexto || input.pontoPadrao.valorNominal
+      }`,
     },
     {
       nome: "Resolucao do equipamento",
@@ -300,13 +340,13 @@ export const calcularPontoCalibracao = (input: CalcularPontoInput) => {
       : input.fatorK;
   if (!fatorK || fatorK <= 0) throw new Error("Informe um fator k valido.");
   const incertezaExpandidaCalculada = uc * fatorK;
-  const casasDecimaisIncerteza = obterCasasDecimaisIncerteza(
-    input.pontoPadrao.incertezaExpandidaTexto,
-    input.pontoPadrao.incertezaExpandida
-  );
-  const incertezaExpandidaReportada = arredondarParaCasas(
+  const incertezaExpandidaReportada = arredondarParaAlgarismosSignificativos(
     incertezaExpandidaCalculada,
-    casasDecimaisIncerteza
+    2
+  );
+  const casasDecimaisIncerteza = obterCasasDecimaisAlgarismosSignificativos(
+    incertezaExpandidaReportada,
+    2
   );
   const conformidade = avaliarConformidade({
     criterio: input.criterio,

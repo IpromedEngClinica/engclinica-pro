@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -36,6 +37,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import SearchableSelect from "@/components/SearchableSelect";
 import SortableTableHeader from "@/components/SortableTableHeader";
+import ListPagination from "@/components/ListPagination";
 import ListLimitSelect, {
   DEFAULT_LIST_LIMIT,
 } from "@/components/ListLimitSelect";
@@ -50,13 +52,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  useEquipamentos,
   useExcluirEquipamento,
+  useEquipamentosPaginados,
+  useEquipamentosTotal,
 } from "@/hooks/useEquipamentos";
 import {
+  EquipamentosSortField,
   EquipamentoSupabase,
   equipamentosService,
   StatusEquipamentoFiltro,
@@ -124,6 +128,28 @@ const getEquipamentoStatusBadge = (equipamento: EquipamentoSupabase) => {
     );
   }
 
+  if (equipamento.status === "Locado") {
+    return (
+      <Badge
+        variant="outline"
+        className="border-orange-200 bg-orange-100 text-orange-800"
+      >
+        Locado
+      </Badge>
+    );
+  }
+
+  if (equipamento.status === "Em manutenção") {
+    return (
+      <Badge
+        variant="outline"
+        className="border-orange-200 bg-orange-50 text-orange-700"
+      >
+        Em manutenção
+      </Badge>
+    );
+  }
+
   return (
     <Badge
       variant="outline"
@@ -139,11 +165,13 @@ const Equipamentos = () => {
   const { hasPermission } = useAuth();
   const excluirEquipamento = useExcluirEquipamento();
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFiltro, setStatusFiltro] =
     useState<StatusEquipamentoFiltro>("ativos");
   const [sortKey, setSortKey] = useState("numero_cadastro");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [listLimit, setListLimit] = useState(DEFAULT_LIST_LIMIT);
+  const [page, setPage] = useState(1);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [loteOpen, setLoteOpen] = useState(false);
   const [detalhesOpen, setDetalhesOpen] = useState(false);
@@ -177,9 +205,6 @@ const Equipamentos = () => {
   const [equipamentoExclusao, setEquipamentoExclusao] =
     useState<EquipamentoSupabase | null>(null);
 
-  const { data: equipamentos = [], isLoading, isError, error, refetch } =
-    useEquipamentos({ statusFiltro });
-
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const emptyFilters = {
@@ -196,6 +221,99 @@ const Equipamentos = () => {
 
   const [filters, setFilters] = useState(emptyFilters);
 
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedSearch(search), 350);
+    return () => window.clearTimeout(timeout);
+  }, [search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, filters, listLimit, sortDirection, sortKey, statusFiltro]);
+
+  const sortableServerFields = useMemo(
+    () =>
+      new Set<string>([
+        "numero_cadastro",
+        "status",
+        "modelo",
+        "fabricante",
+        "tag",
+        "numero_serie",
+        "patrimonio",
+        "setor",
+      ]),
+    []
+  );
+
+  const equipamentosQueryFiltros = useMemo(
+    () => ({
+      statusFiltro,
+      termo: debouncedSearch,
+      estado: filters.estado === ALL ? undefined : filters.estado,
+      empresaNome: filters.proprietario === ALL ? undefined : filters.proprietario,
+      tipoEquipamentoNome: filters.tipo === ALL ? undefined : filters.tipo,
+      fabricante: filters.fabricante === ALL ? undefined : filters.fabricante,
+      modelo: filters.modelo,
+      tag: filters.tag,
+      serie: filters.serie,
+      patrimonio: filters.patrimonio,
+      setor: filters.setor === ALL ? undefined : filters.setor,
+      page,
+      limit: listLimit,
+      sortBy: (sortableServerFields.has(sortKey)
+        ? sortKey
+        : "numero_cadastro") as EquipamentosSortField,
+      ascending: sortDirection === "asc",
+    }),
+    [
+      debouncedSearch,
+      filters,
+      listLimit,
+      page,
+      sortDirection,
+      sortKey,
+      sortableServerFields,
+      statusFiltro,
+    ]
+  );
+
+  const equipamentosTotalFiltros = useMemo(
+    () => ({
+      statusFiltro,
+      termo: debouncedSearch,
+      estado: filters.estado === ALL ? undefined : filters.estado,
+      empresaNome: filters.proprietario === ALL ? undefined : filters.proprietario,
+      tipoEquipamentoNome: filters.tipo === ALL ? undefined : filters.tipo,
+      fabricante: filters.fabricante === ALL ? undefined : filters.fabricante,
+      modelo: filters.modelo,
+      tag: filters.tag,
+      serie: filters.serie,
+      patrimonio: filters.patrimonio,
+      setor: filters.setor === ALL ? undefined : filters.setor,
+    }),
+    [debouncedSearch, filters, statusFiltro]
+  );
+
+  const {
+    data: equipamentosResult,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    isFetching,
+  } = useEquipamentosPaginados(equipamentosQueryFiltros);
+
+  const {
+    data: totalEquipamentosReal,
+    isFetching: isFetchingTotalEquipamentos,
+  } = useEquipamentosTotal(equipamentosTotalFiltros);
+
+  const equipamentos = equipamentosResult?.items || [];
+  const totalEquipamentosOperacional = equipamentosResult?.total || 0;
+  const totalEquipamentos =
+    totalEquipamentosReal ?? totalEquipamentosOperacional;
+  const showTotalEquipamentos = totalEquipamentosReal !== undefined;
+
   const uniq = (arr: string[]) =>
     Array.from(new Set(arr.filter(Boolean))).sort((a, b) =>
       a.localeCompare(b, "pt-BR")
@@ -211,42 +329,6 @@ const Equipamentos = () => {
     }),
     [equipamentos]
   );
-
-  const matchesText = (val: string | null, q: string) =>
-    !q.trim() || (val || "").toLowerCase().includes(q.trim().toLowerCase());
-
-  const filtered = useMemo(() => {
-    const s = search.toLowerCase();
-
-    return equipamentos.filter((e) => {
-      const tipo = getTipoEquipamento(e);
-      const empresa = getEmpresaNome(e);
-
-      const matchesGeneral =
-        !s ||
-        tipo.toLowerCase().includes(s) ||
-        empresa.toLowerCase().includes(s) ||
-        (e.fabricante || "").toLowerCase().includes(s) ||
-        e.id.toLowerCase().includes(s) ||
-        (e.tag || "").toLowerCase().includes(s) ||
-        (e.numero_serie || "").toLowerCase().includes(s) ||
-        (e.patrimonio || "").toLowerCase().includes(s) ||
-        (e.modelo || "").toLowerCase().includes(s);
-
-      return (
-        matchesGeneral &&
-        (filters.estado === ALL || e.status === filters.estado) &&
-        (filters.proprietario === ALL || empresa === filters.proprietario) &&
-        (filters.tipo === ALL || tipo === filters.tipo) &&
-        (filters.fabricante === ALL || e.fabricante === filters.fabricante) &&
-        (filters.setor === ALL || e.setor === filters.setor) &&
-        matchesText(e.modelo, filters.modelo) &&
-        matchesText(e.tag, filters.tag) &&
-        matchesText(e.numero_serie, filters.serie) &&
-        matchesText(e.patrimonio, filters.patrimonio)
-      );
-    });
-  }, [equipamentos, filters, search]);
 
   const sortGetters = useMemo<
     Record<string, (item: EquipamentoSupabase) => unknown>
@@ -266,20 +348,23 @@ const Equipamentos = () => {
     []
   );
 
-  const sortedFiltered = useMemo(
+  const visibleEquipamentos = useMemo(
     () =>
       sortByValue(
-        filtered,
+        equipamentos,
         sortGetters[sortKey] || sortGetters.tipo,
         sortDirection
       ),
-    [filtered, sortDirection, sortGetters, sortKey]
+    [equipamentos, sortDirection, sortGetters, sortKey]
   );
 
-  const visibleEquipamentos = useMemo(
-    () => sortedFiltered.slice(0, listLimit),
-    [listLimit, sortedFiltered]
-  );
+  const totalPages = Math.max(1, Math.ceil(totalEquipamentos / listLimit));
+  const firstVisibleIndex = visibleEquipamentos.length
+    ? (page - 1) * listLimit + 1
+    : 0;
+  const lastVisibleIndex = showTotalEquipamentos
+    ? Math.min(page * listLimit, totalEquipamentos)
+    : Math.min(page * listLimit, totalEquipamentosOperacional);
 
   const handleSort = (key: string) => {
     if (sortKey === key) {
@@ -819,13 +904,27 @@ const Equipamentos = () => {
             <ListLimitSelect
               value={listLimit}
               onChange={setListLimit}
-              total={sortedFiltered.length}
+              total={totalEquipamentos}
             />
             <Button variant="outline" size="sm" onClick={() => refetch()}>
               Atualizar
             </Button>
           </div>
         </div>
+
+        {(isFetching || isFetchingTotalEquipamentos) && (
+          <div className="border-b bg-muted/20 px-5 py-2">
+            <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+              <span>
+                {isFetching
+                  ? "Atualizando equipamentos..."
+                  : "Atualizando total de equipamentos..."}
+              </span>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            </div>
+            <Progress value={70} className="mt-2 h-1 animate-pulse" />
+          </div>
+        )}
 
         {isLoading && (
           <div className="px-5 py-10 flex items-center justify-center gap-2 text-sm text-muted-foreground">
@@ -1034,7 +1133,7 @@ const Equipamentos = () => {
                   );
                 })}
 
-                {filtered.length === 0 && (
+                {visibleEquipamentos.length === 0 && (
                   <tr>
                     <td
                       colSpan={11}
@@ -1046,6 +1145,15 @@ const Equipamentos = () => {
                 )}
               </tbody>
             </table>
+            <ListPagination
+              page={page}
+              totalPages={totalPages}
+              totalItems={totalEquipamentos}
+              firstVisibleIndex={firstVisibleIndex}
+              lastVisibleIndex={lastVisibleIndex}
+              onPageChange={setPage}
+              showTotal={showTotalEquipamentos}
+            />
           </div>
         )}
       </div>

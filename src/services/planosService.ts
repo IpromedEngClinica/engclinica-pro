@@ -1198,13 +1198,17 @@ export const planosService = {
       } as AbrirCalibracaoItemResultado;
     }
 
-    const ciclo = await this.buscarCicloPlano(item.ciclo_id);
-    const procedimentos = await calibracaoProcedimentosService.listarProcedimentos();
-    const procedimento = procedimentos.find((proc) =>
-      proc.ativo &&
-      Boolean(item.equipamento?.tipo_equipamento_id) &&
-      proc.tipo_equipamento_id === item.equipamento?.tipo_equipamento_id
-    );
+    const tipoEquipamentoId = item.equipamento.tipo_equipamento_id;
+    if (!tipoEquipamentoId) {
+      throw new Error("O equipamento nao possui tipo cadastrado para localizar o procedimento de calibracao.");
+    }
+
+    const [ciclo, procedimento] = await Promise.all([
+      this.buscarCicloPlano(item.ciclo_id),
+      calibracaoProcedimentosService.buscarProcedimentoAtivoPorTipoEquipamento(
+        tipoEquipamentoId
+      ),
+    ]);
 
     if (!procedimento) {
       throw new Error("Nenhum procedimento de calibracao cadastrado para este tipo de equipamento.");
@@ -1223,7 +1227,7 @@ export const planosService = {
       incertezaUmidade: 5,
       pressaoAtmosferica: null,
       incertezaPressao: null,
-      observacoes: `Criada pelo ciclo ${ciclo.titulo}.`,
+      observacoes: null,
       dataCalibracao,
       dataEmissao,
       validadeMes: mesAposData(dataCalibracao),
@@ -1231,7 +1235,7 @@ export const planosService = {
       tecnicoExecutorRegistro: null,
       responsavelTecnicoNome: "Icaro Heitor Piris Rezende",
       responsavelTecnicoRegistro: "142085302-3",
-      responsavelSolicitante: ciclo.titulo,
+      responsavelSolicitante: null,
       criterioConformidadeAplicado: false,
       tabelas: criarTabelasExecucaoDoProcedimento(procedimento, false),
     });

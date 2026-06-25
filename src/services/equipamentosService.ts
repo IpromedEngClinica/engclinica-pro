@@ -14,6 +14,8 @@ export type EquipamentoSupabase = {
   patrimonio: string | null;
   tag: string | null;
   setor: string | null;
+  empresa_setor_id: string | null;
+  local_instalacao: string | null;
   status: string;
   data_aquisicao: string | null;
   data_instalacao: string | null;
@@ -56,6 +58,38 @@ export type ListarEquipamentosFiltros = {
   statusFiltro?: StatusEquipamentoFiltro;
   empresaId?: string;
   termo?: string;
+  estado?: string;
+  empresaNome?: string;
+  tipoEquipamentoNome?: string;
+  fabricante?: string;
+  modelo?: string;
+  tag?: string;
+  serie?: string;
+  patrimonio?: string;
+  setor?: string;
+};
+
+export type EquipamentosSortField =
+  | "numero_cadastro"
+  | "status"
+  | "modelo"
+  | "fabricante"
+  | "tag"
+  | "numero_serie"
+  | "patrimonio"
+  | "setor"
+  | "created_at";
+
+export type ListarEquipamentosPaginadoFiltros = ListarEquipamentosFiltros & {
+  page: number;
+  limit: number;
+  sortBy?: EquipamentosSortField;
+  ascending?: boolean;
+};
+
+export type EquipamentosPaginadoResult = {
+  items: EquipamentoSupabase[];
+  total: number;
 };
 
 const selectEquipamentos = `
@@ -71,6 +105,8 @@ const selectEquipamentos = `
   patrimonio,
   tag,
   setor,
+  empresa_setor_id,
+  local_instalacao,
   status,
   data_aquisicao,
   data_instalacao,
@@ -112,6 +148,66 @@ const selectEquipamentos = `
   )
 `;
 
+const selectEquipamentosListagem = `
+  id,
+  numero_cadastro,
+  organizacao_id,
+  empresa_id,
+  tipo_equipamento_id,
+  tipo_texto,
+  fabricante,
+  modelo,
+  numero_serie,
+  patrimonio,
+  tag,
+  setor,
+  empresa_setor_id,
+  local_instalacao,
+  status,
+  data_aquisicao,
+  data_instalacao,
+  data_ultima_preventiva,
+  data_proxima_preventiva,
+  data_ultima_calibracao,
+  data_proxima_calibracao,
+  observacoes,
+  ativo,
+  created_at,
+  updated_at,
+  tipo_equipamento:tipos_equipamento (
+    id,
+    nome
+  )
+`;
+
+const selectEmpresasEquipamentoListagem = `
+  id,
+  numero_cadastro,
+  organizacao_id,
+  nome,
+  nome_fantasia,
+  tipo_cliente,
+  tipo_relacao,
+  representante_comercial_setor,
+  cpf_cnpj,
+  cep,
+  rua,
+  numero,
+  complemento,
+  bairro,
+  cidade,
+  estado,
+  contato,
+  email,
+  celular,
+  telefone,
+  observacoes,
+  incluir_criterio_aceitacao_calibracao,
+  ativo,
+  created_at,
+  updated_at
+`;
+
 const toDatabasePayload = (input: EquipamentoFormInput) => ({
   empresa_id: input.empresaId,
   tipo_equipamento_id: input.tipoEquipamentoId || null,
@@ -130,50 +226,285 @@ const toDatabasePayload = (input: EquipamentoFormInput) => ({
   observacoes: input.observacoes || null,
 });
 
-export const equipamentosService = {
-  async listar(filtros?: ListarEquipamentosFiltros) {
-    const statusFiltro = filtros?.statusFiltro || "ativos";
+const EQUIPAMENTOS_PAGE_SIZE = 1000;
 
-    let query = supabase
-      .from("equipamentos")
-      .select(selectEquipamentos)
-      .eq("empresa.ativo", true)
-      .order("created_at", { ascending: false });
+const normalizarTextoBusca = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
 
-    if (statusFiltro === "ativos") {
-      query = query.eq("ativo", true);
-    }
+const aplicarFiltrosEquipamentos = async <T>(
+  query: T,
+  filtros?: ListarEquipamentosFiltros
+) => {
+  let nextQuery = query as any;
+  const statusFiltro = filtros?.statusFiltro || "ativos";
 
-    if (statusFiltro === "desativados") {
-      query = query.eq("ativo", false);
-    }
+  if (statusFiltro === "ativos") {
+    nextQuery = nextQuery.eq("ativo", true);
+  }
 
-    if (filtros?.empresaId) {
-      query = query.eq("empresa_id", filtros.empresaId);
-    }
+  if (statusFiltro === "desativados") {
+    nextQuery = nextQuery.eq("ativo", false);
+  }
 
-    if (filtros?.termo?.trim()) {
-      const termo = `%${filtros.termo.trim()}%`;
-      query = query.or(
-        [
-          `tipo_texto.ilike.${termo}`,
-          `fabricante.ilike.${termo}`,
-          `modelo.ilike.${termo}`,
-          `numero_serie.ilike.${termo}`,
-          `patrimonio.ilike.${termo}`,
-          `tag.ilike.${termo}`,
-          `setor.ilike.${termo}`,
-        ].join(",")
+  if (filtros?.empresaId) {
+    nextQuery = nextQuery.eq("empresa_id", filtros.empresaId);
+  }
+
+  if (filtros?.empresaNome) {
+    const empresaIds = await buscarEmpresaIdsPorNome(filtros.empresaNome);
+    nextQuery = empresaIds.length
+      ? nextQuery.in("empresa_id", empresaIds)
+      : nextQuery.eq("empresa_id", "00000000-0000-0000-0000-000000000000");
+  }
+
+  if (filtros?.tipoEquipamentoNome) {
+    const tipoIds = await buscarTipoEquipamentoIdsPorNome(
+      filtros.tipoEquipamentoNome
+    );
+    nextQuery = tipoIds.length
+      ? nextQuery.in("tipo_equipamento_id", tipoIds)
+      : nextQuery.eq(
+          "tipo_equipamento_id",
+          "00000000-0000-0000-0000-000000000000"
+        );
+  }
+
+  if (filtros?.estado) {
+    nextQuery = nextQuery.eq("status", filtros.estado);
+  }
+
+  if (filtros?.fabricante) {
+    nextQuery = nextQuery.eq("fabricante", filtros.fabricante);
+  }
+
+  if (filtros?.setor) {
+    nextQuery = nextQuery.eq("setor", filtros.setor);
+  }
+
+  if (filtros?.modelo?.trim()) {
+    nextQuery = nextQuery.ilike("modelo", `%${filtros.modelo.trim()}%`);
+  }
+
+  if (filtros?.tag?.trim()) {
+    nextQuery = nextQuery.ilike("tag", `%${filtros.tag.trim()}%`);
+  }
+
+  if (filtros?.serie?.trim()) {
+    nextQuery = nextQuery.ilike("numero_serie", `%${filtros.serie.trim()}%`);
+  }
+
+  if (filtros?.patrimonio?.trim()) {
+    nextQuery = nextQuery.ilike("patrimonio", `%${filtros.patrimonio.trim()}%`);
+  }
+
+  if (filtros?.termo?.trim()) {
+    const rawTerm = filtros.termo.trim();
+    const termo = `%${rawTerm}%`;
+    const termoNormalizado = `%${normalizarTextoBusca(rawTerm)}%`;
+    const empresaIds = await buscarEmpresaIdsPorTermo(rawTerm);
+
+    const orFilters = [
+      `tipo_texto.ilike.${termo}`,
+      `fabricante.ilike.${termo}`,
+      `modelo.ilike.${termo}`,
+      `numero_serie.ilike.${termo}`,
+      `patrimonio.ilike.${termo}`,
+      `tag.ilike.${termo}`,
+      `setor.ilike.${termo}`,
+    ];
+
+    if (termoNormalizado !== termo) {
+      orFilters.push(
+        `tipo_texto.ilike.${termoNormalizado}`,
+        `fabricante.ilike.${termoNormalizado}`,
+        `modelo.ilike.${termoNormalizado}`,
+        `setor.ilike.${termoNormalizado}`
       );
     }
 
+    if (empresaIds.length) {
+      orFilters.push(`empresa_id.in.(${empresaIds.join(",")})`);
+    }
+
+    nextQuery = nextQuery.or(orFilters.join(","));
+  }
+
+  return nextQuery as T;
+};
+
+const buscarEmpresaIdsPorTermo = async (termo: string) => {
+  const value = `%${termo.trim()}%`;
+  const { data, error } = await supabase
+    .from("empresas")
+    .select("id")
+    .or(`nome.ilike.${value},nome_fantasia.ilike.${value},cpf_cnpj.ilike.${value}`)
+    .limit(200);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data || []).map((item) => item.id as string);
+};
+
+const buscarEmpresaIdsPorNome = async (nome: string) => {
+  const [porNome, porFantasia] = await Promise.all([
+    supabase
+      .from("empresas")
+      .select("id")
+      .eq("nome", nome)
+      .limit(500),
+    supabase
+      .from("empresas")
+      .select("id")
+      .eq("nome_fantasia", nome)
+      .limit(500),
+  ]);
+
+  if (porNome.error) {
+    throw new Error(porNome.error.message);
+  }
+
+  if (porFantasia.error) {
+    throw new Error(porFantasia.error.message);
+  }
+
+  return Array.from(
+    new Set([
+      ...(porNome.data || []).map((item) => item.id as string),
+      ...(porFantasia.data || []).map((item) => item.id as string),
+    ])
+  );
+};
+
+const buscarTipoEquipamentoIdsPorNome = async (nome: string) => {
+  const { data, error } = await supabase
+    .from("tipos_equipamento")
+    .select("id")
+    .eq("nome", nome)
+    .limit(100);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data || []).map((item) => item.id as string);
+};
+
+const carregarEmpresasDaPagina = async (
+  equipamentos: EquipamentoSupabase[]
+) => {
+  const empresaIds = Array.from(
+    new Set(equipamentos.map((item) => item.empresa_id).filter(Boolean))
+  );
+
+  if (empresaIds.length === 0) {
+    return equipamentos;
+  }
+
+  const { data, error } = await supabase
+    .from("empresas")
+    .select(selectEmpresasEquipamentoListagem)
+    .in("id", empresaIds);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const empresasPorId = new Map(
+    ((data || []) as unknown as EmpresaSupabase[]).map((empresa) => [
+      empresa.id,
+      empresa,
+    ])
+  );
+
+  return equipamentos.map((equipamento) => ({
+    ...equipamento,
+    empresa: empresasPorId.get(equipamento.empresa_id) || null,
+  }));
+};
+
+export const equipamentosService = {
+  async listar(filtros?: ListarEquipamentosFiltros) {
+    const equipamentos: EquipamentoSupabase[] = [];
+
+    for (let from = 0; ; from += EQUIPAMENTOS_PAGE_SIZE) {
+      const baseQuery = supabase
+        .from("equipamentos")
+        .select(selectEquipamentos)
+        .eq("empresa.ativo", true)
+        .order("created_at", { ascending: false })
+        .range(from, from + EQUIPAMENTOS_PAGE_SIZE - 1);
+      const query = await aplicarFiltrosEquipamentos(baseQuery, filtros);
+
+      const { data, error } = await query;
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      const pagina = (data || []) as unknown as EquipamentoSupabase[];
+      equipamentos.push(...pagina);
+
+      if (pagina.length < EQUIPAMENTOS_PAGE_SIZE) {
+        break;
+      }
+    }
+
+    return equipamentos;
+  },
+
+  async listarPaginado(
+    filtros: ListarEquipamentosPaginadoFiltros
+  ): Promise<EquipamentosPaginadoResult> {
+    const page = Math.max(1, filtros.page || 1);
+    const limit = Math.max(1, filtros.limit || 25);
+    const from = (page - 1) * limit;
+    const to = from + limit;
+    const sortBy = filtros.sortBy || "numero_cadastro";
+
+    const baseQuery = supabase
+      .from("equipamentos")
+      .select(selectEquipamentosListagem)
+      .order(sortBy, { ascending: filtros.ascending ?? false })
+      .range(from, to);
+
+    const query = await aplicarFiltrosEquipamentos(baseQuery, filtros);
     const { data, error } = await query;
 
     if (error) {
       throw new Error(error.message);
     }
 
-    return data as unknown as EquipamentoSupabase[];
+    const linhas = ((data || []) as unknown as EquipamentoSupabase[]).slice(
+      0,
+      limit
+    );
+    const hasNextPage = (data || []).length > limit;
+    const items = await carregarEmpresasDaPagina(linhas);
+
+    return {
+      items,
+      total: hasNextPage ? from + limit + 1 : from + items.length,
+    };
+  },
+
+  async contar(filtros?: ListarEquipamentosFiltros) {
+    const baseQuery = supabase
+      .from("equipamentos")
+      .select("id", { count: "exact", head: true });
+
+    const query = await aplicarFiltrosEquipamentos(baseQuery, filtros);
+    const { count, error } = await query;
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return count || 0;
   },
 
   async buscarPorId(id: string) {
@@ -264,9 +595,26 @@ export const equipamentosService = {
   },
 
   async atualizar(id: string, input: EquipamentoFormInput) {
+    const { data: equipamentoAtual, error: equipamentoAtualError } = await supabase
+      .from("equipamentos")
+      .select("empresa_id")
+      .eq("id", id)
+      .single();
+
+    if (equipamentoAtualError) {
+      throw new Error(equipamentoAtualError.message);
+    }
+
+    const payload = {
+      ...toDatabasePayload(input),
+      ...(equipamentoAtual?.empresa_id !== input.empresaId
+        ? { empresa_setor_id: null, local_instalacao: null }
+        : {}),
+    };
+
     const { data, error } = await supabase
       .from("equipamentos")
-      .update(toDatabasePayload(input))
+      .update(payload)
       .eq("id", id)
       .select(selectEquipamentos)
       .single();

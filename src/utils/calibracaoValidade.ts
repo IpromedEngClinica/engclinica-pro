@@ -31,5 +31,5 @@ export const formatarLocalCalibracao = (local?: string | null) => {
 export const formatarDataPadrao = (value?: string | null) => {
   if (!value) return "-";
   const [ano, mes, dia] = value.slice(0, 10).split("-");
-  return ano && mes && dia ? `${dia} - ${mes} - ${ano}` : "-";
+  return ano && mes && dia ? `${dia}/${mes}/${ano}` : "-";
 };

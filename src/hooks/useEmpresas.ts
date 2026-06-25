@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ExcluirEmpresaInput,
   EmpresaFormInput,
   empresasService,
   EmpresaSupabase,
@@ -34,6 +35,25 @@ export const useAtualizarEmpresa = () => {
       empresasService.atualizar(id, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: EMPRESAS_QUERY_KEY });
+    },
+  });
+};
+
+export const useExcluirEmpresa = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      id,
+      input,
+    }: {
+      id: string;
+      input?: ExcluirEmpresaInput;
+    }) => empresasService.excluir(id, input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: EMPRESAS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ["equipamentos"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
   });
 };

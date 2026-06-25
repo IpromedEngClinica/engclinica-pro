@@ -420,6 +420,17 @@ const getLatestPreventivaMap = (ordens: ChecklistPreventivaResumo[]) => {
   return map;
 };
 
+const getDashboardFilterUrl = (params: Record<string, string | boolean>) => {
+  const search = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === false || value === "") return;
+    search.set(key, String(value));
+  });
+
+  return `/ordens-servico?${search.toString()}`;
+};
+
 const getDataPreventivaEfetiva = (
   equipamento: EquipamentoResumo,
   latestPreventivaMap: Map<string, string>
@@ -489,7 +500,6 @@ const carregarDashboard = async (): Promise<DashboardData> => {
   hoje.setHours(0, 0, 0, 0);
 
   const limiteContratos = toDateOnly(addDays(hoje, 60));
-  const limitePreventivas = toDateOnly(endOfMonth(addMonths(hoje, 5)));
   const limiteCalibracoes = toDateOnly(addDays(hoje, 60));
   const limitePadroes = toDateOnly(addDays(hoje, 60));
 
@@ -512,10 +522,8 @@ const carregarDashboard = async (): Promise<DashboardData> => {
       .from("equipamentos")
       .select(selectEquipamentos)
       .eq("ativo", true)
-      .not("data_proxima_preventiva", "is", null)
-      .lte("data_proxima_preventiva", limitePreventivas)
       .order("data_proxima_preventiva", { ascending: true })
-      .limit(800),
+      .limit(3000),
     supabase
       .from("equipamentos")
       .select(selectEquipamentos)
@@ -533,6 +541,8 @@ const carregarDashboard = async (): Promise<DashboardData> => {
     supabase
       .from("ordens_servico")
       .select(selectChecklists)
+      .eq("ativo", true)
+      .eq("status_sistema", "fechada")
       .not("equipamento_id", "is", null)
       .order("data_fechamento", { ascending: false })
       .limit(2000),
@@ -595,12 +605,14 @@ const StatCard = ({
   description,
   icon: Icon,
   tone = "default",
+  to,
 }: {
   title: string;
   value: number;
   description: string;
   icon: typeof ClipboardList;
   tone?: "default" | "warning" | "danger" | "success";
+  to?: string;
 }) => {
   const toneClass = {
     default: "bg-primary/10 text-primary",
@@ -609,8 +621,8 @@ const StatCard = ({
     success: "bg-success/10 text-success",
   }[tone];
 
-  return (
-    <Card className="rounded-lg">
+  const content = (
+    <Card className={`rounded-lg ${to ? "transition-colors hover:bg-muted/30" : ""}`}>
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -626,6 +638,17 @@ const StatCard = ({
         <p className="mt-3 text-xs text-muted-foreground">{description}</p>
       </CardContent>
     </Card>
+  );
+
+  if (!to) return content;
+
+  return (
+    <Link
+      to={to}
+      className="block rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+    >
+      {content}
+    </Link>
   );
 };
 
@@ -973,6 +996,10 @@ const Dashboard = () => {
               description="Equipamentos aguardando retirada ou entrega"
               icon={PackageCheck}
               tone="success"
+              to={getDashboardFilterUrl({
+                estado: "Liberado para Entrega",
+                hideClosed: true,
+              })}
             />
             <StatCard
               title="Análise concluída"
@@ -980,6 +1007,12 @@ const Dashboard = () => {
               description="OS aguardando proposta/decisão do gestor"
               icon={ClipboardCheck}
               tone="warning"
+              to={getDashboardFilterUrl({
+                estado: data?.analiseCompleta[0]
+                  ? getEstadoNome(data.analiseCompleta[0])
+                  : "Analise Completa",
+                hideClosed: true,
+              })}
             />
             <StatCard
               title="Preventivas este mês"
@@ -1000,6 +1033,7 @@ const Dashboard = () => {
               value={data?.osAbertas.length || 0}
               description="Ordens ativas que ainda não foram finalizadas"
               icon={ClipboardList}
+              to={getDashboardFilterUrl({ hideClosed: true })}
             />
             <StatCard
               title="Equipamentos em manutenção"
@@ -1033,7 +1067,13 @@ const Dashboard = () => {
                     OS com equipamento pronto, cliente e endereço para logística.
                   </p>
                 </div>
-                <Link to="/ordens-servico" className="text-sm text-primary hover:underline">
+                <Link
+                  to={getDashboardFilterUrl({
+                    estado: "Liberado para Entrega",
+                    hideClosed: true,
+                  })}
+                  className="text-sm text-primary hover:underline"
+                >
                   Ver OS <ArrowRight className="inline h-3 w-3" />
                 </Link>
               </CardHeader>

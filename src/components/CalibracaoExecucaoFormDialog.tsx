@@ -53,6 +53,22 @@ const LOCAL_OPTIONS: [string, string][] = [
   ["dependencias_contratante", "Dependências da Contratante"],
 ];
 
+const procedimentoAtendeTipoEquipamento = (
+  procedimento: {
+    tipo_equipamento_id: string | null;
+    tipos_equipamento?: { id: string }[];
+  },
+  tipoEquipamentoId?: string | null
+) => {
+  if (!tipoEquipamentoId) return false;
+  if (procedimento.tipos_equipamento?.length) {
+    return procedimento.tipos_equipamento.some(
+      (tipo) => tipo.id === tipoEquipamentoId
+    );
+  }
+  return procedimento.tipo_equipamento_id === tipoEquipamentoId;
+};
+
 const hoje = () => {
   const data = new Date();
   return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, "0")}-${String(data.getDate()).padStart(2, "0")}`;
@@ -107,8 +123,7 @@ const CalibracaoExecucaoFormDialog = ({
     [...procedimentos]
       .filter((item) =>
         item.ativo &&
-        Boolean(equipamento?.tipo_equipamento_id) &&
-        item.tipo_equipamento_id === equipamento?.tipo_equipamento_id
+        procedimentoAtendeTipoEquipamento(item, equipamento?.tipo_equipamento_id)
       )
       .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")),
     [equipamento?.tipo_equipamento_id, procedimentos]

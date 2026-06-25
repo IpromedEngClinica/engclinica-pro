@@ -19,6 +19,7 @@ import type {
   PlanoRelatorioAnualModoPeriodo,
   PlanoRelatorioAnualTipoSaida,
 } from "@/services/planosService";
+import { calcularValidadeFimDoMes } from "@/utils/planoDatas";
 
 type Props = {
   open: boolean;
@@ -29,12 +30,6 @@ type Props = {
 };
 
 const hoje = () => new Date().toISOString().slice(0, 10);
-
-const addMeses = (data: string, meses: number) => {
-  const date = new Date(`${data}T00:00:00`);
-  date.setMonth(date.getMonth() + meses);
-  return date.toISOString().slice(0, 10);
-};
 
 const fimPeriodo13Meses = (inicio: string) => {
   const date = new Date(`${inicio}T00:00:00`);
@@ -99,7 +94,7 @@ const PlanoRelatorioAnualDialog = ({ ciclo, modoInicial = "cronograma", onOpenCh
   }, [ano, ciclo, mesInicial, modoPeriodo]);
 
   const emitir = hoje();
-  const validadeAte = addMeses(emitir, Number(validadeMeses) || 12);
+  const validadeAte = calcularValidadeFimDoMes(emitir, Number(validadeMeses) || 12);
 
   const handleGerar = async () => {
     if (!plano) return;

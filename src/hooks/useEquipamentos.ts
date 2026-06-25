@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  EquipamentosPaginadoResult,
   EquipamentoFormInput,
   equipamentosService,
   EquipamentoSupabase,
   ListarEquipamentosFiltros,
+  ListarEquipamentosPaginadoFiltros,
 } from "@/services/equipamentosService";
 
 export const EQUIPAMENTOS_QUERY_KEY = ["equipamentos"];
@@ -12,6 +14,25 @@ export const useEquipamentos = (filtros?: ListarEquipamentosFiltros) => {
   return useQuery<EquipamentoSupabase[]>({
     queryKey: [...EQUIPAMENTOS_QUERY_KEY, filtros],
     queryFn: () => equipamentosService.listar(filtros),
+  });
+};
+
+export const useEquipamentosPaginados = (
+  filtros: ListarEquipamentosPaginadoFiltros
+) => {
+  return useQuery<EquipamentosPaginadoResult>({
+    queryKey: [...EQUIPAMENTOS_QUERY_KEY, "paginado", filtros],
+    queryFn: () => equipamentosService.listarPaginado(filtros),
+    placeholderData: (previousData) => previousData,
+  });
+};
+
+export const useEquipamentosTotal = (filtros?: ListarEquipamentosFiltros) => {
+  return useQuery<number>({
+    queryKey: [...EQUIPAMENTOS_QUERY_KEY, "total", filtros],
+    queryFn: () => equipamentosService.contar(filtros),
+    retry: false,
+    staleTime: 30_000,
   });
 };
 

@@ -16,12 +16,15 @@ import TiposEquipamento from "./pages/TiposEquipamento";
 import TiposOS from "./pages/TiposOS";
 import EstadosOS from "./pages/EstadosOS";
 import Pecas from "./pages/Pecas";
+import OrganizarSetores from "./pages/OrganizarSetores";
 import Protocolos from "./pages/Protocolos";
 import Procedimentos from "./pages/Procedimentos";
 import LaudosObsolescencia from "./pages/LaudosObsolescencia";
 import Calibracao from "./pages/Calibracao";
 import SegurancaEletrica from "./pages/SegurancaEletrica";
 import Relatorios from "./pages/Relatorios";
+import Utilitarios from "./pages/Utilitarios";
+import Auditoria from "./pages/Auditoria";
 import UsuariosPermissoes from "./pages/UsuariosPermissoes";
 import ConviteCadastro from "./pages/ConviteCadastro";
 import NotFound from "./pages/NotFound";
@@ -190,8 +193,54 @@ const App = () => (
                     }
                   />
                   <Route
+                    path="/utilitarios"
+                    element={
+                      <Navigate to="/utilitarios/termos-locacao" replace />
+                    }
+                  />
+                  <Route
+                    path="/utilitarios/termos-locacao"
+                    element={
+                      <PermissionRoute permission="utilitarios.visualizar">
+                        <Utilitarios />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/utilitarios/cadastro-visita"
+                    element={
+                      <PermissionRoute permission="utilitarios.visualizar">
+                        <Utilitarios />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/utilitarios/recibos"
+                    element={
+                      <PermissionRoute permission="utilitarios.visualizar">
+                        <Utilitarios />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/utilitarios/vencimentos"
+                    element={
+                      <PermissionRoute permission="utilitarios.visualizar">
+                        <Utilitarios />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
                     path="/usuarios-permissoes"
                     element={<UsuariosPermissoes />}
+                  />
+                  <Route
+                    path="/auditoria"
+                    element={
+                      <PermissionRoute permission="auditoria.visualizar">
+                        <Auditoria />
+                      </PermissionRoute>
+                    }
                   />
                   <Route
                     path="/procedimentos-preventiva"
@@ -230,6 +279,14 @@ const App = () => (
                     element={
                       <PermissionRoute permission="campos_gerenciais.gerenciar">
                         <Pecas />
+                      </PermissionRoute>
+                    }
+                  />
+                  <Route
+                    path="/campos-gerenciais/setores"
+                    element={
+                      <PermissionRoute permission="campos_gerenciais.gerenciar">
+                        <OrganizarSetores />
                       </PermissionRoute>
                     }
                   />

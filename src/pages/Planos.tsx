@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import ListLimitSelect, {
   DEFAULT_LIST_LIMIT,
 } from "@/components/ListLimitSelect";
+import ListPagination from "@/components/ListPagination";
 import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
 import PlanoFormDialog from "@/components/PlanoFormDialog";
 import PlanosValidadesRelatorios from "@/components/PlanosValidadesRelatorios";
@@ -16,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useDesativarPlano, usePlanos, usePlanoUsuarios } from "@/hooks/usePlanos";
+import { usePaginatedList } from "@/hooks/usePaginatedList";
 import { toast } from "@/hooks/use-toast";
 import type { Plano } from "@/services/planosService";
 import {
@@ -103,10 +105,10 @@ const Planos = () => {
     }), (plano) => sortValue(plano, sortKey), direction);
   }, [dataAte, dataDe, direction, empresa, frequencia, planos, responsavel, search, sortKey, status]);
 
-  const visiblePlanos = useMemo(
-    () => filtered.slice(0, listLimit),
-    [filtered, listLimit]
-  );
+  const {
+    paginatedItems: visiblePlanos,
+    ...planosPagination
+  } = usePaginatedList(filtered, listLimit);
 
   const sort = (key: SortKey) => {
     if (sortKey === key) setDirection((current) => current === "asc" ? "desc" : "asc");
@@ -271,6 +273,10 @@ const Planos = () => {
             {isLoading && <tr><Td>Carregando planos...</Td></tr>}
           </tbody>
         </table>
+        <ListPagination
+          {...planosPagination}
+          onPageChange={planosPagination.setPage}
+        />
       </div>
         </TabsContent>
 

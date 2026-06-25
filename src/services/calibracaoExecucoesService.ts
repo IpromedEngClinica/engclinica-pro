@@ -7,7 +7,7 @@ import { calibracaoProcedimentosService } from "@/services/calibracaoProcediment
 import {
   calcularResultadoGeralCalibracao,
   calcularPontoCalibracao,
-  encontrarPontoPadraoExato,
+  selecionarPontoPadraoReferencia,
   type ComponenteIncerteza,
   type RegraDecisao,
   type ResultadoConformidade,
@@ -408,8 +408,7 @@ export const criarTabelasExecucaoDoProcedimento = (
         : formatDecimalPtBr(tabela.resolucao_equipamento_default),
     fatorModo: tabela.fator_confiabilidade_modo,
     fatorK: tabela.fator_k_fixo,
-    incluirCriterio:
-      clienteUsaCriterio && tabela.incluir_criterio_aceitacao,
+    incluirCriterio: clienteUsaCriterio,
     criterioTipo: tabela.criterio_aceitacao_tipo,
     criterioValorMaximo: tabela.criterio_aceitacao_valor_maximo,
     criterioValorMinimo: tabela.criterio_aceitacao_valor_minimo,
@@ -511,6 +510,52 @@ const criarInputDaExecucao = (
   tabelas: criarTabelasInputDaExecucao(execucao),
 });
 
+const sincronizarMetadadosProcedimentoNoInput = (
+  input: CalibracaoExecucaoFormInput,
+  procedimento: CalibracaoProcedimento
+): CalibracaoExecucaoFormInput => {
+  const tabelasProcedimento = new Map(
+    (procedimento.tabelas || []).map((tabela) => [tabela.id, tabela])
+  );
+
+  return {
+    ...input,
+    tabelas: input.tabelas.map((tabela) => {
+      const tabelaAtual = tabela.procedimentoTabelaId
+        ? tabelasProcedimento.get(tabela.procedimentoTabelaId)
+        : undefined;
+
+      if (!tabelaAtual) return tabela;
+
+      const pontosAtuais = new Map(
+        (tabelaAtual.pontos || []).map((ponto) => [ponto.id, ponto])
+      );
+
+      return {
+        ...tabela,
+        nome: tabelaAtual.nome,
+        grandeza: tabelaAtual.grandeza,
+        unidade: tabelaAtual.unidade,
+        pontos: tabela.pontos.map((ponto) => {
+          const pontoAtual = ponto.procedimentoPontoId
+            ? pontosAtuais.get(ponto.procedimentoPontoId)
+            : undefined;
+
+          if (!pontoAtual) return ponto;
+
+          return {
+            ...ponto,
+            valorNominal: pontoAtual.valor_nominal,
+            valorNominalTexto:
+              pontoAtual.valor_nominal_texto ||
+              formatDecimalPtBr(pontoAtual.valor_nominal),
+          };
+        }),
+      };
+    }),
+  };
+};
+
 const montarSnapshot = async (
   input: CalibracaoExecucaoFormInput,
   organizacaoId: string
@@ -552,7 +597,7 @@ const montarSnapshot = async (
     if (!tabela.pontos.length) throw new Error(`Adicione pontos na tabela "${tabela.nome}".`);
 
     const pontos = tabela.pontos.map((ponto, pontoIndex) => {
-      const pontoPadrao = encontrarPontoPadraoExato(
+      const pontoPadrao = selecionarPontoPadraoReferencia(
         ponto.valorNominal,
         (tabelaPadrao.pontos || []).map((item) => ({
           valorNominal: item.valor_nominal,
@@ -566,7 +611,7 @@ const montarSnapshot = async (
         }))
       );
       if (!pontoPadrao) {
-        throw new Error(`Nao foi encontrado ponto correspondente no padrao para ${ponto.valorNominal} ${tabela.unidade}.`);
+        throw new Error(`Nao foi encontrado ponto de referencia no padrao para a tabela "${tabela.nome}".`);
       }
 
       const leiturasPreenchidas = ponto.leituras.flatMap((leitura) =>
@@ -849,11 +894,15 @@ export const calibracaoExecucoesService = {
       throw new Error("Inicie uma revisao antes de editar a calibracao finalizada.");
     }
     const procedimento = await calibracaoProcedimentosService.buscarProcedimentoPorId(input.procedimentoId);
-    const snapshot = await montarSnapshot(input, atual.organizacao_id);
+    const inputSincronizado = sincronizarMetadadosProcedimentoNoInput(
+      input,
+      procedimento
+    );
+    const snapshot = await montarSnapshot(inputSincronizado, atual.organizacao_id);
     const { error } = await supabase
       .from("calibracao_execucoes")
       .update({
-        ...criarPayloadExecucao(input, procedimento),
+        ...criarPayloadExecucao(inputSincronizado, procedimento),
         resultado_geral: snapshot.resultadoGeral,
         status: "em_execucao",
       })

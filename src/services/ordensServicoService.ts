@@ -119,6 +119,34 @@ export type OrdemServicoFormInput = {
   acessorios?: OrdemServicoAcessorioFormInput[];
 };
 
+export type OrdensServicoSortField =
+  | "numero"
+  | "data_abertura"
+  | "created_at"
+  | "responsavel_texto";
+
+export type ListarOrdensServicoFiltros = {
+  termo?: string;
+  ocultarFechadas?: boolean;
+  estadoNome?: string;
+  solicitanteNome?: string;
+  tipoServicoNome?: string;
+  responsavelTecnico?: string;
+  numero?: string;
+};
+
+export type ListarOrdensServicoPaginadoFiltros = ListarOrdensServicoFiltros & {
+  page: number;
+  limit: number;
+  sortBy?: OrdensServicoSortField;
+  ascending?: boolean;
+};
+
+export type OrdensServicoPaginadoResult = {
+  items: OrdemServicoSupabase[];
+  total: number;
+};
+
 const selectOrdensServico = `
   id,
   organizacao_id,
@@ -280,6 +308,96 @@ const getSelectOrdensServico = async () => {
     ? selectOrdensServico.replace("  descricao_servico,\n", "")
     : selectOrdensServico;
 };
+
+const selectOrdensServicoListagem = `
+  id,
+  organizacao_id,
+  numero,
+  empresa_id,
+  equipamento_id,
+  tipo_os_id,
+  estado_os_id,
+  tecnico_responsavel_id,
+  solicitante_texto,
+  responsavel_texto,
+  data_abertura,
+  data_fechamento,
+  problema_relatado,
+  origem_problema,
+  prioridade,
+  status_sistema,
+  plano_ciclo_id,
+  ativo,
+  created_at,
+  updated_at,
+  empresa:empresas (
+    id,
+    organizacao_id,
+    nome,
+    nome_fantasia,
+    tipo_cliente,
+    tipo_relacao,
+    cpf_cnpj,
+    cep,
+    rua,
+    numero,
+    complemento,
+    bairro,
+    cidade,
+    estado,
+    contato,
+    email,
+    celular,
+    telefone,
+    observacoes,
+    ativo,
+    created_at,
+    updated_at
+  ),
+  equipamento:equipamentos (
+    id,
+    organizacao_id,
+    empresa_id,
+    tipo_equipamento_id,
+    tipo_texto,
+    fabricante,
+    modelo,
+    numero_serie,
+    patrimonio,
+    tag,
+    setor,
+    status,
+    ativo,
+    created_at,
+    updated_at,
+    tipo_equipamento:tipos_equipamento (
+      id,
+      nome
+    )
+  ),
+  tipo_os:tipos_os (
+    id,
+    nome
+  ),
+  estado_os:estados_os (
+    id,
+    nome,
+    finaliza_os,
+    cancela_os
+  ),
+  checklist_preventiva:os_checklists_preventiva (
+    id,
+    ordem_servico_id,
+    procedimento_id,
+    titulo_procedimento,
+    tipo_equipamento_nome,
+    validade_meses,
+    data_validade,
+    resultado_geral,
+    observacoes,
+    created_at
+  )
+`;
 
 const toDatabasePayload = (input: OrdemServicoFormInput) => ({
   empresa_id: input.empresaId,
@@ -610,6 +728,172 @@ const buscarOrdemServicoPorId = async (id: string) => {
   return data as unknown as OrdemServicoSupabase;
 };
 
+const buscarEmpresaIdsPorTermo = async (termo: string) => {
+  const value = `%${termo.trim()}%`;
+  const { data, error } = await supabase
+    .from("empresas")
+    .select("id")
+    .or(`nome.ilike.${value},nome_fantasia.ilike.${value},cpf_cnpj.ilike.${value}`)
+    .limit(300);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data || []).map((item) => item.id as string);
+};
+
+const buscarEmpresaIdsPorNome = async (nome: string) => {
+  const [porNome, porFantasia] = await Promise.all([
+    supabase.from("empresas").select("id").eq("nome", nome).limit(300),
+    supabase.from("empresas").select("id").eq("nome_fantasia", nome).limit(300),
+  ]);
+
+  if (porNome.error) throw new Error(porNome.error.message);
+  if (porFantasia.error) throw new Error(porFantasia.error.message);
+
+  return Array.from(
+    new Set([
+      ...(porNome.data || []).map((item) => item.id as string),
+      ...(porFantasia.data || []).map((item) => item.id as string),
+    ])
+  );
+};
+
+const buscarEquipamentoIdsPorTermo = async (termo: string) => {
+  const rawTerm = termo.trim();
+  const value = `%${rawTerm}%`;
+  const valueNormalizado = `%${normalizarTexto(rawTerm)}%`;
+  const filters = [
+    `tipo_texto.ilike.${value}`,
+    `fabricante.ilike.${value}`,
+    `modelo.ilike.${value}`,
+    `numero_serie.ilike.${value}`,
+    `patrimonio.ilike.${value}`,
+    `tag.ilike.${value}`,
+    `setor.ilike.${value}`,
+  ];
+
+  if (valueNormalizado !== value) {
+    filters.push(
+      `tipo_texto.ilike.${valueNormalizado}`,
+      `fabricante.ilike.${valueNormalizado}`,
+      `modelo.ilike.${valueNormalizado}`,
+      `setor.ilike.${valueNormalizado}`
+    );
+  }
+
+  const { data, error } = await supabase
+    .from("equipamentos")
+    .select("id")
+    .or(filters.join(","))
+    .limit(300);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data || []).map((item) => item.id as string);
+};
+
+const buscarTipoOsIdsPorNome = async (nome: string) => {
+  const { data, error } = await supabase
+    .from("tipos_os")
+    .select("id")
+    .eq("nome", nome)
+    .limit(100);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data || []).map((item) => item.id as string);
+};
+
+const buscarEstadoOsIdsPorNome = async (nome: string) => {
+  const { data, error } = await supabase
+    .from("estados_os")
+    .select("id")
+    .eq("nome", nome)
+    .limit(100);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data || []).map((item) => item.id as string);
+};
+
+const aplicarFiltrosOrdensServico = async <T>(
+  query: T,
+  filtros?: ListarOrdensServicoFiltros
+) => {
+  let nextQuery = query as any;
+
+  if (filtros?.ocultarFechadas) {
+    nextQuery = nextQuery.not("status_sistema", "in", "(fechada,cancelada)");
+  }
+
+  if (filtros?.estadoNome) {
+    const estadoIds = await buscarEstadoOsIdsPorNome(filtros.estadoNome);
+    nextQuery = estadoIds.length
+      ? nextQuery.in("estado_os_id", estadoIds)
+      : nextQuery.eq("estado_os_id", "00000000-0000-0000-0000-000000000000");
+  }
+
+  if (filtros?.solicitanteNome) {
+    const empresaIds = await buscarEmpresaIdsPorNome(filtros.solicitanteNome);
+    nextQuery = empresaIds.length
+      ? nextQuery.in("empresa_id", empresaIds)
+      : nextQuery.eq("empresa_id", "00000000-0000-0000-0000-000000000000");
+  }
+
+  if (filtros?.tipoServicoNome) {
+    const tipoIds = await buscarTipoOsIdsPorNome(filtros.tipoServicoNome);
+    nextQuery = tipoIds.length
+      ? nextQuery.in("tipo_os_id", tipoIds)
+      : nextQuery.eq("tipo_os_id", "00000000-0000-0000-0000-000000000000");
+  }
+
+  if (filtros?.responsavelTecnico?.trim()) {
+    nextQuery = nextQuery.ilike(
+      "responsavel_texto",
+      `%${filtros.responsavelTecnico.trim()}%`
+    );
+  }
+
+  if (filtros?.numero?.trim()) {
+    nextQuery = nextQuery.ilike("numero", `%${filtros.numero.trim()}%`);
+  }
+
+  if (filtros?.termo?.trim()) {
+    const rawTerm = filtros.termo.trim();
+    const termo = `%${rawTerm}%`;
+    const empresaIds = await buscarEmpresaIdsPorTermo(rawTerm);
+    const equipamentoIds = await buscarEquipamentoIdsPorTermo(rawTerm);
+
+    const orFilters = [
+      `numero.ilike.${termo}`,
+      `solicitante_texto.ilike.${termo}`,
+      `responsavel_texto.ilike.${termo}`,
+      `problema_relatado.ilike.${termo}`,
+      `origem_problema.ilike.${termo}`,
+    ];
+
+    if (empresaIds.length) {
+      orFilters.push(`empresa_id.in.(${empresaIds.join(",")})`);
+    }
+
+    if (equipamentoIds.length) {
+      orFilters.push(`equipamento_id.in.(${equipamentoIds.join(",")})`);
+    }
+
+    nextQuery = nextQuery.or(orFilters.join(","));
+  }
+
+  return nextQuery as T;
+};
+
 export const ordensServicoService = {
   async buscarPorId(id: string) {
     return buscarOrdemServicoPorId(id);
@@ -629,6 +913,41 @@ export const ordensServicoService = {
     }
 
     return data as unknown as OrdemServicoSupabase[];
+  },
+
+  async listarPaginado(
+    filtros: ListarOrdensServicoPaginadoFiltros
+  ): Promise<OrdensServicoPaginadoResult> {
+    const page = Math.max(1, filtros.page || 1);
+    const limit = Math.max(1, filtros.limit || 25);
+    const from = (page - 1) * limit;
+    const to = from + limit;
+    const sortBy = filtros.sortBy || "numero";
+
+    const baseQuery = supabase
+      .from("ordens_servico")
+      .select(selectOrdensServicoListagem)
+      .eq("ativo", true)
+      .order(sortBy, { ascending: filtros.ascending ?? false })
+      .range(from, to);
+
+    const query = await aplicarFiltrosOrdensServico(baseQuery, filtros);
+    const { data, error } = await query;
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const hasNextPage = (data || []).length > limit;
+    const items = ((data || []) as unknown as OrdemServicoSupabase[]).slice(
+      0,
+      limit
+    );
+
+    return {
+      items,
+      total: hasNextPage ? from + limit + 1 : from + items.length,
+    };
   },
 
   async criar(input: OrdemServicoFormInput) {

@@ -60,6 +60,9 @@ const equipamentoNome = (item: PlanoEquipamento) =>
 const setorNome = (item: PlanoEquipamento) =>
   item.setor?.nome || item.equipamento?.setor || "Sem setor";
 
+const frequenciaLabel = (value?: string | null) =>
+  getPlanoFrequenciaLabel(value);
+
 const monthKey = (dateIso: string) => dateIso.slice(0, 7);
 
 const itemNaoConforme = (itemIdOs?: string | null) => Boolean(itemIdOs);
@@ -137,7 +140,7 @@ const renderTabela = (
           <td>${escapeHtml(item.equipamento?.modelo)}</td>
           <td>${escapeHtml(item.equipamento?.fabricante)}</td>
           <td>${servicosEquipamento(item, opcoes).map((servico) => `<span class="svc">${servico}</span>`).join("")}</td>
-          <td>${escapeHtml(getPlanoFrequenciaLabel(dados.plano.frequencia))}</td>
+          <td>${escapeHtml(frequenciaLabel(dados.plano.frequencia))}</td>
           ${dados.meses.map((mes) => {
             const marcadores = buildMarcadores(item, mes.key, dados, opcoes);
             return `<td class="month-cell">${marcadores.map((marker) => `<span class="${chipClass(marker)}">${marker}</span>`).join("")}</td>`;
@@ -235,7 +238,7 @@ export const gerarPdfRelatorioAnualPlano = async (
         <div><span class="label">Quantidade</span><span class="value">${dados.equipamentos.length}</span></div>
         <div><span class="label">Data de emissao</span><span class="value">${formatDate(opcoes.emitidoEm)}</span></div>
         <div class="validity"><span class="label">Validade ate</span><span class="value">${formatDate(opcoes.validadeAte)}</span></div>
-        <div><span class="label">Frequencia</span><span class="value">${escapeHtml(getPlanoFrequenciaLabel(dados.plano.frequencia))}</span></div>
+        <div><span class="label">Frequencia</span><span class="value">${escapeHtml(frequenciaLabel(dados.plano.frequencia))}</span></div>
       </section>
       ${grupos.map((grupo) => `
         <h2>Setor: ${escapeHtml(grupo.setor)}</h2>

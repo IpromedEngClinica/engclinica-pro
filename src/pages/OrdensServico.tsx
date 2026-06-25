@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import SearchableSelect from "@/components/SearchableSelect";
 import SortableTableHeader from "@/components/SortableTableHeader";
+import ListPagination from "@/components/ListPagination";
 import ListLimitSelect, {
   DEFAULT_LIST_LIMIT,
 } from "@/components/ListLimitSelect";
@@ -35,10 +36,11 @@ import { useSearchParams } from "react-router-dom";
 import {
   useAlterarEstadoOrdemServico,
   useExcluirOrdemServico,
-  useOrdensServico,
+  useOrdensServicoPaginadas,
 } from "@/hooks/useOrdensServico";
 import { useEstadosOS } from "@/hooks/useCamposOS";
 import {
+  OrdensServicoSortField,
   OrdemServicoSupabase,
   ordensServicoService,
 } from "@/services/ordensServicoService";
@@ -157,10 +159,13 @@ const statusColor = (status: string) => {
 const OrdensServico = () => {
   const { usuario } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
+  const queryString = searchParams.toString();
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [sortKey, setSortKey] = useState("numero");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [listLimit, setListLimit] = useState(DEFAULT_LIST_LIMIT);
+  const [page, setPage] = useState(1);
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<DialogMode>("create");
   const [selected, setSelected] = useState<OrdemServicoSupabase | null>(null);
@@ -187,8 +192,6 @@ const OrdensServico = () => {
   const [hideClosed, setHideClosed] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const { data: ordensServico = [], isLoading, isError, error, refetch } =
-    useOrdensServico();
   const { data: estadosOS = [] } = useEstadosOS();
   const alterarEstadoOS = useAlterarEstadoOrdemServico();
   const excluirOS = useExcluirOrdemServico();
@@ -202,6 +205,66 @@ const OrdensServico = () => {
   };
 
   const [filters, setFilters] = useState(emptyFilters);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedSearch(search), 350);
+    return () => window.clearTimeout(timeout);
+  }, [search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, filters, hideClosed, listLimit, sortDirection, sortKey]);
+
+  const sortableServerFields = useMemo(
+    () =>
+      new Set<string>(["numero", "data", "created_at", "responsavel"]),
+    []
+  );
+
+  const sortByServerField = useMemo(() => {
+    if (sortKey === "data") return "data_abertura";
+    if (sortKey === "responsavel") return "responsavel_texto";
+    return sortableServerFields.has(sortKey) ? sortKey : "numero";
+  }, [sortKey, sortableServerFields]);
+
+  const ordensServicoQueryFiltros = useMemo(
+    () => ({
+      termo: debouncedSearch,
+      ocultarFechadas: hideClosed,
+      estadoNome: filters.estado === ALL ? undefined : filters.estado,
+      solicitanteNome:
+        filters.solicitante === ALL ? undefined : filters.solicitante,
+      tipoServicoNome:
+        filters.tipoServico === ALL ? undefined : filters.tipoServico,
+      responsavelTecnico: filters.responsavelTecnico,
+      numero: filters.numero,
+      page,
+      limit: listLimit,
+      sortBy: sortByServerField as OrdensServicoSortField,
+      ascending: sortDirection === "asc",
+    }),
+    [
+      debouncedSearch,
+      filters,
+      hideClosed,
+      listLimit,
+      page,
+      sortDirection,
+      sortByServerField,
+    ]
+  );
+
+  const {
+    data: ordensServicoResult,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    isFetching,
+  } = useOrdensServicoPaginadas(ordensServicoQueryFiltros);
+
+  const ordensServico = ordensServicoResult?.items || [];
+  const totalOrdensServico = ordensServicoResult?.total || 0;
 
   const uniq = (arr: string[]) =>
     Array.from(new Set(arr.filter(Boolean))).sort((a, b) =>
@@ -222,72 +285,34 @@ const OrdensServico = () => {
     [estadosOS]
   );
 
-  const matchesText = (val: string, q: string) =>
-    !q.trim() || val.toLowerCase().includes(q.trim().toLowerCase());
-
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-
-    return ordensServico.filter((os) => {
-      const estado = getEstado(os);
-      const solicitante = getEmpresaNome(os);
-      const equipamento = getEquipamentoLabel(os);
-      const tipoServico = getTipoServico(os);
-      const tecnico = getTecnico(os);
-
-      const matchSearch =
-        !q ||
-        os.numero.toLowerCase().includes(q) ||
-        solicitante.toLowerCase().includes(q) ||
-        equipamento.toLowerCase().includes(q) ||
-        tipoServico.toLowerCase().includes(q) ||
-        tecnico.toLowerCase().includes(q) ||
-        (os.problema_relatado || "").toLowerCase().includes(q);
-
-      const matchHide =
-        !hideClosed ||
-        !(
-          os.status_sistema === "fechada" ||
-          os.status_sistema === "cancelada" ||
-          estado.toLowerCase().includes("fechada") ||
-          estado.toLowerCase().includes("cancelada")
-        );
-
-      const matchAdv =
-        (filters.estado === ALL || estado === filters.estado) &&
-        (filters.solicitante === ALL || solicitante === filters.solicitante) &&
-        (filters.tipoServico === ALL || tipoServico === filters.tipoServico) &&
-        matchesText(tecnico, filters.responsavelTecnico) &&
-        matchesText(os.numero, filters.numero);
-
-      return matchSearch && matchHide && matchAdv;
-    });
-  }, [ordensServico, search, hideClosed, filters]);
-
-  const sortGetters: Record<string, (item: OrdemServicoSupabase) => unknown> = {
-    numero: (os) => getNumeroOrdenacao(os.numero),
-    data: (os) => os.data_abertura || os.created_at,
-    empresa: getEmpresaNome,
-    equipamento: getEquipamentoLabel,
-    estado: getEstado,
-    tipo_os: getTipoServico,
-    responsavel: getTecnico,
-  };
-
-  const sortedFiltered = useMemo(
-    () =>
-      sortByValue(
-        filtered,
-        sortGetters[sortKey] || sortGetters.data,
-        sortDirection
-      ),
-    [filtered, sortDirection, sortKey]
+  const sortGetters = useMemo<Record<string, (item: OrdemServicoSupabase) => unknown>>(
+    () => ({
+      numero: (os) => getNumeroOrdenacao(os.numero),
+      data: (os) => os.data_abertura || os.created_at,
+      empresa: getEmpresaNome,
+      equipamento: getEquipamentoLabel,
+      estado: getEstado,
+      tipo_os: getTipoServico,
+      responsavel: getTecnico,
+    }),
+    []
   );
 
   const visibleOrdensServico = useMemo(
-    () => sortedFiltered.slice(0, listLimit),
-    [listLimit, sortedFiltered]
+    () =>
+      sortByValue(
+        ordensServico,
+        sortGetters[sortKey] || sortGetters.data,
+        sortDirection
+      ),
+    [ordensServico, sortDirection, sortGetters, sortKey]
   );
+
+  const totalPages = Math.max(1, Math.ceil(totalOrdensServico / listLimit));
+  const firstVisibleIndex = totalOrdensServico
+    ? (page - 1) * listLimit + 1
+    : 0;
+  const lastVisibleIndex = Math.min(page * listLimit, totalOrdensServico);
 
   const handleSort = (key: string) => {
     if (sortKey === key) {
@@ -310,6 +335,34 @@ const OrdensServico = () => {
 
     return n;
   }, [filters]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(queryString);
+    const hasUrlFilters = [
+      "estado",
+      "solicitante",
+      "tipoServico",
+      "responsavelTecnico",
+      "numero",
+      "hideClosed",
+      "q",
+    ].some((key) => params.has(key));
+
+    setSearch(params.get("q") || "");
+    setHideClosed(params.get("hideClosed") === "true");
+    setFilters((current) => ({
+      ...current,
+      estado: params.get("estado") || ALL,
+      solicitante: params.get("solicitante") || ALL,
+      tipoServico: params.get("tipoServico") || ALL,
+      responsavelTecnico: params.get("responsavelTecnico") || "",
+      numero: params.get("numero") || "",
+    }));
+
+    if (hasUrlFilters) {
+      setFiltersOpen(true);
+    }
+  }, [queryString]);
 
   useEffect(() => {
     const osId = searchParams.get("os");
@@ -354,19 +407,41 @@ const OrdensServico = () => {
     setOpen(true);
   };
 
-  const openDetails = (os: OrdemServicoSupabase) => {
-    setDetalhesOS(os);
-    setDetalhesOpen(true);
+  const carregarOSCompleta = async (os: OrdemServicoSupabase) => {
+    return ordensServicoService.buscarPorId(os.id);
+  };
+
+  const openDetails = async (os: OrdemServicoSupabase) => {
+    try {
+      const ordemCompleta = await carregarOSCompleta(os);
+      setDetalhesOS(ordemCompleta);
+      setDetalhesOpen(true);
+    } catch (error) {
+      toast({
+        title: "Erro ao abrir OS",
+        description: error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    }
   };
 
   const openView = (os: OrdemServicoSupabase) => {
     openDetails(os);
   };
 
-  const openEdit = (os: OrdemServicoSupabase) => {
-    setSelected(os);
-    setMode("edit");
-    setOpen(true);
+  const openEdit = async (os: OrdemServicoSupabase) => {
+    try {
+      const ordemCompleta = await carregarOSCompleta(os);
+      setSelected(ordemCompleta);
+      setMode("edit");
+      setOpen(true);
+    } catch (error) {
+      toast({
+        title: "Erro ao abrir edição",
+        description: error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    }
   };
 
   const openEntrega = (os: OrdemServicoSupabase) => {
@@ -379,9 +454,18 @@ const OrdensServico = () => {
     setOrcamentoOpen(true);
   };
 
-  const openChecklist = (os: OrdemServicoSupabase) => {
-    setOsChecklist(os);
-    setChecklistOpen(true);
+  const openChecklist = async (os: OrdemServicoSupabase) => {
+    try {
+      const ordemCompleta = await carregarOSCompleta(os);
+      setOsChecklist(ordemCompleta);
+      setChecklistOpen(true);
+    } catch (error) {
+      toast({
+        title: "Erro ao abrir checklist",
+        description: error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    }
   };
 
   const openEmpresaDetalhes = async (
@@ -707,7 +791,7 @@ const OrdensServico = () => {
             <ListLimitSelect
               value={listLimit}
               onChange={setListLimit}
-              total={sortedFiltered.length}
+              total={totalOrdensServico}
             />
             <Button
               variant={hideClosed ? "default" : "outline"}
@@ -720,7 +804,7 @@ const OrdensServico = () => {
             </Button>
 
             <Button variant="outline" size="sm" onClick={() => refetch()}>
-              Atualizar
+              {isFetching ? "Atualizando..." : "Atualizar"}
             </Button>
           </div>
         </div>
@@ -941,7 +1025,7 @@ const OrdensServico = () => {
                   );
                 })}
 
-                {filtered.length === 0 && (
+                {visibleOrdensServico.length === 0 && (
                   <tr>
                     <td
                       colSpan={8}
@@ -953,6 +1037,15 @@ const OrdensServico = () => {
                 )}
               </tbody>
             </table>
+            <ListPagination
+              page={page}
+              totalPages={totalPages}
+              totalItems={totalOrdensServico}
+              firstVisibleIndex={firstVisibleIndex}
+              lastVisibleIndex={lastVisibleIndex}
+              onPageChange={setPage}
+              showTotal={false}
+            />
           </div>
         )}
       </div>

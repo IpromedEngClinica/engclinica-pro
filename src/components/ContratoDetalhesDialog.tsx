@@ -15,11 +15,14 @@ import ContratoDocumentosDialog from "@/components/ContratoDocumentosDialog";
 import { useState } from "react";
 import {
   ContratoSupabase,
+  calcularProximoMesFaturamentoContrato,
+  formatarMesContrato,
   getDiasContratoTexto,
   getEmpresaContratoNome,
   getStatusVencimentoContrato,
   getTermosAditivosRestantes,
   getTermosAditivosTexto,
+  isFaturamentoPrevistoNoMes,
 } from "@/services/contratosService";
 
 interface ContratoDetalhesDialogProps {
@@ -37,6 +40,14 @@ const formatDate = (value?: string | null) => {
   if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleDateString("pt-BR");
 };
+
+const formatCurrency = (value?: number | null) =>
+  value === null || value === undefined
+    ? "-"
+    : new Intl.NumberFormat("pt-BR", {
+        style: "currency",
+        currency: "BRL",
+      }).format(Number(value || 0));
 
 const statusLabel: Record<string, string> = {
   vencido: "Vencido",
@@ -82,6 +93,8 @@ const ContratoDetalhesDialog = ({
 
   const status = getStatusVencimentoContrato(contrato.data_proxima_renovacao);
   const termosRestantes = getTermosAditivosRestantes(contrato);
+  const proximoMesFaturamento =
+    calcularProximoMesFaturamentoContrato(contrato);
 
   return (
     <>
@@ -175,6 +188,28 @@ const ContratoDetalhesDialog = ({
                 </Field>
                 <Field label="Restantes">
                   {termosRestantes === null ? "-" : termosRestantes}
+                </Field>
+              </div>
+            </section>
+
+            <section className="rounded-lg border p-4 space-y-3">
+              <h3 className="text-sm font-semibold">Faturamento previsto</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Field label="Valor previsto">
+                  {formatCurrency(contrato.valor_previsto)}
+                </Field>
+                <Field label="Mes da ultima visita">
+                  {formatarMesContrato(contrato.mes_ultima_visita)}
+                </Field>
+                <Field label="Proximo faturamento">
+                  {proximoMesFaturamento
+                    ? formatarMesContrato(`${proximoMesFaturamento}-01`)
+                    : "-"}
+                </Field>
+                <Field label="Situacao">
+                  {isFaturamentoPrevistoNoMes(contrato)
+                    ? "Previsto para este mes"
+                    : "Sem previsao no mes atual"}
                 </Field>
               </div>
             </section>

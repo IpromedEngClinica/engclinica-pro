@@ -10,6 +10,8 @@ type RenderHtmlPdfOptions = {
   marginMm?: number;
   scale?: number;
   fontScale?: number;
+  footerText?: string;
+  footerHeightMm?: number;
 };
 
 type AvoidBlock = {
@@ -23,8 +25,13 @@ const DEFAULT_MARGIN_MM = 8;
 // 2.5 renders A4 above 300 DPI while avoiding the memory cost of scale 3.
 const DEFAULT_SCALE = 2.5;
 const DEFAULT_FONT_SCALE = 1.5;
+const DEFAULT_FOOTER_HEIGHT_MM = 15;
 const MIN_SLICE_RATIO = 0.58;
 const PAGE_BREAK_GAP_PX = 16;
+const PAGE_BREAK_GAP_CSS_PX = 18;
+const MIN_TRAILING_SLICE_PX = 24;
+const PAGE_BREAK_SPACER_CLASS = "pdf-page-break-spacer";
+const FOOTER_SPACER_CLASS = "pdf-footer-bottom-spacer";
 
 const PAGE_BREAK_SELECTOR = [
   "header",
@@ -51,6 +58,24 @@ const PAGE_BREAK_SELECTOR = [
   ".summary",
   ".equipment-block",
   ".client-block",
+  ".clause",
+  ".notice",
+  ".date-line",
+  ".signature-line",
+  ".result-block",
+].join(",");
+
+const PAGE_BREAK_LAYOUT_SELECTOR = [
+  "table",
+  "tr",
+  "h2",
+  "h3",
+  ".result-block",
+  ".clause",
+  ".notice",
+  ".date-line",
+  ".signatures",
+  ".signature-line",
 ].join(",");
 
 const RENDER_QUALITY_CSS = `
@@ -89,7 +114,16 @@ const RENDER_QUALITY_CSS = `
   .signatures,
   .summary,
   .equipment-block,
-  .client-block {
+  .client-block,
+  .clause,
+  .notice,
+  .date-line,
+  .signature-line {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .result-block {
     break-inside: avoid;
     page-break-inside: avoid;
   }
@@ -128,6 +162,121 @@ const getPageSize = (pdf: jsPDF) => ({
   width: pdf.internal.pageSize.getWidth(),
   height: pdf.internal.pageSize.getHeight(),
 });
+
+const drawFixedFooter = ({
+  footerText,
+  marginMm,
+  pageHeightMm,
+  pageWidthMm,
+  pdf,
+}: {
+  footerText: string;
+  marginMm: number;
+  pageHeightMm: number;
+  pageWidthMm: number;
+  pdf: jsPDF;
+}) => {
+  const maxWidth = pageWidthMm - marginMm * 2;
+  const lineY = pageHeightMm - 18;
+  const textY = pageHeightMm - 13;
+
+  pdf.setDrawColor(209, 213, 219);
+  pdf.setLineWidth(0.2);
+  pdf.line(marginMm, lineY, pageWidthMm - marginMm, lineY);
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(8);
+  pdf.setTextColor(156, 163, 175);
+
+  const lines = pdf.splitTextToSize(footerText, maxWidth);
+  pdf.text(lines.slice(0, 2), pageWidthMm / 2, textY, {
+    align: "center",
+    lineHeightFactor: 1.2,
+    maxWidth,
+  });
+};
+
+const insertPageBreakSpacers = (element: HTMLElement, pageHeightPx: number) => {
+  Array.from(element.querySelectorAll(`.${PAGE_BREAK_SPACER_CLASS}`)).forEach(
+    (spacer) => spacer.remove()
+  );
+
+  const maxIterations = 80;
+
+  for (let index = 0; index < maxIterations; index += 1) {
+    const rootRect = element.getBoundingClientRect();
+    const blocks = Array.from(
+      element.querySelectorAll<HTMLElement>(PAGE_BREAK_LAYOUT_SELECTOR)
+    )
+      .filter((block) => !block.classList.contains(PAGE_BREAK_SPACER_CLASS))
+      .map((block) => {
+        const rect = block.getBoundingClientRect();
+        const top = rect.top - rootRect.top;
+        const bottom = rect.bottom - rootRect.top;
+        return {
+          block,
+          top,
+          bottom,
+          height: bottom - top,
+        };
+      })
+      .filter(
+        ({ top, bottom, height }) =>
+          bottom > top &&
+          height > 12 &&
+          height < pageHeightPx * 0.82 &&
+          Math.floor(Math.max(0, top) / pageHeightPx) <
+            Math.floor(Math.max(0, bottom - 1) / pageHeightPx)
+      )
+      .sort((a, b) => a.top - b.top);
+
+    const target = blocks.find(({ top }) => top % pageHeightPx > 24);
+
+    if (!target) return;
+
+    const nextPageTop = (Math.floor(target.top / pageHeightPx) + 1) * pageHeightPx;
+    const spacerHeight = Math.ceil(nextPageTop - target.top + PAGE_BREAK_GAP_CSS_PX);
+
+    if (spacerHeight <= 0 || spacerHeight > pageHeightPx * 0.95) return;
+
+    const spacer = element.ownerDocument.createElement("div");
+    spacer.className = PAGE_BREAK_SPACER_CLASS;
+    spacer.style.height = `${spacerHeight}px`;
+    spacer.style.breakInside = "avoid";
+    spacer.style.pageBreakInside = "avoid";
+    spacer.style.flexShrink = "0";
+    spacer.setAttribute("aria-hidden", "true");
+
+    target.block.parentNode?.insertBefore(spacer, target.block);
+    spacer.getBoundingClientRect();
+  }
+};
+
+const alignFooterToPageBottom = (element: HTMLElement, pageHeightPx: number) => {
+  element.querySelector(`.${FOOTER_SPACER_CLASS}`)?.remove();
+
+  const footer = element.querySelector<HTMLElement>("footer");
+  if (!footer) return;
+
+  const rootRect = element.getBoundingClientRect();
+  const footerRect = footer.getBoundingClientRect();
+  const footerBottom = footerRect.bottom - rootRect.top;
+  const footerRemainder = footerBottom % pageHeightPx;
+
+  if (footerRemainder < 8 || pageHeightPx - footerRemainder < 8) return;
+
+  const spacerHeight = Math.floor(pageHeightPx - footerRemainder - 2);
+  const maxFooterAdjustment = pageHeightPx * 0.14;
+
+  if (spacerHeight <= 0 || spacerHeight > maxFooterAdjustment) return;
+
+  const spacer = element.ownerDocument.createElement("div");
+  spacer.className = FOOTER_SPACER_CLASS;
+  spacer.style.height = `${spacerHeight}px`;
+  spacer.style.flexShrink = "0";
+  spacer.setAttribute("aria-hidden", "true");
+
+  footer.parentNode?.insertBefore(spacer, footer);
+};
 
 const collectAvoidBlocks = (element: HTMLElement, canvasScale: number) => {
   const rootRect = element.getBoundingClientRect();
@@ -317,6 +466,8 @@ export const renderHtmlToPdf = async ({
   marginMm = DEFAULT_MARGIN_MM,
   scale = DEFAULT_SCALE,
   fontScale = DEFAULT_FONT_SCALE,
+  footerText,
+  footerHeightMm = DEFAULT_FOOTER_HEIGHT_MM,
 }: RenderHtmlPdfOptions) => {
   const { frame, frameDocument } = createRenderFrame(html, orientation);
 
@@ -336,9 +487,23 @@ export const renderHtmlToPdf = async ({
     // HTML + html2canvas rasterizes the PDF. For selectable text, move this
     // generation to backend Playwright/Puppeteer or a Supabase Edge Function.
     const dimensions = getDocumentDimensions(orientation);
+    const pdf = new jsPDF(orientation, "mm", "a4");
+    const { width: pageWidthMm, height: pageHeightMm } = getPageSize(pdf);
     const elementWidth = Math.ceil(
       Math.max(element.scrollWidth, element.offsetWidth, dimensions.width)
     );
+    const contentWidthMm = pageWidthMm - marginMm * 2;
+    const contentHeightMm =
+      pageHeightMm - marginMm * 2 - (footerText ? footerHeightMm : 0);
+    const cssPxPerMm = elementWidth / contentWidthMm;
+    const pageHeightCssPx = Math.floor(contentHeightMm * cssPxPerMm);
+
+    insertPageBreakSpacers(element, pageHeightCssPx);
+    if (!footerText) alignFooterToPageBottom(element, pageHeightCssPx);
+    await new Promise((resolve) =>
+      (frameDocument.defaultView ?? window).requestAnimationFrame(resolve)
+    );
+
     const elementHeight = Math.ceil(
       Math.max(element.scrollHeight, element.offsetHeight, dimensions.height)
     );
@@ -363,10 +528,6 @@ export const renderHtmlToPdf = async ({
       scrollY: 0,
     });
 
-    const pdf = new jsPDF(orientation, "mm", "a4");
-    const { width: pageWidthMm, height: pageHeightMm } = getPageSize(pdf);
-    const contentWidthMm = pageWidthMm - marginMm * 2;
-    const contentHeightMm = pageHeightMm - marginMm * 2;
     const pxPerMm = canvas.width / contentWidthMm;
     const pageHeightPx = Math.floor(contentHeightMm * pxPerMm);
     const canvasScale = canvas.height / elementHeight;
@@ -380,6 +541,10 @@ export const renderHtmlToPdf = async ({
     let renderedHeight = 0;
 
     while (renderedHeight < canvas.height) {
+      if (canvas.height - renderedHeight <= MIN_TRAILING_SLICE_PX) {
+        break;
+      }
+
       const sliceHeight = Math.max(
         1,
         Math.floor(
@@ -445,10 +610,19 @@ export const renderHtmlToPdf = async ({
     const totalPages = pdf.getNumberOfPages();
     for (let index = 1; index <= totalPages; index += 1) {
       pdf.setPage(index);
+      if (footerText) {
+        drawFixedFooter({
+          footerText,
+          marginMm,
+          pageHeightMm,
+          pageWidthMm,
+          pdf,
+        });
+      }
       pdf.setFont("helvetica", "normal");
       pdf.setFontSize(10);
       pdf.setTextColor(120, 120, 120);
-      pdf.text(`Pagina ${index} de ${totalPages}`, pageWidthMm - marginMm, pageHeightMm - 3, {
+      pdf.text(`Página ${index} de ${totalPages}`, pageWidthMm - marginMm, pageHeightMm - 3, {
         align: "right",
       });
     }

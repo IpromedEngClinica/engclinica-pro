@@ -2,7 +2,10 @@ import aciLogo from "@/assets/aci-logo-hd.png";
 import type { OrdemServicoSupabase } from "@/services/ordensServicoService";
 import { imageToDataUrl } from "@/utils/pdfImageUtils";
 import { renderHtmlToPdf } from "@/utils/pdfHtmlRenderer";
-import { buildOrdemServicoHtml } from "@/utils/osPdfTemplate";
+import {
+  buildOrdemServicoHtml,
+  ORDEM_SERVICO_FOOTER_TEXT,
+} from "@/utils/osPdfTemplate";
 import { assinaturasService } from "@/services/assinaturasService";
 
 export const gerarPdfOrdemServico = async (
@@ -25,5 +28,7 @@ export const gerarPdfOrdemServico = async (
     html,
     fileName: `OS-${os.numero || "sem-numero"}.pdf`,
     save,
+    footerText: ORDEM_SERVICO_FOOTER_TEXT,
+    footerHeightMm: 13,
   });
 };

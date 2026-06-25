@@ -67,6 +67,10 @@ const hidratarAssinatura = async (
 };
 
 export const assinaturasService = {
+  async buscarDataUrlPorStoragePath(storagePath?: string | null) {
+    return storagePath ? baixarDataUrl(storagePath) : null;
+  },
+
   async buscarMinhaAssinatura() {
     const { data: authData, error: authError } = await supabase.auth.getUser();
     if (authError) throw new Error(authError.message);

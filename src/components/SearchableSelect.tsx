@@ -1,9 +1,9 @@
-import { useState } from "react";
-import { Check, ChevronsUpDown, Plus } from "lucide-react";
+import { KeyboardEvent, useEffect, useRef, useState } from "react";
+import { Check, ChevronsUpDown, Plus, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 
 interface SearchableSelectProps {
   value: string;
@@ -27,9 +27,51 @@ const SearchableSelect = ({
   disabled = false,
 }: SearchableSelectProps) => {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const normalize = (text: string) =>
+    text
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[.\-/]/g, "")
+      .toLowerCase()
+      .trim();
+  const searchTerms = normalize(query).split(/\s+/).filter(Boolean);
+  const filteredOptions = searchTerms.length
+    ? options.filter((option) => {
+        const searchable = normalize(option);
+        return searchTerms.every((term) => searchable.includes(term));
+      })
+    : options;
+
+  useEffect(() => {
+    if (!open) return;
+
+    const timeout = window.setTimeout(() => {
+      searchInputRef.current?.focus();
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
+  }, [open]);
+
+  const handleTriggerKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (disabled) return;
+
+    if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      setOpen(true);
+      setQuery((current) => `${current}${event.key}`);
+      event.preventDefault();
+    }
+  };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(value) => {
+        setOpen(value);
+        if (!value) setQuery("");
+      }}
+    >
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -37,6 +79,7 @@ const SearchableSelect = ({
           aria-expanded={open}
           disabled={disabled}
           className="w-full justify-between font-normal"
+          onKeyDown={handleTriggerKeyDown}
         >
           <span className={cn("truncate", !value && "text-muted-foreground")}>
             {value || placeholder}
@@ -45,44 +88,63 @@ const SearchableSelect = ({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-        <Command>
-          <CommandInput placeholder="Buscar..." />
-          <CommandList>
-            <CommandEmpty>{emptyText}</CommandEmpty>
-            <CommandGroup>
-              {onAddNew && (
-                <CommandItem
-                  onSelect={() => {
-                    onAddNew();
-                    setOpen(false);
-                  }}
-                  className="text-primary"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  {addNewLabel}
-                </CommandItem>
-              )}
-              {options.map((option) => (
-                <CommandItem
-                  key={option}
-                  value={option}
-                  onSelect={() => {
-                    onValueChange(option);
-                    setOpen(false);
-                  }}
-                >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4",
-                      value === option ? "opacity-100" : "opacity-0"
-                    )}
-                  />
+        <div className="border-b p-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              ref={searchInputRef}
+              className="h-9 pl-8"
+              placeholder="Buscar..."
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </div>
+        </div>
+        <div className="max-h-[300px] overflow-y-auto p-1">
+          {onAddNew && (
+            <button
+              type="button"
+              onClick={() => {
+                onAddNew();
+                setOpen(false);
+                setQuery("");
+              }}
+              className="flex w-full items-center rounded-sm px-2 py-2 text-left text-sm text-primary hover:bg-accent"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              {addNewLabel}
+            </button>
+          )}
+
+          {filteredOptions.length === 0 ? (
+            <div className="px-2 py-6 text-center text-sm text-muted-foreground">
+              {emptyText}
+            </div>
+          ) : (
+            filteredOptions.map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => {
+                  onValueChange(option);
+                  setOpen(false);
+                  setQuery("");
+                }}
+                className="flex w-full items-center rounded-sm px-2 py-2 text-left text-sm hover:bg-accent"
+              >
+                <Check
+                  className={cn(
+                    "mr-2 h-4 w-4 shrink-0",
+                    value === option ? "opacity-100" : "opacity-0"
+                  )}
+                />
+                <span className="min-w-0 whitespace-normal break-words">
                   {option}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
+                </span>
+              </button>
+            ))
+          )}
+        </div>
       </PopoverContent>
     </Popover>
   );

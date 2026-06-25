@@ -19,7 +19,9 @@ import CalibracaoExecucoesSection from "@/components/CalibracaoExecucoesSection"
 import ListLimitSelect, {
   DEFAULT_LIST_LIMIT,
 } from "@/components/ListLimitSelect";
+import ListPagination from "@/components/ListPagination";
 import PageHeader from "@/components/PageHeader";
+import SortableTableHeader from "@/components/SortableTableHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,6 +36,7 @@ import {
   useCalibracaoPadroes,
   useDesativarCalibracaoPadrao,
 } from "@/hooks/useCalibracaoPadroes";
+import { usePaginatedList } from "@/hooks/usePaginatedList";
 import { toast } from "@/hooks/use-toast";
 import {
   CalibracaoPadrao,
@@ -42,12 +45,13 @@ import {
   getStatusValidadePadrao,
 } from "@/services/calibracaoPadroesService";
 import { formatarDataPadrao } from "@/utils/calibracaoValidade";
+import { sortByValue, type SortDirection } from "@/utils/sortUtils";
 
 const statusLabels: Record<CalibracaoPadraoStatusValidade, string> = {
   vencido: "Vencido",
-  ate_30_dias: "Vence em ate 30 dias",
-  ate_60_dias: "Vence em ate 60 dias",
-  valido: "Valido",
+  ate_30_dias: "Vence em até 30 dias",
+  ate_60_dias: "Vence em até 60 dias",
+  valido: "Válido",
 };
 
 const statusClasses: Record<CalibracaoPadraoStatusValidade, string> = {
@@ -60,7 +64,37 @@ const statusClasses: Record<CalibracaoPadraoStatusValidade, string> = {
 const formatDate = (value: string) =>
   new Date(`${value}T00:00:00`).toLocaleDateString("pt-BR");
 
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+const getDiasRestantes = (dataValidade: string) => {
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+
+  const validade = new Date(`${dataValidade}T00:00:00`);
+  validade.setHours(0, 0, 0, 0);
+
+  return Math.ceil((validade.getTime() - hoje.getTime()) / MS_PER_DAY);
+};
+
+const formatDiasRestantes = (dias: number) => {
+  if (dias < 0) return `Vencido há ${Math.abs(dias)} dia${Math.abs(dias) === 1 ? "" : "s"}`;
+  if (dias === 0) return "Vence hoje";
+  return `${dias} dia${dias === 1 ? "" : "s"}`;
+};
+
 type CalibracaoSection = "execucoes" | "padroes" | "procedimentos" | "configuracoes";
+type PadroesSortField =
+  | "numero_certificado"
+  | "nome_padrao"
+  | "fabricante"
+  | "modelo"
+  | "numero_serie"
+  | "laboratorio_calibrador"
+  | "data_calibracao"
+  | "data_validade"
+  | "dias_restantes"
+  | "status"
+  | "documentos";
 
 const Calibracao = ({ section }: { section: CalibracaoSection }) => {
   const [search, setSearch] = useState("");
@@ -70,6 +104,8 @@ const Calibracao = ({ section }: { section: CalibracaoSection }) => {
   const [selected, setSelected] = useState<CalibracaoPadrao | null>(null);
   const [renovacaoOpen, setRenovacaoOpen] = useState(false);
   const [listLimit, setListLimit] = useState(DEFAULT_LIST_LIMIT);
+  const [sortField, setSortField] = useState<PadroesSortField>("data_validade");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const { data: padroes = [], isLoading, isError, error, refetch } =
     useCalibracaoPadroes();
   const desativarPadrao = useDesativarCalibracaoPadrao();
@@ -101,10 +137,39 @@ const Calibracao = ({ section }: { section: CalibracaoSection }) => {
     [padroes]
   );
 
-  const visiblePadroes = useMemo(
-    () => filtered.slice(0, listLimit),
-    [filtered, listLimit]
-  );
+  const sortedPadroes = useMemo(() => {
+    const getters: Record<PadroesSortField, (padrao: CalibracaoPadrao) => unknown> = {
+      numero_certificado: (padrao) => padrao.numero_certificado,
+      nome_padrao: (padrao) => padrao.nome_padrao,
+      fabricante: (padrao) => padrao.fabricante,
+      modelo: (padrao) => padrao.modelo,
+      numero_serie: (padrao) => padrao.numero_serie,
+      laboratorio_calibrador: (padrao) => padrao.laboratorio_calibrador,
+      data_calibracao: (padrao) => padrao.data_calibracao,
+      data_validade: (padrao) => padrao.data_validade,
+      dias_restantes: (padrao) => getDiasRestantes(padrao.data_validade),
+      status: (padrao) => getStatusValidadePadrao(padrao.data_validade),
+      documentos: (padrao) => padrao.documentos?.length || 0,
+    };
+
+    return sortByValue(filtered, getters[sortField], sortDirection);
+  }, [filtered, sortDirection, sortField]);
+
+  const {
+    paginatedItems: visiblePadroes,
+    ...padroesPagination
+  } = usePaginatedList(sortedPadroes, listLimit);
+
+  const handleSort = (field: string) => {
+    const nextField = field as PadroesSortField;
+    if (nextField === sortField) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortField(nextField);
+    setSortDirection("asc");
+  };
 
   const openCreate = () => {
     setSelected(null);
@@ -277,17 +342,49 @@ const Calibracao = ({ section }: { section: CalibracaoSection }) => {
 
             {!isLoading && !isError && (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[1500px] text-sm">
+                <table className="w-full min-w-[1600px] text-sm">
                   <thead>
                     <tr className="border-b bg-muted/50">
-                      {["Número do Certificado", "Padrão", "Fabricante", "Modelo", "Número de Série", "Laboratório Calibrador", "Data da Calibração", "Validade", "Status", "Documentos", "Ações"].map((label) => (
-                        <th key={label} className={`${label === "Ações" ? "text-right" : "text-left"} px-4 py-3 font-medium text-muted-foreground`}>{label}</th>
-                      ))}
+                      <th className="px-4 py-3 text-left text-muted-foreground">
+                        <SortableTableHeader label="Número do Certificado" sortField="numero_certificado" sortKey={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                      </th>
+                      <th className="px-4 py-3 text-left text-muted-foreground">
+                        <SortableTableHeader label="Padrão" sortField="nome_padrao" sortKey={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                      </th>
+                      <th className="px-4 py-3 text-left text-muted-foreground">
+                        <SortableTableHeader label="Fabricante" sortField="fabricante" sortKey={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                      </th>
+                      <th className="px-4 py-3 text-left text-muted-foreground">
+                        <SortableTableHeader label="Modelo" sortField="modelo" sortKey={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                      </th>
+                      <th className="px-4 py-3 text-left text-muted-foreground">
+                        <SortableTableHeader label="Número de Série" sortField="numero_serie" sortKey={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                      </th>
+                      <th className="px-4 py-3 text-left text-muted-foreground">
+                        <SortableTableHeader label="Laboratório Calibrador" sortField="laboratorio_calibrador" sortKey={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                      </th>
+                      <th className="px-4 py-3 text-left text-muted-foreground">
+                        <SortableTableHeader label="Data da Calibração" sortField="data_calibracao" sortKey={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                      </th>
+                      <th className="px-4 py-3 text-left text-muted-foreground">
+                        <SortableTableHeader label="Validade" sortField="data_validade" sortKey={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                      </th>
+                      <th className="px-4 py-3 text-left text-muted-foreground">
+                        <SortableTableHeader label="Dias restantes" sortField="dias_restantes" sortKey={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                      </th>
+                      <th className="px-4 py-3 text-left text-muted-foreground">
+                        <SortableTableHeader label="Status" sortField="status" sortKey={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                      </th>
+                      <th className="px-4 py-3 text-left text-muted-foreground">
+                        <SortableTableHeader label="Documentos" sortField="documentos" sortKey={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                      </th>
+                      <th className="px-4 py-3 text-right font-medium text-muted-foreground">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
                     {visiblePadroes.map((padrao) => {
                       const status = getStatusValidadePadrao(padrao.data_validade);
+                      const diasRestantes = getDiasRestantes(padrao.data_validade);
                       return (
                         <tr key={padrao.id} className="border-b last:border-0 hover:bg-muted/30">
                           <td className="px-4 py-3 font-medium">{padrao.numero_certificado}</td>
@@ -300,6 +397,7 @@ const Calibracao = ({ section }: { section: CalibracaoSection }) => {
                           <td className="px-4 py-3">{padrao.laboratorio_calibrador}</td>
                           <td className="px-4 py-3">{formatDate(padrao.data_calibracao)}</td>
                           <td className="px-4 py-3">{formatarDataPadrao(padrao.data_validade)}</td>
+                          <td className="px-4 py-3">{formatDiasRestantes(diasRestantes)}</td>
                           <td className="px-4 py-3"><Badge variant="outline" className={statusClasses[status]}>{statusLabels[status]}</Badge></td>
                           <td className="px-4 py-3">{padrao.documentos?.length || 0}</td>
                           <td className="px-4 py-3">
@@ -322,10 +420,14 @@ const Calibracao = ({ section }: { section: CalibracaoSection }) => {
                       );
                     })}
                     {filtered.length === 0 && (
-                      <tr><td colSpan={11} className="px-5 py-8 text-center text-muted-foreground">Nenhum padrão de calibração cadastrado.</td></tr>
+                      <tr><td colSpan={12} className="px-5 py-8 text-center text-muted-foreground">Nenhum padrão de calibração cadastrado.</td></tr>
                     )}
                   </tbody>
                 </table>
+                <ListPagination
+                  {...padroesPagination}
+                  onPageChange={padroesPagination.setPage}
+                />
               </div>
             )}
           </div>
