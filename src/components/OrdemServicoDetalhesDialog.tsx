@@ -374,7 +374,7 @@ const OrdemServicoDetalhesDialog = ({
               {!preventiva && (
                 <Field label="Tipo de OS">{getTipoServico(os)}</Field>
               )}
-              <Field label="Responsável técnico">{getTecnico(os)}</Field>
+              <Field label="Técnico executor">{getTecnico(os)}</Field>
               <Field label="Estado">{estado}</Field>
               <Field label="Status interno">{os.status_sistema || "—"}</Field>
             </div>

@@ -18,7 +18,7 @@ const equipamento = (index: number): EquipamentoSupabase =>
     patrimonio: `PAT-${index}`,
     tag: `TAG-${index}`,
     setor: index % 2 === 0 ? "Sem setor" : "Centro Cirurgico",
-    status: "Ativo",
+    status: index === 3 ? "Em manutenção" : "Ativo",
     data_aquisicao: null,
     data_instalacao: null,
     data_ultima_preventiva: null,
@@ -62,7 +62,7 @@ const dados: RelatorioVisitaExternaDados = {
 };
 
 describe("visitaExternaPdfTemplate", () => {
-  it("usa tabela unica por cliente sem prefixo de serie", () => {
+  it("separa por setor, deixa setor vazio em branco e destaca manutencao", () => {
     const html = buildVisitaExternaHtml(dados, "data:image/png;base64,logo");
 
     expect(html).toContain("width: 1588px");
@@ -71,7 +71,11 @@ describe("visitaExternaPdfTemplate", () => {
     expect(html).toContain("N&uacute;mero de S&eacute;rie");
     expect(html).toContain("N&atilde;o conforme");
     expect(html).toContain("Observa&ccedil;&otilde;es gerais da visita");
-    expect(html.match(/class="equipment-table"/g)).toHaveLength(1);
+    expect(html).toContain("Setor: Centro Cirurgico");
+    expect(html).toContain("Equipamentos sem setor");
+    expect(html.match(/class="equipment-table"/g)).toHaveLength(2);
+    expect(html).toContain('class="maintenance-row"');
+    expect(html).toContain('<td></td>');
     expect(html).not.toContain("continua");
     expect(html).not.toContain("Serie:");
   });

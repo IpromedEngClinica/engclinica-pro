@@ -3,71 +3,115 @@ import type {
   SegurancaEletricaResultado,
 } from "@/services/segurancaEletricaService";
 import { formatNumeroCertificadoSegurancaEletrica } from "@/services/segurancaEletricaService";
-import { getEquipamentoLabel } from "@/utils/equipamentoDisplay";
 import { formatDecimalSeguranca } from "@/utils/segurancaEletricaTemplate";
 import type { AssinaturasDocumento } from "@/services/assinaturasService";
+import { PDF_DOCUMENT_BASE_CSS } from "@/utils/pdfDocumentStyles";
 
-const FOOTER =
+export const SEGURANCA_ELETRICA_FOOTER =
   "ACI Comercio LTDA - Assistencia Tecnica Hospitalar e Engenharia Clinica - Rua Jose Martins da Silva, 215 - Ceramica - Juiz de Fora - MG - CEP 36.080-370 - PABX: (32) 3221-7944 - E-mail: acicomercio@yahoo.com.br - CNPJ: 71.208.094/0001-37";
-const RESPONSAVEL_TECNICO_CREA = "CREA: 142085302-3";
 
-const esc = (value?: string | number | null) =>
-  String(value ?? "-")
+const RESPONSAVEL_TECNICO_CREA = "CREA: 142085302-3";
+const EMPTY = "-";
+
+const esc = (value?: string | number | null) => {
+  if (value === null || value === undefined || value === "") return EMPTY;
+
+  return String(value)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+};
+
+const hasValue = (value?: string | number | null) => {
+  if (value === null || value === undefined) return false;
+  const text = String(value).trim();
+  return text !== "" && text !== EMPTY;
+};
+
+const escPreserveBreaks = (value?: string | number | null) =>
+  esc(value).replace(/\n/g, "<br>");
 
 const date = (value?: string | null) =>
-  value ? new Date(`${value}T00:00:00`).toLocaleDateString("pt-BR") : "-";
+  value ? new Date(`${value}T00:00:00`).toLocaleDateString("pt-BR") : EMPTY;
+
+const sectionTitle = (number: string, title: string) => `
+  <h2 class="section-title">${esc(number)}. ${esc(title)}</h2>
+`;
+
+const field = (label: string, value?: string | number | null, wide = false) => `
+  <div class="field ${wide ? "field-address" : ""}">
+    <span class="field-label">${esc(label)}</span>
+    <span class="field-value">${esc(value)}</span>
+  </div>
+`;
+
+const optionalField = (
+  label: string,
+  value?: string | number | null,
+  wide = false
+) => (hasValue(value) ? field(label, value, wide) : "");
+
+const getEmpresaNome = (execucao: SegurancaEletricaExecucao) =>
+  execucao.empresa?.nome_fantasia || execucao.empresa?.nome;
+
+const getEnderecoEmpresa = (execucao: SegurancaEletricaExecucao) => {
+  const empresa = execucao.empresa;
+  if (!empresa) return EMPTY;
+
+  const linha1 = [empresa.rua, empresa.numero].filter(Boolean).join(", ");
+  const linha2 = [empresa.bairro, empresa.cidade, empresa.estado]
+    .filter(Boolean)
+    .join(" - ");
+  const cep = empresa.cep ? `CEP ${empresa.cep}` : "";
+
+  return [linha1, linha2, cep].filter(Boolean).join(" - ") || EMPTY;
+};
+
+const getTipoEquipamento = (execucao: SegurancaEletricaExecucao) =>
+  execucao.equipamento?.tipo_equipamento?.nome ||
+  execucao.equipamento?.tipo_texto ||
+  EMPTY;
+
+const getIdentificacaoEquipamento = (execucao: SegurancaEletricaExecucao) =>
+  execucao.equipamento?.tag ||
+  execucao.equipamento?.patrimonio ||
+  execucao.equipamento?.numero_serie ||
+  EMPTY;
 
 const resultLabel = (value?: string | null) => {
-  if (value === "aprovado") return "APROVADO";
-  if (value === "reprovado") return "REPROVADO";
-  return "N/A";
+  if (value === "aprovado") return "Aprovado";
+  if (value === "reprovado") return "Reprovado";
+  return EMPTY;
 };
 
 const resultClass = (value?: string | null) => {
-  if (value === "aprovado") return "approved";
-  if (value === "reprovado") return "failed";
-  return "na";
+  if (value === "aprovado") return "result-ok";
+  if (value === "reprovado") return "result-fail";
+  return "result-na";
 };
-
-const field = (label: string, value?: string | number | null) =>
-  `<div class="field"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`;
-
-const getEmpresaNome = (execucao: SegurancaEletricaExecucao) =>
-  execucao.empresa?.nome_fantasia ||
-  execucao.empresa?.nome ||
-  "Nao informado";
-
-const getEnderecoEmpresa = (execucao: SegurancaEletricaExecucao) =>
-  [
-    [execucao.empresa?.rua, execucao.empresa?.numero].filter(Boolean).join(", "),
-    execucao.empresa?.bairro,
-    [execucao.empresa?.cidade, execucao.empresa?.estado].filter(Boolean).join(" - "),
-    execucao.empresa?.cep ? `CEP ${execucao.empresa.cep}` : "",
-  ]
-    .filter(Boolean)
-    .join(" - ");
 
 const formatValorRegistrado = (item: SegurancaEletricaResultado) =>
   item.valor_registrado_texto ||
   (item.valor_registrado == null
-    ? "-"
+    ? EMPTY
     : formatDecimalSeguranca(item.valor_registrado));
 
 const groupBy = (resultados: SegurancaEletricaResultado[]) =>
   resultados.reduce<Record<string, SegurancaEletricaResultado[]>>((acc, item) => {
-    if (!acc[item.grupo]) acc[item.grupo] = [];
-    acc[item.grupo].push(item);
+    const grupo = item.grupo || "Resultados";
+    if (!acc[grupo]) acc[grupo] = [];
+    acc[grupo].push(item);
     return acc;
   }, {});
 
 const buildResultados = (resultados: SegurancaEletricaResultado[]) => {
-  const grupos = groupBy(resultados);
+  if (!resultados.length) {
+    return '<tr><td colspan="6" class="center">Nenhum resultado registrado.</td></tr>';
+  }
 
-  return Object.entries(grupos)
+  return Object.entries(groupBy(resultados))
     .map(
       ([grupo, itens]) => `
         <tr class="group-row"><td colspan="6">${esc(grupo)}</td></tr>
@@ -75,12 +119,12 @@ const buildResultados = (resultados: SegurancaEletricaResultado[]) => {
           .map(
             (item) => `
               <tr>
-                <td>${esc(item.caracteristica)}</td>
-                <td class="center">${esc(item.unidade)}</td>
-                <td class="numeric">${esc(item.valor_esperado_texto)}</td>
-                <td class="numeric">${esc(formatValorRegistrado(item))}</td>
-                <td class="numeric">${esc(item.desvio_texto || "N/A")}</td>
-                <td class="center ${resultClass(item.resultado)}">${resultLabel(item.resultado)}</td>
+                <td class="text-left">${esc(item.caracteristica)}</td>
+                <td class="center nowrap">${esc(item.unidade)}</td>
+                <td class="center">${esc(item.valor_esperado_texto)}</td>
+                <td class="center">${esc(formatValorRegistrado(item))}</td>
+                <td class="center nowrap">${esc(item.desvio_texto || EMPTY)}</td>
+                <td class="center ${resultClass(item.resultado)}">${esc(resultLabel(item.resultado))}</td>
               </tr>
             `
           )
@@ -90,39 +134,93 @@ const buildResultados = (resultados: SegurancaEletricaResultado[]) => {
     .join("");
 };
 
+const assinaturaBlock = ({
+  dataUrl,
+  nome,
+  funcao,
+  registro,
+}: {
+  dataUrl?: string;
+  nome?: string | null;
+  funcao: string;
+  registro?: string | null;
+}) => `
+  <div class="signature-block">
+    ${dataUrl ? `<img class="signature-image" src="${dataUrl}" alt="Assinatura de ${esc(nome)}">` : '<div class="signature-image-placeholder"></div>'}
+    <div class="signature-line"></div>
+    <div class="signature-name">${esc(nome)}</div>
+    <div class="signature-role">${esc(funcao)}</div>
+    ${registro ? `<div class="signature-register">${esc(registro)}</div>` : ""}
+  </div>
+`;
+
+const buildNotaResultado = (execucao: SegurancaEletricaExecucao) => {
+  const resultado = resultLabel(execucao.resultado_geral).toLowerCase();
+
+  return `O equipamento encontra-se ${resultado || "sem resultado registrado"} conforme os resultados obtidos.
+
+Este documento certifica que os padrões listados foram utilizados para avaliar o equipamento identificado acima, de acordo com os procedimentos aplicáveis e com a NBR IEC 60601-1. Este certificado refere-se somente aos itens avaliados, não sendo permitida sua reprodução parcial.
+
+O resultado das medições apresentadas neste certificado refere-se ao resultado não corrigido.`;
+};
+
 const styles = `
-  *{box-sizing:border-box}
-  body{margin:0;background:#fff;color:#111827;font:12px Arial,Helvetica,sans-serif}
-  .document{width:1123px;min-height:1588px;padding:42px;background:#fff}
-  header{display:flex;justify-content:space-between;gap:24px;align-items:flex-start;border-top:6px solid #c5161d;padding-top:14px;margin-bottom:14px}
-  .logo{width:190px;height:auto}
-  h1{font-size:22px;margin:0 0 6px;text-align:right;color:#111827}
-  h2{font-size:15px;border-bottom:1px solid #e5e7eb;padding-bottom:5px;margin:16px 0 8px;color:#111827}
-  .meta{text-align:right;color:#6b7280;line-height:1.45}
-  .meta strong{display:block;color:#111827;font-size:13px}
-  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px 16px;border:1px solid #e5e7eb;border-radius:6px;padding:10px}
-  .field span{display:block;color:#6b7280;font-size:9px;font-weight:700;text-transform:uppercase;margin-bottom:2px}
-  .field strong{display:block;color:#111827;font-size:12px;word-break:break-word}
-  .note{white-space:pre-wrap;border-left:3px solid #c5161d;background:#fff7f7;padding:10px;line-height:1.45;border-radius:4px}
-  .status{display:inline-flex;align-items:center;border-radius:999px;padding:4px 10px;font-weight:700}
-  .status.approved{background:#dcfce7;color:#166534}
-  .status.failed{background:#fee2e2;color:#991b1b}
-  table{width:100%;border-collapse:collapse;font-size:11px;margin-top:8px;page-break-inside:auto}
-  thead{display:table-header-group}
-  tr{page-break-inside:avoid}
-  th,td{border:1px solid #e5e7eb;padding:5px 6px;text-align:left;vertical-align:middle}
-  th{background:#f3f4f6;color:#111827;font-size:10px;text-transform:uppercase}
-  .group-row td{background:#f9fafb;color:#111827;font-weight:700;text-align:center}
-  .numeric{text-align:right;white-space:nowrap}
-  .center{text-align:center}
-  .approved{color:#166534;font-weight:700}
-  .failed{color:#991b1b;font-weight:700}
-  .na{color:#6b7280;font-weight:700}
-  .sign{display:grid;grid-template-columns:1fr 1fr;gap:50px;margin-top:42px;text-align:center}
-  .line{border-top:1px solid #777;padding-top:8px}
-  .signature-image{height:64px;display:flex;align-items:flex-end;justify-content:center;margin-bottom:3px}
-  .signature-image img{display:block;max-width:90%;max-height:62px;object-fit:contain}
-  footer{border-top:1px solid #ddd;margin-top:28px;padding-top:8px;color:#6b7280;font-size:10px;text-align:center}
+  ${PDF_DOCUMENT_BASE_CSS}
+
+  .info-box {
+    padding: 8px 9px;
+    border: 1px solid var(--light-line);
+    border-radius: 6px;
+    background: var(--soft-2);
+    color: var(--value);
+    white-space: pre-wrap;
+  }
+
+  .mt-compact {
+    margin-top: 8px;
+  }
+
+  .result-ok {
+    color: var(--ok);
+    font-weight: 750;
+  }
+
+  .result-fail {
+    color: var(--fail);
+    font-weight: 750;
+  }
+
+  .result-na {
+    color: var(--muted);
+    font-weight: 700;
+  }
+
+  .result-pill {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-weight: 750;
+  }
+
+  .result-pill.result-ok {
+    background: var(--ok-soft);
+  }
+
+  .result-pill.result-fail {
+    background: var(--fail-soft);
+  }
+
+  .group-row td {
+    background: #f9fafb;
+    color: var(--ink);
+    font-weight: 750;
+    text-align: left;
+  }
+
+  .summary-signatures {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
 `;
 
 export const buildSegurancaEletricaHtml = (
@@ -139,90 +237,148 @@ export const buildSegurancaEletricaHtml = (
     (a, b) => Number(a.ordem || 0) - Number(b.ordem || 0)
   );
 
-  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><style>${styles}</style></head>
-  <body><main class="document">
-    <header>
-      <img class="logo" src="${logoSrc}" alt="ACI">
-      <div>
-        <h1>Avaliação de Segurança Elétrica</h1>
-        <div class="meta"><strong>${esc(numero)}</strong>Emissão: ${esc(date(execucao.data_emissao))}</div>
-      </div>
-    </header>
+  return `<!doctype html>
+  <html lang="pt-BR">
+    <head>
+      <meta charset="utf-8">
+      <style>${styles}</style>
+    </head>
+    <body>
+      <main class="document">
+        <header class="document-header">
+          <img class="logo" src="${logoSrc}" alt="ACI">
+          <div class="document-title">
+            <h1>Certificado de Segurança Elétrica</h1>
+            <div class="document-code">SE-${esc(numero)}</div>
+            <div class="document-meta">Emissão: ${date(execucao.data_emissao)}</div>
+          </div>
+        </header>
 
-    <h2>1. Identificação do Cliente</h2>
-    <section class="grid">
-      ${field("Cliente", getEmpresaNome(execucao))}
-      ${field("CPF/CNPJ", execucao.empresa?.cpf_cnpj)}
-      ${field("Endereço", getEnderecoEmpresa(execucao))}
-      ${field("Cidade", execucao.empresa?.cidade)}
-      ${field("UF", execucao.empresa?.estado)}
-      ${field("CEP", execucao.empresa?.cep)}
-    </section>
+        <section class="section">
+          ${sectionTitle("1", "Dados do Contratante")}
+          <div class="info-grid info-grid-2 client-identification">
+            ${field("Nome:", getEmpresaNome(execucao))}
+            ${optionalField("Contato:", [execucao.empresa?.contato, execucao.empresa?.telefone || execucao.empresa?.celular].filter(Boolean).join(" / "))}
+            ${optionalField("Endereço:", getEnderecoEmpresa(execucao), true)}
+            ${optionalField("CPF/CNPJ:", execucao.empresa?.cpf_cnpj)}
+            ${optionalField("E-mail:", execucao.empresa?.email, true)}
+            ${optionalField("Fantasia:", execucao.empresa?.nome_fantasia)}
+          </div>
+        </section>
 
-    <h2>2. Identificação do Equipamento</h2>
-    <section class="grid">
-      ${field("Equipamento", equipamento?.tipo_equipamento?.nome || equipamento?.tipo_texto)}
-      ${field("Identificação", getEquipamentoLabel(equipamento))}
-      ${field("Marca", equipamento?.fabricante)}
-      ${field("Modelo", equipamento?.modelo)}
-      ${field("Patrimônio", equipamento?.patrimonio)}
-      ${field("Nº de Série", equipamento?.numero_serie)}
-      ${field("Classe", execucao.classe_equipamento)}
-      ${field("Parte aplicada", execucao.tipo_parte_aplicada)}
-      ${field("Setor", equipamento?.setor)}
-    </section>
+        <section class="section">
+          ${sectionTitle("2", "Instrumento / Equipamento Ensaiado")}
+          <div class="info-grid info-grid-3">
+            ${optionalField("Tipo:", getTipoEquipamento(execucao))}
+            ${optionalField("Identificação:", getIdentificacaoEquipamento(execucao))}
+            ${optionalField("Modelo:", equipamento?.modelo)}
+            ${optionalField("Fabricante:", equipamento?.fabricante)}
+            ${optionalField("Número de Série:", equipamento?.numero_serie)}
+            ${optionalField("Patrimônio:", equipamento?.patrimonio)}
+            ${optionalField("TAG:", equipamento?.tag)}
+            ${optionalField("Setor:", equipamento?.setor)}
+            ${optionalField("Classe:", execucao.classe_equipamento)}
+            ${optionalField("Parte aplicada:", execucao.tipo_parte_aplicada)}
+          </div>
+        </section>
 
-    <h2>3. Condições Ambientais</h2>
-    <section class="grid">
-      ${field("Temperatura (ºC)", execucao.temperatura_ambiente_texto)}
-      ${field("U.R. (%)", execucao.umidade_relativa_texto)}
-      ${field("Instrumento", padrao?.nome_padrao || "Termo-higrômetro")}
-    </section>
+        <section class="section">
+          ${sectionTitle("3", "Condições Ambientais")}
+          <div class="info-grid info-grid-3">
+            ${optionalField("Local:", execucao.local_ensaio)}
+            ${optionalField("Temperatura:", execucao.temperatura_ambiente_texto)}
+            ${optionalField("Umidade Relativa:", execucao.umidade_relativa_texto)}
+          </div>
+        </section>
 
-    <h2>4. Padrão Utilizado</h2>
-    <section class="grid">
-      ${field("Instrumento", padrao?.nome_padrao)}
-      ${field("Nº Série", padrao?.numero_serie || padrao?.patrimonio || padrao?.tag)}
-      ${field("Nº do Certificado", padrao?.numero_certificado)}
-      ${field("Data Cal.", date(padrao?.data_calibracao))}
-      ${field("Data Val. Cal.", date(padrao?.data_validade))}
-      ${field("Órgão Calibrador", padrao?.laboratorio_calibrador)}
-    </section>
+        <section class="section">
+          ${sectionTitle("4", "Padrão Utilizado")}
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th class="text-left">Nome</th>
+                <th class="nowrap">Certificado</th>
+                <th class="nowrap">Validade</th>
+                <th class="nowrap">Identificação</th>
+                <th>Órgão calibrador</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="text-left">${esc(padrao?.nome_padrao)}</td>
+                <td class="nowrap">${esc(padrao?.numero_certificado)}</td>
+                <td class="nowrap">${date(padrao?.data_validade)}</td>
+                <td class="nowrap">${esc(padrao?.tag || padrao?.numero_serie || padrao?.patrimonio)}</td>
+                <td>${esc(padrao?.laboratorio_calibrador)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
 
-    <h2>5. Resultado da Avaliação</h2>
-    <div class="note">O equipamento encontra-se <span class="status ${resultClass(execucao.resultado_geral)}">${resultLabel(execucao.resultado_geral)}</span> conforme os resultados obtidos em anexo.
+        <section class="section">
+          ${sectionTitle("5", "Resultado da Avaliação")}
+          <div class="info-grid info-grid-3 summary-block">
+            ${field("Resultado geral:", resultLabel(execucao.resultado_geral))}
+            ${field("Data do ensaio:", date(execucao.data_teste))}
+            ${field("Próxima certificação:", date(execucao.data_validade))}
+          </div>
+          <div class="info-box mt-compact">${escPreserveBreaks(buildNotaResultado(execucao))}</div>
+        </section>
 
-Este documento certifica que os padrões listados foram utilizados para avaliar o equipamento identificado acima, de acordo com os padrões adotados em procedimento específico e com a NBR IEC 60601-1. A exatidão e calibração dos instrumentos utilizados são direta ou indiretamente rastreáveis ao INMETRO, através de calibrações realizadas em intervalos periódicos. Este certificado refere-se somente aos itens avaliados, não sendo permitida sua reprodução parcial.
+        <section class="section">
+          ${sectionTitle("6", "Resultados dos Testes de Segurança Elétrica")}
+          <table class="data-table result-table">
+            <thead>
+              <tr>
+                <th class="text-left">Características</th>
+                <th class="center nowrap">Unidade</th>
+                <th class="center">Valor esperado</th>
+                <th class="center">Valor registrado</th>
+                <th class="center nowrap">Desvio</th>
+                <th class="center">Resultado</th>
+              </tr>
+            </thead>
+            <tbody>${buildResultados(resultados)}</tbody>
+          </table>
+        </section>
 
-O resultado das medições apresentadas neste certificado refere-se ao resultado não corrigido.</div>
+        ${
+          execucao.observacoes
+            ? `
+              <section class="section">
+                ${sectionTitle("7", "Observações")}
+                <div class="info-box">${escPreserveBreaks(execucao.observacoes)}</div>
+              </section>
+            `
+            : ""
+        }
 
-    <section class="grid" style="margin-top:10px">
-      ${field("Data da realização do teste", date(execucao.data_teste))}
-      ${field("Data da emissão", date(execucao.data_emissao))}
-      ${field("Próxima certificação", date(execucao.data_validade))}
-    </section>
-
-    <h2>6. Resultado dos Testes de Segurança Elétrica - ${esc(execucao.classe_equipamento)} - ${esc(execucao.tipo_parte_aplicada)}</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>Características</th>
-          <th>Unidade</th>
-          <th>Valor Esperado</th>
-          <th>Valor Registrado</th>
-          <th>Desvio</th>
-          <th>Aprovação</th>
-        </tr>
-      </thead>
-      <tbody>${buildResultados(resultados)}</tbody>
-    </table>
-
-    ${execucao.observacoes ? `<h2>7. Observações</h2><div class="note">${esc(execucao.observacoes)}</div>` : ""}
-
-    <div class="sign">
-      <div><div class="signature-image">${assinaturas.tecnico?.dataUrl ? `<img src="${assinaturas.tecnico.dataUrl}" alt="Assinatura do tecnico executor">` : ""}</div><div class="line">${esc(assinaturas.tecnico?.nome || execucao.tecnico_executor_nome)}<br>Técnico Executor</div></div>
-      <div><div class="signature-image">${assinaturas.responsavel?.dataUrl ? `<img src="${assinaturas.responsavel.dataUrl}" alt="Assinatura do responsavel tecnico">` : ""}</div><div class="line">${esc(assinaturas.responsavel?.nome || execucao.responsavel_tecnico_nome)}<br>${esc(RESPONSAVEL_TECNICO_CREA)}<br>Responsável Técnico</div></div>
-    </div>
-    <footer>${esc(FOOTER)}</footer>
-  </main></body></html>`;
+        <section class="section summary-signatures">
+          ${sectionTitle(execucao.observacoes ? "8" : "7", "Assinaturas")}
+          <div class="signature-area">
+            ${assinaturaBlock({
+              dataUrl: assinaturas.tecnico?.dataUrl,
+              nome: assinaturas.tecnico?.nome || execucao.tecnico_executor_nome,
+              funcao: "Técnico Executor",
+            })}
+            ${assinaturaBlock({
+              dataUrl: assinaturas.responsavel?.dataUrl,
+              nome: assinaturas.responsavel?.nome || execucao.responsavel_tecnico_nome,
+              funcao: "Responsável Técnico / Signatário Autorizado",
+              registro: RESPONSAVEL_TECNICO_CREA,
+            })}
+            ${assinaturaBlock({
+              dataUrl: assinaturas.solicitante?.dataUrl,
+              nome:
+                assinaturas.solicitante?.nome ||
+                execucao.responsavel_solicitante ||
+                execucao.empresa?.contato ||
+                getEmpresaNome(execucao),
+              funcao: "Solicitante",
+            })}
+          </div>
+        </section>
+      </main>
+    </body>
+  </html>`;
 };

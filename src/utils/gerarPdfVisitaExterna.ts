@@ -2,6 +2,7 @@ import aciLogo from "@/assets/aci-logo-hd.png";
 import type { RelatorioVisitaExternaDados } from "@/services/relatoriosService";
 import { imageToDataUrl } from "@/utils/pdfImageUtils";
 import { renderHtmlToPdf } from "@/utils/pdfHtmlRenderer";
+import { renderHtmlToPdfWithPrintToPdf } from "@/utils/printToPdfRenderer";
 import { buildVisitaExternaHtml } from "@/utils/visitaExternaPdfTemplate";
 
 const normalizeFileName = (value: string) =>
@@ -22,12 +23,23 @@ export const gerarPdfVisitaExterna = async (
     dados.relatorio.titulo || "relatorio"
   )}_rev${dados.relatorio.revisao}.pdf`;
 
+  const printToPdf = await renderHtmlToPdfWithPrintToPdf({
+    html,
+    fileName,
+    save,
+    orientation: "l",
+    footerText: " ",
+    footerFontSizePx: 10,
+  });
+
+  if (printToPdf) return printToPdf;
+
   return renderHtmlToPdf({
     html,
     fileName,
     save,
     orientation: "l",
     marginMm: 5,
-    fontScale: 1.2,
+    fontScale: 1,
   });
 };

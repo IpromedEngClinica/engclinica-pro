@@ -36,6 +36,18 @@ export type ProtocoloOSSupabase = {
     id: string;
     nome: string;
     nome_fantasia: string | null;
+    cpf_cnpj: string | null;
+    cep: string | null;
+    rua: string | null;
+    numero: string | null;
+    complemento: string | null;
+    bairro: string | null;
+    cidade: string | null;
+    estado: string | null;
+    contato: string | null;
+    email: string | null;
+    celular: string | null;
+    telefone: string | null;
     ativo: boolean;
   } | null;
   equipamento?: {
@@ -142,6 +154,18 @@ const selectProtocolos = `
     id,
     nome,
     nome_fantasia,
+    cpf_cnpj,
+    cep,
+    rua,
+    numero,
+    complemento,
+    bairro,
+    cidade,
+    estado,
+    contato,
+    email,
+    celular,
+    telefone,
     ativo
   ),
   equipamento:equipamentos (

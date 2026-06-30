@@ -14,5 +14,5 @@ export const formatDescricaoPecaOrcamento = (item: OrcamentoItemSupabase) => {
 
   if (!detalhes.length) return base;
 
-  return `${base} — ${detalhes.join(" — ")}`;
+  return `${base} - ${detalhes.join(" - ")}`;
 };

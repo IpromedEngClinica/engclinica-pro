@@ -1,6 +1,8 @@
 import {
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Copy,
   Download,
   Loader2,
@@ -430,6 +432,8 @@ const Utilitarios = () => {
   const [gerandoCadastroVisita, setGerandoCadastroVisita] = useState(false);
   const [gerandoReciboId, setGerandoReciboId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedVencimentoClienteId, setExpandedVencimentoClienteId] =
+    useState<string | null>(null);
   const [limit, setLimit] = useState(DEFAULT_LIST_LIMIT);
   const isCadastroVisita = location.pathname.endsWith("/cadastro-visita");
   const isRecibos = location.pathname.endsWith("/recibos");
@@ -1217,86 +1221,136 @@ const Utilitarios = () => {
                   </div>
 
                   <div className="divide-y">
-                    {mes.clientes.map((cliente) => (
-                      <div key={cliente.empresaId} className="p-4">
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div>
-                            <div className="text-base font-semibold">
-                              {cliente.clienteNome}
-                            </div>
-                            <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                              {cliente.contato && (
-                                <span>Contato: {cliente.contato}</span>
-                              )}
-                              {cliente.telefone && (
-                                <span>Telefone: {cliente.telefone}</span>
-                              )}
-                              {cliente.email && <span>E-mail: {cliente.email}</span>}
-                            </div>
-                          </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              handleCopiarMensagemVencimentos(cliente)
-                            }
-                          >
-                            <Copy className="mr-2 h-4 w-4" />
-                            Copiar mensagem
-                          </Button>
-                        </div>
+                    {mes.clientes.map((cliente) => {
+                      const expandedKey = `${mes.mes}-${cliente.empresaId}`;
+                      const expanded = expandedVencimentoClienteId === expandedKey;
 
-                        <div className="mt-4 overflow-x-auto rounded-md border">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead className="w-[120px]">Vencimento</TableHead>
-                                <TableHead className="w-[120px]">Servico</TableHead>
-                                <TableHead>Equipamento</TableHead>
-                                <TableHead>Identificacao</TableHead>
-                                <TableHead>Setor</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {cliente.itens.map((item) => (
-                                <TableRow
-                                  key={`${item.equipamentoId}-${item.tipoServico}-${item.dataVencimento}`}
+                      return (
+                        <div key={expandedKey} className="p-3">
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            className="rounded-lg border bg-background p-4 transition-colors hover:bg-muted/40"
+                            onClick={() =>
+                              setExpandedVencimentoClienteId(
+                                expanded ? null : expandedKey
+                              )
+                            }
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                setExpandedVencimentoClienteId(
+                                  expanded ? null : expandedKey
+                                );
+                              }
+                            }}
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div className="flex min-w-0 items-center gap-3">
+                                {expanded ? (
+                                  <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                ) : (
+                                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                )}
+                                <div className="min-w-0">
+                                  <div className="truncate text-base font-semibold">
+                                    {cliente.clienteNome}
+                                  </div>
+                                  <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                                    <span>Cidade: {cliente.cidade || "-"}</span>
+                                    {cliente.contato && (
+                                      <span>Contato: {cliente.contato}</span>
+                                    )}
+                                    {cliente.telefone && (
+                                      <span>Telefone: {cliente.telefone}</span>
+                                    )}
+                                    {cliente.email && (
+                                      <span>E-mail: {cliente.email}</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex shrink-0 items-center gap-2">
+                                <Badge variant="secondary">
+                                  {cliente.itens.length} item(ns)
+                                </Badge>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleCopiarMensagemVencimentos(cliente);
+                                  }}
                                 >
-                                  <TableCell className="font-medium">
-                                    {formatDate(item.dataVencimento)}
-                                  </TableCell>
-                                  <TableCell>
-                                    <Badge
-                                      variant={
-                                        item.tipoServico === "calibracao"
-                                          ? "default"
-                                          : "secondary"
-                                      }
-                                    >
-                                      {getServicoLabel(item.tipoServico)}
-                                    </Badge>
-                                  </TableCell>
-                                  <TableCell>
-                                    <div className="font-medium">
-                                      {item.tipoEquipamento}
-                                    </div>
-                                    <div className="text-xs text-muted-foreground">
-                                      {[item.fabricante, item.modelo]
-                                        .filter(Boolean)
-                                        .join(" | ") || "-"}
-                                    </div>
-                                  </TableCell>
-                                  <TableCell>
-                                    {getVencimentoIdentificacao(item)}
-                                  </TableCell>
-                                  <TableCell>{item.setor || "-"}</TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
+                                  <Copy className="mr-2 h-4 w-4" />
+                                  Copiar mensagem
+                                </Button>
+                              </div>
+                            </div>
+
+                            {expanded && (
+                              <div
+                                className="mt-4 overflow-x-auto rounded-md border"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow>
+                                      <TableHead className="w-[120px]">
+                                        Vencimento
+                                      </TableHead>
+                                      <TableHead className="w-[120px]">
+                                        Servico
+                                      </TableHead>
+                                      <TableHead>Equipamento</TableHead>
+                                      <TableHead>Identificacao</TableHead>
+                                      <TableHead>Setor</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {cliente.itens.map((item) => (
+                                      <TableRow
+                                        key={`${item.equipamentoId}-${item.tipoServico}-${item.dataVencimento}`}
+                                      >
+                                        <TableCell className="font-medium">
+                                          {formatDate(item.dataVencimento)}
+                                        </TableCell>
+                                        <TableCell>
+                                          <Badge
+                                            variant={
+                                              item.tipoServico === "calibracao"
+                                                ? "default"
+                                                : "secondary"
+                                            }
+                                          >
+                                            {getServicoLabel(item.tipoServico)}
+                                          </Badge>
+                                        </TableCell>
+                                        <TableCell>
+                                          <div className="font-medium">
+                                            {item.tipoEquipamento}
+                                          </div>
+                                          <div className="text-xs text-muted-foreground">
+                                            {[item.fabricante, item.modelo]
+                                              .filter(Boolean)
+                                              .join(" | ") || "-"}
+                                          </div>
+                                        </TableCell>
+                                        <TableCell>
+                                          {getVencimentoIdentificacao(item)}
+                                        </TableCell>
+                                        <TableCell>{item.setor || "-"}</TableCell>
+                                      </TableRow>
+                                    ))}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ))

@@ -27,21 +27,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useEmpresas } from "@/hooks/useEmpresas";
-import { useEquipamentos } from "@/hooks/useEquipamentos";
 import {
   useAtualizarRelatorioVisitaExterna,
   useAtualizarRelatorioControlePatrimonial,
   useCriarRelatorioVisitaExterna,
   useCriarRelatorioControlePatrimonial,
   useRelatorios,
+  useRelatoriosEquipamentosOpcoes,
 } from "@/hooks/useRelatorios";
 import { toast } from "@/hooks/use-toast";
-import type { EquipamentoSupabase } from "@/services/equipamentosService";
 import {
   FILTROS_CONTROLE_PATRIMONIAL_PADRAO,
   FILTROS_VISITA_EXTERNA_PADRAO,
   getTipoEquipamentoRelatorio,
   relatoriosService,
+  type RelatorioEquipamentoOpcao,
   type RelatorioControlePatrimonialFiltros,
   type RelatorioTipo,
   type RelatorioRegistro,
@@ -67,7 +67,7 @@ const uniqueSorted = (values: string[]) =>
   );
 
 const filterEquipamentosByEmpresas = (
-  equipamentos: EquipamentoSupabase[],
+  equipamentos: RelatorioEquipamentoOpcao[],
   empresaIds: string[]
 ) => {
   const empresaSet = new Set(empresaIds);
@@ -77,7 +77,7 @@ const filterEquipamentosByEmpresas = (
 };
 
 const filterEquipamentosByTipos = (
-  equipamentos: EquipamentoSupabase[],
+  equipamentos: RelatorioEquipamentoOpcao[],
   tipos: string[]
 ) => {
   const tipoSet = new Set(tipos);
@@ -89,7 +89,7 @@ const filterEquipamentosByTipos = (
 };
 
 const filterEquipamentosBySetores = (
-  equipamentos: EquipamentoSupabase[],
+  equipamentos: RelatorioEquipamentoOpcao[],
   setores: string[]
 ) => {
   const setorSet = new Set(setores);
@@ -100,7 +100,7 @@ const filterEquipamentosBySetores = (
     : equipamentos;
 };
 
-const getStatusFiltroEquipamento = (equipamento: EquipamentoSupabase) =>
+const getStatusFiltroEquipamento = (equipamento: RelatorioEquipamentoOpcao) =>
   equipamento.ativo === false ? "Desativado" : equipamento.status || "Ativo";
 
 const SelectField = ({
@@ -261,9 +261,7 @@ const Relatorios = () => {
     statusFiltro: "ativas",
   });
   const { data: equipamentos = [], isLoading: equipamentosLoading } =
-    useEquipamentos({
-      statusFiltro: "todos",
-    });
+    useRelatoriosEquipamentosOpcoes();
   const {
     data: relatorios = [],
     isLoading: relatoriosLoading,

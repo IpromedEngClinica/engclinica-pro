@@ -5,10 +5,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
+type SearchableSelectOption =
+  | string
+  | {
+      value: string;
+      label: string;
+      searchText?: string;
+    };
+
 interface SearchableSelectProps {
   value: string;
   onValueChange: (value: string) => void;
-  options: string[];
+  options: SearchableSelectOption[];
   placeholder?: string;
   emptyText?: string;
   onAddNew?: () => void;
@@ -29,6 +37,17 @@ const SearchableSelect = ({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const normalizedOptions = options.map((option) =>
+    typeof option === "string"
+      ? { value: option, label: option, searchText: option }
+      : {
+          value: option.value,
+          label: option.label,
+          searchText: [option.label, option.searchText, option.value]
+            .filter(Boolean)
+            .join(" "),
+        }
+  );
   const normalize = (text: string) =>
     text
       .normalize("NFD")
@@ -36,13 +55,14 @@ const SearchableSelect = ({
       .replace(/[.\-/]/g, "")
       .toLowerCase()
       .trim();
+  const selectedOption = normalizedOptions.find((option) => option.value === value);
   const searchTerms = normalize(query).split(/\s+/).filter(Boolean);
   const filteredOptions = searchTerms.length
-    ? options.filter((option) => {
-        const searchable = normalize(option);
+    ? normalizedOptions.filter((option) => {
+        const searchable = normalize(option.searchText);
         return searchTerms.every((term) => searchable.includes(term));
       })
-    : options;
+    : normalizedOptions;
 
   useEffect(() => {
     if (!open) return;
@@ -82,7 +102,7 @@ const SearchableSelect = ({
           onKeyDown={handleTriggerKeyDown}
         >
           <span className={cn("truncate", !value && "text-muted-foreground")}>
-            {value || placeholder}
+            {selectedOption?.label || value || placeholder}
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -121,12 +141,12 @@ const SearchableSelect = ({
               {emptyText}
             </div>
           ) : (
-            filteredOptions.map((option) => (
+            filteredOptions.map((option, index) => (
               <button
-                key={option}
+                key={`${option.value}-${index}`}
                 type="button"
                 onClick={() => {
-                  onValueChange(option);
+                  onValueChange(option.value);
                   setOpen(false);
                   setQuery("");
                 }}
@@ -135,11 +155,11 @@ const SearchableSelect = ({
                 <Check
                   className={cn(
                     "mr-2 h-4 w-4 shrink-0",
-                    value === option ? "opacity-100" : "opacity-0"
+                    value === option.value ? "opacity-100" : "opacity-0"
                   )}
                 />
                 <span className="min-w-0 whitespace-normal break-words">
-                  {option}
+                  {option.label}
                 </span>
               </button>
             ))

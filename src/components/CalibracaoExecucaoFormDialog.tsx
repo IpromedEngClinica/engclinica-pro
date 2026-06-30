@@ -101,7 +101,10 @@ const CalibracaoExecucaoFormDialog = ({
   const [tabelas, setTabelas] = useState<CalibracaoExecucaoTabelaInput[]>([]);
   const [activeTabela, setActiveTabela] = useState("0");
   const { data: empresas = [] } = useEmpresas();
-  const { data: equipamentos = [] } = useEquipamentos({ empresaId: form.empresaId });
+  const { data: equipamentos = [] } = useEquipamentos(
+    { empresaId: form.empresaId, statusFiltro: "ativos" },
+    { enabled: open && Boolean(form.empresaId) }
+  );
   const { data: procedimentos = [] } = useCalibracaoProcedimentos();
   const { data: padroes = [] } = useCalibracaoPadroesValidos(form.dataCalibracao);
   const criar = useSalvarCalibracaoFinalizada();

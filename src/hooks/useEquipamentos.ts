@@ -10,10 +10,25 @@ import {
 
 export const EQUIPAMENTOS_QUERY_KEY = ["equipamentos"];
 
-export const useEquipamentos = (filtros?: ListarEquipamentosFiltros) => {
+type UseEquipamentosOptions = {
+  enabled?: boolean;
+  staleTime?: number;
+  gcTime?: number;
+};
+
+const EQUIPAMENTOS_STALE_TIME = 5 * 60 * 1000;
+const EQUIPAMENTOS_GC_TIME = 15 * 60 * 1000;
+
+export const useEquipamentos = (
+  filtros?: ListarEquipamentosFiltros,
+  options?: UseEquipamentosOptions
+) => {
   return useQuery<EquipamentoSupabase[]>({
     queryKey: [...EQUIPAMENTOS_QUERY_KEY, filtros],
     queryFn: () => equipamentosService.listar(filtros),
+    enabled: options?.enabled ?? true,
+    staleTime: options?.staleTime ?? EQUIPAMENTOS_STALE_TIME,
+    gcTime: options?.gcTime ?? EQUIPAMENTOS_GC_TIME,
   });
 };
 
@@ -24,6 +39,8 @@ export const useEquipamentosPaginados = (
     queryKey: [...EQUIPAMENTOS_QUERY_KEY, "paginado", filtros],
     queryFn: () => equipamentosService.listarPaginado(filtros),
     placeholderData: (previousData) => previousData,
+    staleTime: EQUIPAMENTOS_STALE_TIME,
+    gcTime: EQUIPAMENTOS_GC_TIME,
   });
 };
 

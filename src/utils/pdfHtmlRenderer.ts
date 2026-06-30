@@ -12,6 +12,7 @@ type RenderHtmlPdfOptions = {
   fontScale?: number;
   footerText?: string;
   footerHeightMm?: number;
+  footerFontSizePt?: number;
 };
 
 type AvoidBlock = {
@@ -26,6 +27,7 @@ const DEFAULT_MARGIN_MM = 8;
 const DEFAULT_SCALE = 2.5;
 const DEFAULT_FONT_SCALE = 1.5;
 const DEFAULT_FOOTER_HEIGHT_MM = 15;
+const DEFAULT_FOOTER_FONT_SIZE_PT = 10.4;
 const MIN_SLICE_RATIO = 0.58;
 const PAGE_BREAK_GAP_PX = 16;
 const PAGE_BREAK_GAP_CSS_PX = 18;
@@ -165,12 +167,14 @@ const getPageSize = (pdf: jsPDF) => ({
 
 const drawFixedFooter = ({
   footerText,
+  footerFontSizePt,
   marginMm,
   pageHeightMm,
   pageWidthMm,
   pdf,
 }: {
   footerText: string;
+  footerFontSizePt: number;
   marginMm: number;
   pageHeightMm: number;
   pageWidthMm: number;
@@ -184,7 +188,7 @@ const drawFixedFooter = ({
   pdf.setLineWidth(0.2);
   pdf.line(marginMm, lineY, pageWidthMm - marginMm, lineY);
   pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(8);
+  pdf.setFontSize(footerFontSizePt);
   pdf.setTextColor(156, 163, 175);
 
   const lines = pdf.splitTextToSize(footerText, maxWidth);
@@ -468,6 +472,7 @@ export const renderHtmlToPdf = async ({
   fontScale = DEFAULT_FONT_SCALE,
   footerText,
   footerHeightMm = DEFAULT_FOOTER_HEIGHT_MM,
+  footerFontSizePt = DEFAULT_FOOTER_FONT_SIZE_PT,
 }: RenderHtmlPdfOptions) => {
   const { frame, frameDocument } = createRenderFrame(html, orientation);
 
@@ -613,6 +618,7 @@ export const renderHtmlToPdf = async ({
       if (footerText) {
         drawFixedFooter({
           footerText,
+          footerFontSizePt,
           marginMm,
           pageHeightMm,
           pageWidthMm,

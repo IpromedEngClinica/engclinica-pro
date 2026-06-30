@@ -13,6 +13,13 @@ export const useRelatorios = () =>
     queryFn: () => relatoriosService.listar(),
   });
 
+export const useRelatoriosEquipamentosOpcoes = () =>
+  useQuery({
+    queryKey: [...RELATORIOS_QUERY_KEY, "equipamentos-opcoes"],
+    queryFn: () => relatoriosService.listarOpcoesEquipamentos(),
+    staleTime: 60_000,
+  });
+
 export const useCriarRelatorioControlePatrimonial = () => {
   const queryClient = useQueryClient();
 

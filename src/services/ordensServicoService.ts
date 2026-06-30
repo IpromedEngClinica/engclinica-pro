@@ -399,21 +399,83 @@ const selectOrdensServicoListagem = `
   )
 `;
 
-const toDatabasePayload = (input: OrdemServicoFormInput) => ({
-  empresa_id: input.empresaId,
-  equipamento_id: input.equipamentoId || null,
-  tipo_os_id: input.tipoOsId || null,
-  estado_os_id: input.estadoOsId || null,
-  tecnico_responsavel_id: input.tecnicoResponsavelId || null,
-  ...(input.dataAbertura ? { data_abertura: input.dataAbertura } : {}),
-  solicitante_texto: input.solicitanteTexto || null,
-  responsavel_texto: input.responsavelTexto || null,
-  problema_relatado: input.problemaRelatado || null,
-  origem_problema: input.origemProblema || null,
-  descricao_servico: input.descricaoServico || null,
-  observacoes: input.observacoes || null,
-  status_sistema: input.statusSistema || "aberta",
-});
+type OrdemServicoDatabasePayload = {
+  empresa_id: string;
+  equipamento_id: string | null;
+  tipo_os_id: string | null;
+  estado_os_id: string | null;
+  tecnico_responsavel_id: string | null;
+  data_abertura?: string;
+  data_fechamento?: string | null;
+  solicitante_texto: string | null;
+  responsavel_texto: string | null;
+  problema_relatado: string | null;
+  origem_problema: string | null;
+  descricao_servico: string | null;
+  observacoes: string | null;
+  status_sistema: string;
+};
+
+const buscarEstadoOperacional = async (estadoOsId?: string | null) => {
+  if (!estadoOsId) return null;
+
+  const { data, error } = await supabase
+    .from("estados_os")
+    .select("id, finaliza_os, cancela_os")
+    .eq("id", estadoOsId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
+};
+
+const toDatabasePayload = async (
+  input: OrdemServicoFormInput,
+  options: {
+    dataAberturaFallback?: string | null;
+    dataFechamentoFallback?: string | null;
+  } = {}
+): Promise<OrdemServicoDatabasePayload> => {
+  const estado = await buscarEstadoOperacional(input.estadoOsId);
+  const dataAbertura = input.dataAbertura || options.dataAberturaFallback || null;
+  const payload: OrdemServicoDatabasePayload = {
+    empresa_id: input.empresaId,
+    equipamento_id: input.equipamentoId || null,
+    tipo_os_id: input.tipoOsId || null,
+    estado_os_id: input.estadoOsId || null,
+    tecnico_responsavel_id: input.tecnicoResponsavelId || null,
+    ...(input.dataAbertura ? { data_abertura: input.dataAbertura } : {}),
+    solicitante_texto: input.solicitanteTexto || null,
+    responsavel_texto: input.responsavelTexto || null,
+    problema_relatado: input.problemaRelatado || null,
+    origem_problema: input.origemProblema || null,
+    descricao_servico: input.descricaoServico || null,
+    observacoes: input.observacoes || null,
+    status_sistema: input.statusSistema || "aberta",
+  };
+
+  if (estado?.finaliza_os || estado?.cancela_os) {
+    const fechamento =
+      options.dataFechamentoFallback ||
+      dataAbertura ||
+      new Date().toISOString();
+
+    if (!input.dataAbertura && !options.dataAberturaFallback) {
+      payload.data_abertura = fechamento;
+    }
+
+    payload.data_fechamento = fechamento;
+    payload.status_sistema = estado.finaliza_os ? "fechada" : "cancelada";
+    return payload;
+  }
+
+  payload.status_sistema = "aberta";
+  payload.data_fechamento = null;
+  return payload;
+};
 
 type AcessorioNormalizado = {
   descricao: string;
@@ -543,7 +605,7 @@ const montarDescricaoAlteracoes = async ({
   }
 
   if (texto(osAnterior.responsavel_texto) !== texto(input.responsavelTexto)) {
-    alteracoes.push("Responsável técnico alterado.");
+    alteracoes.push("Técnico executor alterado.");
   }
 
   if (texto(osAnterior.problema_relatado) !== texto(input.problemaRelatado)) {
@@ -629,7 +691,7 @@ const atualizarStatusEquipamento = async (
 
   const { data: equipamento, error: equipamentoError } = await supabase
     .from("equipamentos")
-    .select("id, ativo")
+    .select("id, ativo, status")
     .eq("id", equipamentoId)
     .maybeSingle();
 
@@ -638,6 +700,7 @@ const atualizarStatusEquipamento = async (
   }
 
   if (!equipamento || equipamento.ativo === false) return;
+  if (equipamento.status === "Locado") return;
 
   const { error } = await supabase
     .from("equipamentos")
@@ -963,11 +1026,13 @@ export const ordensServicoService = {
       throw new Error("Não foi possível identificar a organização do usuário.");
     }
 
+    const payload = await toDatabasePayload(input);
+
     const { data: osCriada, error } = await supabase
       .from("ordens_servico")
       .insert({
         organizacao_id: organizacaoId,
-        ...toDatabasePayload(input),
+        ...payload,
         prioridade: "normal",
         ativo: true,
       })
@@ -1026,6 +1091,8 @@ export const ordensServicoService = {
           equipamento_id,
           tipo_os_id,
           estado_os_id,
+          data_abertura,
+          data_fechamento,
           responsavel_texto,
           problema_relatado,
           origem_problema,
@@ -1047,10 +1114,14 @@ export const ordensServicoService = {
       .eq("ordem_servico_id", id);
 
     const acessorios = normalizarAcessorios(input.acessorios);
+    const payload = await toDatabasePayload(input, {
+      dataAberturaFallback: osAnterior.data_abertura,
+      dataFechamentoFallback: osAnterior.data_fechamento,
+    });
 
     const { error } = await supabase
       .from("ordens_servico")
-      .update(toDatabasePayload(input))
+      .update(payload)
       .eq("id", id);
 
     if (error) {

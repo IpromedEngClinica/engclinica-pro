@@ -49,6 +49,11 @@ export type RelatorioVisitaExternaDados = {
   equipamentos: EquipamentoSupabase[];
 };
 
+export type RelatorioEquipamentoOpcao = Pick<
+  EquipamentoSupabase,
+  "id" | "empresa_id" | "tipo_texto" | "setor" | "status" | "ativo" | "tipo_equipamento"
+>;
+
 export type RelatorioControlePatrimonialInput = {
   titulo: string;
   filtros: RelatorioControlePatrimonialFiltros;
@@ -119,6 +124,23 @@ const selectEquipamentosRelatorio = `
     ativo,
     created_at,
     updated_at
+  ),
+  tipo_equipamento:tipos_equipamento (
+    id,
+    nome
+  )
+`;
+
+const selectEquipamentosOpcoes = `
+  id,
+  empresa_id,
+  tipo_texto,
+  setor,
+  status,
+  ativo,
+  empresa:empresas!inner (
+    id,
+    ativo
   ),
   tipo_equipamento:tipos_equipamento (
     id,
@@ -221,6 +243,18 @@ export const relatoriosService = {
     return ((data || []) as unknown as RelatorioRegistro[]).map(
       normalizarRelatorio
     );
+  },
+
+  async listarOpcoesEquipamentos(): Promise<RelatorioEquipamentoOpcao[]> {
+    const { data, error } = await supabase
+      .from("equipamentos")
+      .select(selectEquipamentosOpcoes)
+      .eq("empresa.ativo", true)
+      .order("tipo_texto", { ascending: true, nullsFirst: false });
+
+    if (error) throw new Error(error.message);
+
+    return (data || []) as unknown as RelatorioEquipamentoOpcao[];
   },
 
   async criarVisitaExterna(input: RelatorioVisitaExternaInput) {

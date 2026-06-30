@@ -1,9 +1,10 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CheckCircle2,
-  ChevronDown,
   Loader2,
+  MapPin,
+  MoveRight,
   Plus,
   RefreshCw,
   Search,
@@ -30,8 +31,12 @@ import {
 import { useEmpresas } from "@/hooks/useEmpresas";
 import {
   setoresOrganizacaoService,
-  type SetorEquipamentoGrupo,
+  type EquipamentoSetorResumo,
 } from "@/services/setoresOrganizacaoService";
+
+const TODOS = "__todos__";
+const SEM_SETOR = "__sem_setor__";
+const PENDENTES = "__pendentes__";
 
 const normalizarBusca = (value: string) =>
   value
@@ -43,26 +48,38 @@ const normalizarBusca = (value: string) =>
 const formatEmpresaLabel = (numero: number | null | undefined, nome: string) =>
   `${String(numero || 0).padStart(3, "0")} - ${nome}`;
 
+const formatNumero = (numero: number | null | undefined) =>
+  numero ? String(numero).padStart(3, "0") : "-";
+
 const getErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : "Erro inesperado.";
+
+const montarTextoEquipamento = (equipamento: EquipamentoSetorResumo) =>
+  [
+    setoresOrganizacaoService.montarDescricaoEquipamento(equipamento),
+    equipamento.numero_cadastro,
+    equipamento.numero_serie,
+    equipamento.patrimonio,
+    equipamento.tag,
+    equipamento.setor,
+    equipamento.local_instalacao,
+  ]
+    .filter(Boolean)
+    .join(" ");
 
 const OrganizarSetores = () => {
   const queryClient = useQueryClient();
   const { data: empresas = [], isLoading: loadingEmpresas } = useEmpresas({
     statusFiltro: "todas",
   });
+
   const [empresaId, setEmpresaId] = useState("");
-  const [somentePendentes, setSomentePendentes] = useState(true);
-  const [busca, setBusca] = useState("");
   const [novoSetor, setNovoSetor] = useState("");
-  const [setoresSelecionados, setSetoresSelecionados] = useState<Record<string, string>>(
-    {}
-  );
-  const [locais, setLocais] = useState<Record<string, string>>({});
-  const [gruposAbertos, setGruposAbertos] = useState<Record<string, boolean>>({});
-  const [equipamentosSelecionados, setEquipamentosSelecionados] = useState<
-    Record<string, string[]>
-  >({});
+  const [setorSelecionadoId, setSetorSelecionadoId] = useState(TODOS);
+  const [buscaEquipamento, setBuscaEquipamento] = useState("");
+  const [equipamentosSelecionados, setEquipamentosSelecionados] = useState<string[]>([]);
+  const [setorDestinoNome, setSetorDestinoNome] = useState("");
+  const [localDestino, setLocalDestino] = useState("");
 
   const empresasOptions = useMemo(
     () => empresas.map((empresa) => formatEmpresaLabel(empresa.numero_cadastro, empresa.nome)),
@@ -85,27 +102,23 @@ const OrganizarSetores = () => {
   const empresaLabelSelecionada = useMemo(
     () =>
       empresaSelecionada
-        ? formatEmpresaLabel(
-            empresaSelecionada.numero_cadastro,
-            empresaSelecionada.nome
-          )
+        ? formatEmpresaLabel(empresaSelecionada.numero_cadastro, empresaSelecionada.nome)
         : "",
     [empresaSelecionada]
   );
 
   const setoresQueryKey = ["organizacao-setores", empresaSelecionada?.id];
-  const {
-    data,
-    isLoading,
-    isFetching,
-    isError,
-    error,
-    refetch,
-  } = useQuery({
+  const { data, isLoading, isFetching, isError, error, refetch } = useQuery({
     queryKey: setoresQueryKey,
     queryFn: () => setoresOrganizacaoService.carregarEmpresa(empresaSelecionada!.id),
     enabled: Boolean(empresaSelecionada?.id),
   });
+
+  const setoresPorId = useMemo(() => {
+    const map = new Map<string, NonNullable<typeof data>["setores"][number]>();
+    (data?.setores || []).forEach((setor) => map.set(setor.id, setor));
+    return map;
+  }, [data?.setores]);
 
   const setorOptions = useMemo(
     () => (data?.setores || []).map((setor) => setor.nome),
@@ -118,42 +131,99 @@ const OrganizarSetores = () => {
     return map;
   }, [data?.setores]);
 
+  const equipamentos = data?.equipamentos || [];
+
   const setoresVazios = useMemo(() => {
     const setoresUsados = new Set(
-      (data?.grupos || [])
-        .flatMap((grupo) => grupo.equipamentos)
+      equipamentos
         .map((equipamento) => equipamento.empresa_setor_id)
         .filter((id): id is string => Boolean(id))
     );
 
     return (data?.setores || []).filter((setor) => !setoresUsados.has(setor.id));
-  }, [data?.grupos, data?.setores]);
+  }, [data?.setores, equipamentos]);
 
-  useEffect(() => {
-    if (!data?.grupos) {
-      setSetoresSelecionados({});
-      setLocais({});
-      setEquipamentosSelecionados({});
-      setGruposAbertos({});
-      return;
-    }
+  const isEquipamentoPendente = (equipamento: EquipamentoSetorResumo) => {
+    if (!equipamento.empresa_setor_id) return true;
+    const setorOficial = setoresPorId.get(equipamento.empresa_setor_id);
+    return Boolean(setorOficial && equipamento.setor?.trim() !== setorOficial.nome);
+  };
 
-    const nextSetores: Record<string, string> = {};
-    const nextLocais: Record<string, string> = {};
-    const nextSelecionados: Record<string, string[]> = {};
-
-    data.grupos.forEach((grupo) => {
-      nextSetores[grupo.key] = grupo.setorOficialNome || "";
-      nextLocais[grupo.key] = grupo.localInstalacao || "";
-      nextSelecionados[grupo.key] = grupo.equipamentos.map(
-        (equipamento) => equipamento.id
+  const contagemPorSetor = useMemo(() => {
+    const map = new Map<string, number>();
+    equipamentos.forEach((equipamento) => {
+      if (!equipamento.empresa_setor_id) return;
+      map.set(
+        equipamento.empresa_setor_id,
+        (map.get(equipamento.empresa_setor_id) || 0) + 1
       );
     });
+    return map;
+  }, [equipamentos]);
 
-    setSetoresSelecionados(nextSetores);
-    setLocais(nextLocais);
-    setEquipamentosSelecionados(nextSelecionados);
-  }, [data?.grupos]);
+  const totalSemSetor = useMemo(
+    () => equipamentos.filter((equipamento) => !equipamento.empresa_setor_id).length,
+    [equipamentos]
+  );
+
+  const totalPendentes = useMemo(
+    () => equipamentos.filter((equipamento) => isEquipamentoPendente(equipamento)).length,
+    [equipamentos, setoresPorId]
+  );
+
+  const equipamentosFiltrados = useMemo(() => {
+    const termo = normalizarBusca(buscaEquipamento);
+
+    return equipamentos
+      .filter((equipamento) => {
+        if (setorSelecionadoId === TODOS) return true;
+        if (setorSelecionadoId === SEM_SETOR) return !equipamento.empresa_setor_id;
+        if (setorSelecionadoId === PENDENTES) return isEquipamentoPendente(equipamento);
+        return equipamento.empresa_setor_id === setorSelecionadoId;
+      })
+      .filter((equipamento) => {
+        if (!termo) return true;
+        return normalizarBusca(montarTextoEquipamento(equipamento)).includes(termo);
+      })
+      .sort((a, b) => {
+        const setorA = a.setor || "";
+        const setorB = b.setor || "";
+        const setorCompare = setorA.localeCompare(setorB, "pt-BR");
+        if (setorCompare !== 0) return setorCompare;
+        return (b.numero_cadastro || 0) - (a.numero_cadastro || 0);
+      });
+  }, [buscaEquipamento, equipamentos, setorSelecionadoId, setoresPorId]);
+
+  const equipamentosVisiveisIds = useMemo(
+    () => equipamentosFiltrados.map((equipamento) => equipamento.id),
+    [equipamentosFiltrados]
+  );
+
+  const equipamentosSelecionadosValidos = useMemo(
+    () =>
+      equipamentosSelecionados.filter((id) =>
+        equipamentos.some((equipamento) => equipamento.id === id)
+      ),
+    [equipamentos, equipamentosSelecionados]
+  );
+
+  const todosVisiveisSelecionados =
+    equipamentosVisiveisIds.length > 0 &&
+    equipamentosVisiveisIds.every((id) => equipamentosSelecionados.includes(id));
+
+  useEffect(() => {
+    setSetorSelecionadoId(TODOS);
+    setBuscaEquipamento("");
+    setEquipamentosSelecionados([]);
+    setSetorDestinoNome("");
+    setLocalDestino("");
+  }, [empresaId]);
+
+  useEffect(() => {
+    setEquipamentosSelecionados((current) =>
+      current.filter((id) => equipamentos.some((equipamento) => equipamento.id === id))
+    );
+  }, [equipamentos]);
 
   const criarSetorMutation = useMutation({
     mutationFn: (nome: string) =>
@@ -162,59 +232,47 @@ const OrganizarSetores = () => {
       setNovoSetor("");
       queryClient.invalidateQueries({ queryKey: setoresQueryKey });
       queryClient.invalidateQueries({ queryKey: ["empresas"] });
-      toast.success("Setor oficial criado.");
+      toast.success("Setor criado.");
     },
     onError: (error) => toast.error(getErrorMessage(error)),
   });
 
-  const aplicarMutation = useMutation({
-    mutationFn: (grupo: SetorEquipamentoGrupo) => {
-      const setorNome = setoresSelecionados[grupo.key];
-      const setorOficialId = setorNome ? setorIdPorNome.get(setorNome) : null;
-      const equipamentoIds =
-        equipamentosSelecionados[grupo.key] ||
-        grupo.equipamentos.map((equipamento) => equipamento.id);
-
-      if (!setorOficialId) {
-        throw new Error("Selecione o setor oficial antes de aplicar.");
+  const moverEquipamentosMutation = useMutation({
+    mutationFn: async () => {
+      if (!empresaSelecionada?.id) {
+        throw new Error("Selecione um cliente primeiro.");
       }
 
-      if (equipamentoIds.length === 0) {
+      if (equipamentosSelecionadosValidos.length === 0) {
         throw new Error("Selecione ao menos um equipamento.");
       }
 
+      if (setorDestinoNome === SEM_SETOR) {
+        return setoresOrganizacaoService.removerEquipamentosDoSetor(
+          empresaSelecionada.id,
+          equipamentosSelecionadosValidos
+        );
+      }
+
+      const setorOficialId = setorIdPorNome.get(setorDestinoNome);
+      if (!setorOficialId) {
+        throw new Error("Selecione o setor de destino.");
+      }
+
       return setoresOrganizacaoService.aplicarMapeamento({
-        empresaId: empresaSelecionada!.id,
-        setorAtualOriginal: grupo.setorAtualOriginal,
+        empresaId: empresaSelecionada.id,
+        setorAtualOriginal: null,
         setorOficialId,
-        localInstalacao: locais[grupo.key],
-        equipamentoIds,
+        localInstalacao: localDestino,
+        equipamentoIds: equipamentosSelecionadosValidos,
       });
     },
     onSuccess: (quantidade) => {
       queryClient.invalidateQueries({ queryKey: setoresQueryKey });
       queryClient.invalidateQueries({ queryKey: ["equipamentos"] });
+      setEquipamentosSelecionados([]);
+      setLocalDestino("");
       toast.success(`${quantidade} equipamento(s) atualizado(s).`);
-    },
-    onError: (error) => toast.error(getErrorMessage(error)),
-  });
-
-  const removerEquipamentosMutation = useMutation({
-    mutationFn: ({
-      grupo,
-      equipamentoIds,
-    }: {
-      grupo: SetorEquipamentoGrupo;
-      equipamentoIds: string[];
-    }) =>
-      setoresOrganizacaoService.removerEquipamentosDoSetor(
-        empresaSelecionada!.id,
-        equipamentoIds
-      ),
-    onSuccess: (quantidade) => {
-      queryClient.invalidateQueries({ queryKey: setoresQueryKey });
-      queryClient.invalidateQueries({ queryKey: ["equipamentos"] });
-      toast.success(`${quantidade} equipamento(s) removido(s) do setor.`);
     },
     onError: (error) => toast.error(getErrorMessage(error)),
   });
@@ -236,32 +294,9 @@ const OrganizarSetores = () => {
     onError: (error) => toast.error(getErrorMessage(error)),
   });
 
-  const gruposFiltrados = useMemo(() => {
-    const termo = normalizarBusca(busca);
-    return (data?.grupos || []).filter((grupo) => {
-      if (somentePendentes && grupo.normalizado) return false;
-      if (!termo) return true;
-
-      const textoGrupo = normalizarBusca(
-        [
-          grupo.setorAtual,
-          grupo.setorOficialNome,
-          grupo.localInstalacao,
-          ...grupo.equipamentos.slice(0, 3).map((equipamento) =>
-            setoresOrganizacaoService.montarDescricaoEquipamento(equipamento)
-          ),
-        ]
-          .filter(Boolean)
-          .join(" ")
-      );
-
-      return textoGrupo.includes(termo);
-    });
-  }, [busca, data?.grupos, somentePendentes]);
-
   const criarSetor = () => {
     if (!empresaSelecionada?.id) {
-      toast.error("Selecione uma empresa primeiro.");
+      toast.error("Selecione um cliente primeiro.");
       return;
     }
 
@@ -270,7 +305,7 @@ const OrganizarSetores = () => {
 
   const limparSetoresVazios = () => {
     if (!empresaSelecionada?.id) {
-      toast.error("Selecione uma empresa primeiro.");
+      toast.error("Selecione um cliente primeiro.");
       return;
     }
 
@@ -288,7 +323,7 @@ const OrganizarSetores = () => {
         ? `\n... e mais ${setoresVazios.length - 8} setor(es).`
         : "";
     const confirmado = window.confirm(
-      `Remover ${setoresVazios.length} setor(es) oficial(is) sem equipamentos vinculados?\n\n${preview}${restantes}`
+      `Remover ${setoresVazios.length} setor(es) sem equipamentos vinculados?\n\n${preview}${restantes}`
     );
 
     if (!confirmado) return;
@@ -296,76 +331,59 @@ const OrganizarSetores = () => {
     limparSetoresVaziosMutation.mutate();
   };
 
-  const getSelecionadosGrupo = (grupo: SetorEquipamentoGrupo) =>
-    equipamentosSelecionados[grupo.key] ||
-    grupo.equipamentos.map((equipamento) => equipamento.id);
-
-  const setGrupoAberto = (grupoKey: string, aberto: boolean) => {
-    setGruposAbertos((current) => ({
-      ...current,
-      [grupoKey]: aberto,
-    }));
+  const toggleEquipamento = (id: string) => {
+    setEquipamentosSelecionados((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
+    );
   };
 
-  const toggleEquipamentoGrupo = (
-    grupo: SetorEquipamentoGrupo,
-    equipamentoId: string
-  ) => {
+  const toggleTodosVisiveis = () => {
     setEquipamentosSelecionados((current) => {
-      const selecionados = new Set(
-        current[grupo.key] ||
-          grupo.equipamentos.map((equipamento) => equipamento.id)
-      );
-
-      if (selecionados.has(equipamentoId)) {
-        selecionados.delete(equipamentoId);
+      const currentSet = new Set(current);
+      if (todosVisiveisSelecionados) {
+        equipamentosVisiveisIds.forEach((id) => currentSet.delete(id));
       } else {
-        selecionados.add(equipamentoId);
+        equipamentosVisiveisIds.forEach((id) => currentSet.add(id));
       }
-
-      return {
-        ...current,
-        [grupo.key]: Array.from(selecionados),
-      };
+      return Array.from(currentSet);
     });
   };
 
-  const selecionarTodosGrupo = (grupo: SetorEquipamentoGrupo) => {
-    setEquipamentosSelecionados((current) => ({
-      ...current,
-      [grupo.key]: grupo.equipamentos.map((equipamento) => equipamento.id),
-    }));
+  const selecionarSetor = (id: string) => {
+    setSetorSelecionadoId(id);
+    setEquipamentosSelecionados([]);
   };
 
-  const limparSelecaoGrupo = (grupo: SetorEquipamentoGrupo) => {
-    setEquipamentosSelecionados((current) => ({
-      ...current,
-      [grupo.key]: [],
-    }));
-  };
-
-  const removerSelecionadosDoSetor = (grupo: SetorEquipamentoGrupo) => {
-    const equipamentoIds = getSelecionadosGrupo(grupo);
-
-    if (equipamentoIds.length === 0) {
-      toast.info("Selecione ao menos um equipamento.");
-      return;
-    }
-
-    const confirmado = window.confirm(
-      `Remover ${equipamentoIds.length} equipamento(s) deste setor oficial?\n\nOs equipamentos nao serao excluidos; eles ficarao sem setor para reorganizacao.`
-    );
-
-    if (!confirmado) return;
-
-    removerEquipamentosMutation.mutate({ grupo, equipamentoIds });
-  };
+  const renderSetorButton = (
+    id: string,
+    label: string,
+    quantidade: number,
+    description?: string,
+    pendente?: boolean
+  ) => (
+    <button
+      key={id}
+      type="button"
+      onClick={() => selecionarSetor(id)}
+      className={`w-full rounded-md border px-3 py-2 text-left transition-colors hover:bg-muted/60 ${
+        setorSelecionadoId === id ? "border-primary bg-primary/5" : "bg-background"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <span className="min-w-0 truncate text-sm font-medium">{label}</span>
+        <Badge variant={pendente ? "outline" : "secondary"}>{quantidade}</Badge>
+      </div>
+      {description && (
+        <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{description}</p>
+      )}
+    </button>
+  );
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Organizar Setores"
-        description="Padronize os setores dos equipamentos por cliente e preserve local/sala como controle interno."
+        description="Revise os setores do cliente, confira os equipamentos vinculados e mova itens entre setores."
       >
         <Button
           variant="outline"
@@ -385,7 +403,6 @@ const OrganizarSetores = () => {
               value={empresaLabelSelecionada}
               onValueChange={(label) => {
                 setEmpresaId(empresaIdPorLabel.get(label) || "");
-                setBusca("");
               }}
               options={empresasOptions}
               placeholder={loadingEmpresas ? "Carregando clientes..." : "Selecione o cliente"}
@@ -393,7 +410,7 @@ const OrganizarSetores = () => {
             />
           </div>
 
-          <div className="grid gap-3 rounded-md border bg-muted/20 p-4 sm:grid-cols-3">
+          <div className="grid gap-3 rounded-md border bg-muted/20 p-4 sm:grid-cols-4">
             <div>
               <p className="text-xs text-muted-foreground">Equipamentos</p>
               <p className="text-xl font-semibold">
@@ -401,15 +418,21 @@ const OrganizarSetores = () => {
               </p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Grupos pendentes</p>
+              <p className="text-xs text-muted-foreground">Setores</p>
               <p className="text-xl font-semibold">
-                {empresaSelecionada && isLoading ? "..." : data?.totalPendentes ?? "-"}
+                {empresaSelecionada && isLoading ? "..." : data?.setores.length ?? "-"}
               </p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Setores oficiais</p>
+              <p className="text-xs text-muted-foreground">Sem setor</p>
               <p className="text-xl font-semibold">
-                {empresaSelecionada && isLoading ? "..." : data?.setores.length ?? "-"}
+                {empresaSelecionada && isLoading ? "..." : totalSemSetor || "-"}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Pendentes</p>
+              <p className="text-xl font-semibold">
+                {empresaSelecionada && isLoading ? "..." : totalPendentes || "-"}
               </p>
             </div>
           </div>
@@ -430,11 +453,11 @@ const OrganizarSetores = () => {
       )}
 
       {empresaSelecionada && (
-        <div className="grid gap-6 xl:grid-cols-[320px_1fr]">
+        <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between gap-3">
-                <CardTitle className="text-base">Setores oficiais</CardTitle>
+                <CardTitle className="text-base">Setores do cliente</CardTitle>
                 <Button
                   type="button"
                   variant="outline"
@@ -445,7 +468,7 @@ const OrganizarSetores = () => {
                     limparSetoresVaziosMutation.isPending ||
                     setoresVazios.length === 0
                   }
-                  title="Remove setores oficiais sem equipamentos vinculados"
+                  title="Remove setores sem equipamentos vinculados"
                 >
                   {limparSetoresVaziosMutation.isPending ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -461,7 +484,7 @@ const OrganizarSetores = () => {
                 <Input
                   value={novoSetor}
                   onChange={(event) => setNovoSetor(event.target.value)}
-                  placeholder="Novo setor oficial"
+                  placeholder="Novo setor"
                   onKeyDown={(event) => {
                     if (event.key === "Enter") criarSetor();
                   }}
@@ -481,23 +504,39 @@ const OrganizarSetores = () => {
                 </Button>
               </div>
 
+              <div className="space-y-2">
+                {renderSetorButton(TODOS, "Todos os equipamentos", equipamentos.length)}
+                {renderSetorButton(
+                  PENDENTES,
+                  "Pendentes de organizacao",
+                  totalPendentes,
+                  "Sem setor oficial ou com texto diferente do setor oficial.",
+                  true
+                )}
+                {renderSetorButton(
+                  SEM_SETOR,
+                  "Sem setor",
+                  totalSemSetor,
+                  "Equipamentos sem unidade vinculada.",
+                  totalSemSetor > 0
+                )}
+              </div>
+
               <div className="max-h-[520px] space-y-2 overflow-y-auto pr-1">
                 {isLoading ? (
                   <p className="text-sm text-muted-foreground">Carregando setores...</p>
                 ) : data?.setores.length ? (
-                  data.setores.map((setor) => (
-                    <div key={setor.id} className="rounded-md border px-3 py-2 text-sm">
-                      <p className="font-medium">{setor.nome}</p>
-                      {(setor.cidade || setor.estado) && (
-                        <p className="text-xs text-muted-foreground">
-                          {[setor.cidade, setor.estado].filter(Boolean).join(" / ")}
-                        </p>
-                      )}
-                    </div>
-                  ))
+                  data.setores.map((setor) =>
+                    renderSetorButton(
+                      setor.id,
+                      setor.nome,
+                      contagemPorSetor.get(setor.id) || 0,
+                      [setor.cidade, setor.estado].filter(Boolean).join(" / ")
+                    )
+                  )
                 ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Nenhum setor oficial cadastrado para este cliente.
+                  <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                    Nenhum setor cadastrado para este cliente.
                   </p>
                 )}
               </div>
@@ -507,254 +546,181 @@ const OrganizarSetores = () => {
           <Card>
             <CardHeader>
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <CardTitle className="text-base">Grupos de equipamentos</CardTitle>
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="somente-pendentes"
-                      checked={somentePendentes}
-                      onCheckedChange={(checked) => setSomentePendentes(Boolean(checked))}
-                    />
-                    <Label htmlFor="somente-pendentes">Somente pendentes</Label>
-                  </div>
-                  <div className="relative min-w-[260px]">
-                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      value={busca}
-                      onChange={(event) => setBusca(event.target.value)}
-                      className="pl-8"
-                      placeholder="Buscar setor ou equipamento"
-                    />
-                  </div>
+                <div>
+                  <CardTitle className="text-base">Equipamentos do setor</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    {equipamentosFiltrados.length} equipamento(s) no filtro atual.
+                  </p>
+                </div>
+                <div className="relative min-w-[280px]">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={buscaEquipamento}
+                    onChange={(event) => setBuscaEquipamento(event.target.value)}
+                    className="pl-8"
+                    placeholder="Buscar equipamento, serie, patrimonio..."
+                  />
                 </div>
               </div>
             </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Setor atual</TableHead>
-                    <TableHead className="w-[90px] text-center">Qtd.</TableHead>
-                    <TableHead>Exemplos</TableHead>
-                    <TableHead className="min-w-[240px]">Setor oficial</TableHead>
-                    <TableHead className="min-w-[180px]">Local/Sala</TableHead>
-                    <TableHead className="w-[140px] text-right">Ação</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isLoading ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
-                        Carregando equipamentos...
-                      </TableCell>
-                    </TableRow>
-                  ) : gruposFiltrados.length ? (
-                    gruposFiltrados.map((grupo) => {
-                      const selecionados = getSelecionadosGrupo(grupo);
-                      const aberto = Boolean(gruposAbertos[grupo.key]);
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 rounded-md border bg-muted/20 p-3 lg:grid-cols-[1fr_220px_180px_auto]">
+                <div className="space-y-2">
+                  <Label>Mover selecionados para</Label>
+                  <SearchableSelect
+                    value={setorDestinoNome === SEM_SETOR ? "Sem setor" : setorDestinoNome}
+                    onValueChange={(value) =>
+                      setSetorDestinoNome(value === "Sem setor" ? SEM_SETOR : value)
+                    }
+                    options={["Sem setor", ...setorOptions]}
+                    placeholder="Selecione o destino"
+                    emptyText="Nenhum setor encontrado."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Local/Sala</Label>
+                  <Input
+                    value={localDestino}
+                    onChange={(event) => setLocalDestino(event.target.value)}
+                    placeholder="Opcional"
+                    disabled={setorDestinoNome === SEM_SETOR}
+                  />
+                </div>
+                <div className="flex items-end text-sm text-muted-foreground">
+                  {equipamentosSelecionadosValidos.length} equipamento(s) selecionado(s)
+                </div>
+                <div className="flex items-end">
+                  <Button
+                    type="button"
+                    onClick={() => moverEquipamentosMutation.mutate()}
+                    disabled={
+                      moverEquipamentosMutation.isPending ||
+                      equipamentosSelecionadosValidos.length === 0 ||
+                      !setorDestinoNome
+                    }
+                    className="w-full"
+                  >
+                    {moverEquipamentosMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : setorDestinoNome === SEM_SETOR ? (
+                      <Unlink className="mr-2 h-4 w-4" />
+                    ) : (
+                      <MoveRight className="mr-2 h-4 w-4" />
+                    )}
+                    Aplicar
+                  </Button>
+                </div>
+              </div>
 
-                      return (
-                        <Fragment key={grupo.key}>
+              <div className="overflow-hidden rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-10">
+                        <Checkbox
+                          checked={todosVisiveisSelecionados}
+                          onCheckedChange={toggleTodosVisiveis}
+                          aria-label="Selecionar equipamentos visiveis"
+                        />
+                      </TableHead>
+                      <TableHead className="w-[80px]">N</TableHead>
+                      <TableHead>Equipamento</TableHead>
+                      <TableHead>Identificacao</TableHead>
+                      <TableHead>Setor atual</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {isLoading ? (
                       <TableRow>
-                        <TableCell>
-                          <div className="space-y-2">
-                            <p className="font-medium">{grupo.setorAtual}</p>
-                            <div className="flex flex-wrap items-center gap-2">
-                              {grupo.normalizado ? (
-                                <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
-                                  <CheckCircle2 className="mr-1 h-3 w-3" />
-                                  Organizado
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline">Pendente</Badge>
-                              )}
-                              <Badge variant="secondary">
-                                {selecionados.length}/{grupo.quantidade} selecionado(s)
-                              </Badge>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center font-medium">{grupo.quantidade}</TableCell>
-                        <TableCell>
-                          <div className="max-w-[360px] space-y-1 text-xs text-muted-foreground">
-                            {grupo.equipamentos.slice(0, 3).map((equipamento) => (
-                              <p key={equipamento.id} className="truncate">
-                                {String(equipamento.numero_cadastro || "").padStart(3, "0")} -{" "}
-                                {setoresOrganizacaoService.montarDescricaoEquipamento(equipamento)}
-                              </p>
-                            ))}
-                            {grupo.equipamentos.length > 3 && (
-                              <p>+ {grupo.equipamentos.length - 3} equipamento(s)</p>
-                            )}
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 px-2 text-xs"
-                              onClick={() => setGrupoAberto(grupo.key, !aberto)}
-                            >
-                              <ChevronDown
-                                className={`mr-1 h-3.5 w-3.5 transition-transform ${
-                                  aberto ? "rotate-180" : ""
-                                }`}
-                              />
-                              {aberto ? "Ocultar equipamentos" : "Ver equipamentos"}
-                            </Button>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <SearchableSelect
-                            value={setoresSelecionados[grupo.key] || ""}
-                            onValueChange={(value) =>
-                              setSetoresSelecionados((current) => ({
-                                ...current,
-                                [grupo.key]: value,
-                              }))
-                            }
-                            options={setorOptions}
-                            placeholder="Selecione o setor"
-                            emptyText="Nenhum setor encontrado."
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            value={locais[grupo.key] || ""}
-                            onChange={(event) =>
-                              setLocais((current) => ({
-                                ...current,
-                                [grupo.key]: event.target.value,
-                              }))
-                            }
-                            placeholder="Ex.: Sala 2, Emergência"
-                          />
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            onClick={() => aplicarMutation.mutate(grupo)}
-                            disabled={
-                              aplicarMutation.isPending ||
-                              !setoresSelecionados[grupo.key] ||
-                              selecionados.length === 0
-                            }
-                          >
-                            {aplicarMutation.isPending ? (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : null}
-                            Aplicar seleção
-                          </Button>
+                        <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                          Carregando equipamentos...
                         </TableCell>
                       </TableRow>
+                    ) : equipamentosFiltrados.length ? (
+                      equipamentosFiltrados.map((equipamento) => {
+                        const setorOficial = equipamento.empresa_setor_id
+                          ? setoresPorId.get(equipamento.empresa_setor_id)
+                          : null;
+                        const pendente = isEquipamentoPendente(equipamento);
+                        const checked = equipamentosSelecionados.includes(equipamento.id);
 
-                      {aberto && (
-                        <TableRow>
-                          <TableCell colSpan={6} className="bg-muted/20 p-4">
-                            <div className="space-y-3">
-                              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                <div className="text-sm text-muted-foreground">
-                                  Selecione apenas os equipamentos que devem receber a ação deste grupo.
-                                </div>
-                                <div className="flex flex-wrap gap-2">
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => selecionarTodosGrupo(grupo)}
-                                  >
-                                    Selecionar todos
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => limparSelecaoGrupo(grupo)}
-                                  >
-                                    Limpar seleção
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => removerSelecionadosDoSetor(grupo)}
-                                    disabled={
-                                      removerEquipamentosMutation.isPending ||
-                                      selecionados.length === 0
-                                    }
-                                  >
-                                    {removerEquipamentosMutation.isPending ? (
-                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    ) : (
-                                      <Unlink className="mr-2 h-4 w-4" />
-                                    )}
-                                    Remover do setor
-                                  </Button>
-                                </div>
-                              </div>
-
-                              <div className="rounded-md border bg-background">
-                                {grupo.equipamentos.map((equipamento) => {
-                                  const checked = selecionados.includes(equipamento.id);
-                                  const detalhes = [
-                                    equipamento.fabricante,
-                                    equipamento.modelo,
-                                    equipamento.numero_serie
-                                      ? `Série ${equipamento.numero_serie}`
-                                      : null,
-                                    equipamento.patrimonio
-                                      ? `Patrimônio ${equipamento.patrimonio}`
-                                      : null,
-                                    equipamento.tag ? `TAG ${equipamento.tag}` : null,
-                                  ]
+                        return (
+                          <TableRow key={equipamento.id}>
+                            <TableCell>
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={() => toggleEquipamento(equipamento.id)}
+                                aria-label={`Selecionar equipamento ${formatNumero(
+                                  equipamento.numero_cadastro
+                                )}`}
+                              />
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              {formatNumero(equipamento.numero_cadastro)}
+                            </TableCell>
+                            <TableCell>
+                              <div className="space-y-1">
+                                <p className="font-medium">
+                                  {setoresOrganizacaoService.montarDescricaoEquipamento(
+                                    equipamento
+                                  )}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {[equipamento.fabricante, equipamento.modelo]
                                     .filter(Boolean)
-                                    .join(" | ");
-
-                                  return (
-                                    <label
-                                      key={equipamento.id}
-                                      className="flex cursor-pointer items-start gap-3 border-b px-3 py-2 last:border-b-0 hover:bg-muted/30"
-                                    >
-                                      <Checkbox
-                                        checked={checked}
-                                        onCheckedChange={() =>
-                                          toggleEquipamentoGrupo(grupo, equipamento.id)
-                                        }
-                                        className="mt-0.5"
-                                      />
-                                      <div className="min-w-0 flex-1">
-                                        <p className="text-sm font-medium">
-                                          {String(equipamento.numero_cadastro || "").padStart(3, "0")} -{" "}
-                                          {setoresOrganizacaoService.montarDescricaoEquipamento(equipamento)}
-                                        </p>
-                                        {detalhes && (
-                                          <p className="truncate text-xs text-muted-foreground">
-                                            {detalhes}
-                                          </p>
-                                        )}
-                                        {equipamento.local_instalacao && (
-                                          <p className="text-xs text-muted-foreground">
-                                            Local/Sala: {equipamento.local_instalacao}
-                                          </p>
-                                        )}
-                                      </div>
-                                    </label>
-                                  );
-                                })}
+                                    .join(" | ") || "-"}
+                                </p>
                               </div>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </Fragment>
-                      );
-                    })
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
-                        Nenhum grupo encontrado para os filtros atuais.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                            </TableCell>
+                            <TableCell>
+                              <div className="space-y-1 text-sm">
+                                <p>Serie: {equipamento.numero_serie || "-"}</p>
+                                <p>Patrimonio: {equipamento.patrimonio || "-"}</p>
+                                <p>TAG: {equipamento.tag || "-"}</p>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  {pendente ? (
+                                    <Badge variant="outline">Pendente</Badge>
+                                  ) : (
+                                    <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+                                      <CheckCircle2 className="mr-1 h-3 w-3" />
+                                      Organizado
+                                    </Badge>
+                                  )}
+                                </div>
+                                <p className="text-sm font-medium">
+                                  {setorOficial?.nome || equipamento.setor || "Sem setor"}
+                                </p>
+                                {equipamento.local_instalacao && (
+                                  <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                                    <MapPin className="h-3 w-3" />
+                                    {equipamento.local_instalacao}
+                                  </p>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={equipamento.ativo ? "secondary" : "outline"}>
+                                {equipamento.ativo ? equipamento.status || "Ativo" : "Desativado"}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                          Nenhum equipamento encontrado para o setor e busca atuais.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
         </div>

@@ -21,6 +21,7 @@ import {
   formatDecimalPtBr,
   maiorQuantidadeCasas,
 } from "@/utils/numberUtils";
+import { buildPdfFileName } from "@/utils/pdfFileNames";
 
 const CERTIFICADOS_BUCKET = "calibracao-certificados";
 
@@ -844,6 +845,29 @@ export const formatNomeArquivoCertificadoCalibracao = (
   return `${formatNumeroCertificadoCalibracao(execucao.numero_certificado)}${revisao}.pdf`;
 };
 
+export const formatNomeDownloadCertificadoCalibracao = (
+  execucao: Pick<
+    CalibracaoExecucao,
+    "numero_certificado" | "numero_revisao" | "empresa" | "equipamento"
+  >
+) => {
+  const numero = formatNomeArquivoCertificadoCalibracao(execucao)
+    .replace(/\.pdf$/i, "")
+    .replace(/^CAL-?/i, "");
+  const cliente = execucao.empresa?.nome_fantasia || execucao.empresa?.nome;
+  const equipamento =
+    execucao.equipamento?.tipo_equipamento?.nome ||
+    execucao.equipamento?.tipo_texto ||
+    execucao.equipamento?.modelo;
+
+  return buildPdfFileName("CAL", [
+    { value: numero, fallback: "sem-numero" },
+    { value: cliente, fallback: "cliente" },
+    { value: equipamento, fallback: "equipamento" },
+    { value: execucao.equipamento?.numero_serie, fallback: "sem-ns" },
+  ]);
+};
+
 export const calibracaoExecucoesService = {
   async listarExecucoes() {
     const { data, error } = await supabase
@@ -1027,7 +1051,7 @@ export const calibracaoExecucoesService = {
     const { data, error } = await supabase.storage
       .from(CERTIFICADOS_BUCKET)
       .createSignedUrl(execucao.pdf_storage_path, 60 * 5, {
-        download: download ? formatNomeArquivoCertificadoCalibracao(execucao) : false,
+        download: download ? formatNomeDownloadCertificadoCalibracao(execucao) : false,
       });
     if (error) throw new Error(error.message);
     return data.signedUrl;

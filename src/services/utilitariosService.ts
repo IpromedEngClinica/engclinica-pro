@@ -139,6 +139,7 @@ export type VencimentoEquipamentoItem = {
   equipamentoId: string;
   empresaId: string;
   clienteNome: string;
+  clienteCidade: string | null;
   contato: string | null;
   telefone: string | null;
   email: string | null;
@@ -157,6 +158,7 @@ export type VencimentoEquipamentoItem = {
 export type VencimentoClienteGrupo = {
   empresaId: string;
   clienteNome: string;
+  cidade: string | null;
   contato: string | null;
   telefone: string | null;
   email: string | null;
@@ -851,6 +853,9 @@ export const utilitariosService = {
       .forEach((equipamento) => {
         const empresa = equipamento.empresa as EmpresaSupabase;
         const clienteNome = empresa.nome_fantasia || empresa.nome || "-";
+        const clienteCidade = [empresa.cidade, empresa.estado]
+          .filter(Boolean)
+          .join(" - ") || null;
         const contato = getEmpresaContato(empresa);
         const tipoEquipamento = getVencimentoTipoEquipamento(equipamento);
 
@@ -866,6 +871,7 @@ export const utilitariosService = {
               equipamentoId: equipamento.id,
               empresaId: empresa.id,
               clienteNome,
+              clienteCidade,
               ...contato,
               tipoServico: "calibracao",
               dataVencimento,
@@ -896,6 +902,7 @@ export const utilitariosService = {
               equipamentoId: equipamento.id,
               empresaId: empresa.id,
               clienteNome,
+              clienteCidade,
               ...contato,
               tipoServico: "preventiva",
               dataVencimento,
@@ -945,6 +952,7 @@ export const utilitariosService = {
           clienteGrupo = {
             empresaId: item.empresaId,
             clienteNome: item.clienteNome,
+            cidade: item.clienteCidade,
             contato: item.contato,
             telefone: item.telefone,
             email: item.email,

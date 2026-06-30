@@ -33,6 +33,7 @@ export type SetorEquipamentoGrupo = {
 
 export type OrganizacaoSetoresEmpresa = {
   setores: EmpresaSetorSupabase[];
+  equipamentos: EquipamentoSetorResumo[];
   grupos: SetorEquipamentoGrupo[];
   totalEquipamentos: number;
   totalPendentes: number;
@@ -180,6 +181,7 @@ export const setoresOrganizacaoService = {
 
     return {
       setores,
+      equipamentos,
       grupos,
       totalEquipamentos: equipamentos.length,
       totalPendentes: grupos.filter((grupo) => !grupo.normalizado).length,
