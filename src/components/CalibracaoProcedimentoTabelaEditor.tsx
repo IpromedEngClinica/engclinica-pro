@@ -34,8 +34,6 @@ export type CalibracaoProcedimentoTabelaDraft = {
   padraoId: string;
   padraoTabelaId: string;
   modoPreenchimento: CalibracaoProcedimentoModoPreenchimento;
-  quantidadeLeituras: number;
-  tipoMedida: string;
   resolucaoPadraoDefault: string;
   resolucaoEquipamentoDefault: string;
   faixaUsoMin: string;
@@ -113,9 +111,8 @@ const CalibracaoProcedimentoTabelaEditor = ({
       </div>
 
       <Section title="3.1 Identificacao da tabela">
-        <div className="grid gap-3 md:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-3">
           <TextField
-            className="md:col-span-2"
             label="Titulo *"
             value={tabela.nome}
             disabled={disabled}
@@ -133,30 +130,6 @@ const CalibracaoProcedimentoTabelaEditor = ({
             disabled={disabled}
             onChange={(unidade) => onAtualizar(tabela.key, { unidade })}
           />
-          <TextField
-            className="md:col-span-2"
-            label="Tipo de medida"
-            value={tabela.tipoMedida}
-            disabled={disabled}
-            onChange={(tipoMedida) => onAtualizar(tabela.key, { tipoMedida })}
-          />
-          <div className="space-y-2">
-            <Label>Quantidade de leituras *</Label>
-            <Input
-              type="number"
-              min={1}
-              value={tabela.quantidadeLeituras}
-              disabled={disabled}
-              onChange={(event) =>
-                onAtualizar(tabela.key, {
-                  quantidadeLeituras: Math.max(
-                    1,
-                    Number.parseInt(event.target.value, 10) || 1
-                  ),
-                })
-              }
-            />
-          </div>
         </div>
       </Section>
 
@@ -283,57 +256,48 @@ const CalibracaoProcedimentoTabelaEditor = ({
         </label>
       </Section>
 
-      <Section title="3.4 Criterio de aceitacao">
-        <label className="flex items-center gap-2 text-sm">
-          <Checkbox
-            checked={tabela.incluirCriterioAceitacao}
+      <Section title="3.4 Parametros do criterio de aceitacao">
+        <p className="text-xs text-muted-foreground">
+          Estes parametros ficam vinculados ao procedimento. O criterio so sera
+          aplicado quando o cliente estiver configurado para emitir declaracao de
+          conformidade.
+        </p>
+        <div className="mt-3 grid gap-3 md:grid-cols-3">
+          <SelectField
+            label="Tipo de criterio"
+            value={tabela.criterioAceitacaoTipo}
             disabled={disabled}
-            onCheckedChange={(checked) =>
+            onChange={(value) =>
               onAtualizar(tabela.key, {
-                incluirCriterioAceitacao: Boolean(checked),
+                criterioAceitacaoTipo:
+                  value as CalibracaoProcedimentoCriterioTipo,
               })
             }
+            options={[
+              ["absoluto", "Absoluto"],
+              ["percentual", "Percentual"],
+              ["faixa", "Faixa"],
+            ]}
           />
-          Incluir criterio de aceitacao
-        </label>
-        {tabela.incluirCriterioAceitacao && (
-          <div className="mt-3 grid gap-3 md:grid-cols-3">
-            <SelectField
-              label="Tipo de criterio"
-              value={tabela.criterioAceitacaoTipo}
-              disabled={disabled}
-              onChange={(value) =>
-                onAtualizar(tabela.key, {
-                  criterioAceitacaoTipo:
-                    value as CalibracaoProcedimentoCriterioTipo,
-                })
-              }
-              options={[
-                ["absoluto", "Absoluto"],
-                ["percentual", "Percentual"],
-                ["faixa", "Faixa"],
-              ]}
-            />
-            {tabela.criterioAceitacaoTipo === "faixa" && (
-              <DecimalField
-                label="Valor minimo *"
-                value={tabela.criterioAceitacaoValorMinimo}
-                disabled={disabled}
-                onChange={(criterioAceitacaoValorMinimo) =>
-                  onAtualizar(tabela.key, { criterioAceitacaoValorMinimo })
-                }
-              />
-            )}
+          {tabela.criterioAceitacaoTipo === "faixa" && (
             <DecimalField
-              label="Valor maximo *"
-              value={tabela.criterioAceitacaoValorMaximo}
+              label="Valor minimo"
+              value={tabela.criterioAceitacaoValorMinimo}
               disabled={disabled}
-              onChange={(criterioAceitacaoValorMaximo) =>
-                onAtualizar(tabela.key, { criterioAceitacaoValorMaximo })
+              onChange={(criterioAceitacaoValorMinimo) =>
+                onAtualizar(tabela.key, { criterioAceitacaoValorMinimo })
               }
             />
-          </div>
-        )}
+          )}
+          <DecimalField
+            label="Valor maximo"
+            value={tabela.criterioAceitacaoValorMaximo}
+            disabled={disabled}
+            onChange={(criterioAceitacaoValorMaximo) =>
+              onAtualizar(tabela.key, { criterioAceitacaoValorMaximo })
+            }
+          />
+        </div>
       </Section>
 
       <Section title="3.5 Pontos nominais">

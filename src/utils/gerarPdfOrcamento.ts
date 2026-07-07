@@ -1,9 +1,13 @@
 import aciLogo from "@/assets/aci-logo-hd.png";
 import { assinaturasService } from "@/services/assinaturasService";
 import type { OrcamentoSupabase } from "@/services/orcamentosService";
-import { buildOrcamentoHtml } from "@/utils/orcamentoPdfTemplate";
+import {
+  buildOrcamentoHtml,
+  ORCAMENTO_FOOTER_TEXT,
+} from "@/utils/orcamentoPdfTemplate";
 import { imageToDataUrl } from "@/utils/pdfImageUtils";
 import { renderHtmlToPdf } from "@/utils/pdfHtmlRenderer";
+import { renderHtmlToPdfWithPrintToPdf } from "@/utils/printToPdfRenderer";
 
 const sanitizeFileNameSegment = (value?: string | number | null) =>
   String(value || "")
@@ -30,7 +34,12 @@ const getNomeArquivoOrcamento = (orcamento: OrcamentoSupabase) => {
 
 export const gerarPdfOrcamento = async (orcamento: OrcamentoSupabase) => {
   const [logoBase64, assinaturas] = await Promise.all([
-    imageToDataUrl(aciLogo),
+    imageToDataUrl(aciLogo, {
+      maxWidth: 560,
+      maxHeight: 220,
+      type: "image/jpeg",
+      quality: 0.9,
+    }),
     assinaturasService.resolverDocumento({
       tecnicoNome: orcamento.responsavel_orcamentista,
       responsavelNome: orcamento.responsavel_orcamentista,
@@ -39,9 +48,20 @@ export const gerarPdfOrcamento = async (orcamento: OrcamentoSupabase) => {
     }),
   ]);
   const html = buildOrcamentoHtml(orcamento, logoBase64, assinaturas);
+  const fileName = getNomeArquivoOrcamento(orcamento);
+
+  const printToPdfResult = await renderHtmlToPdfWithPrintToPdf({
+    html,
+    fileName,
+    footerText: ORCAMENTO_FOOTER_TEXT,
+  });
+
+  if (printToPdfResult) return;
 
   await renderHtmlToPdf({
     html,
-    fileName: getNomeArquivoOrcamento(orcamento),
+    fileName,
+    footerText: ORCAMENTO_FOOTER_TEXT,
+    footerHeightMm: 16,
   });
 };

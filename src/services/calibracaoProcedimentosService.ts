@@ -85,6 +85,7 @@ export type CalibracaoProcedimento = {
   created_at: string;
   updated_at: string;
   tipo_equipamento?: { id: string; nome: string } | null;
+  tipos_equipamento?: { id: string; nome: string }[];
   tabelas?: CalibracaoProcedimentoTabela[];
 };
 
@@ -99,7 +100,8 @@ export type CalibracaoProcedimentoSnapshot = Pick<
 export type CalibracaoProcedimentoFormInput = {
   codigo?: string;
   nome: string;
-  tipoEquipamentoId: string;
+  tipoEquipamentoId?: string;
+  tipoEquipamentoIds: string[];
   metodoReferencia?: string | null;
   observacoes?: string | null;
   versao?: number;
@@ -300,9 +302,110 @@ const normalizePadraoSelecionavel = (
     })),
 });
 
+type ProcedimentoTipoEquipamentoVinculo = {
+  procedimento_id: string;
+  tipo_equipamento: { id: string; nome: string } | null;
+};
+
+const isTabelaVinculosTiposAusente = (error: { code?: string; message?: string }) =>
+  error.code === "42P01" ||
+  error.code === "PGRST205" ||
+  /calibracao_procedimento_tipos_equipamento|schema cache|does not exist|not find/i.test(
+    error.message || ""
+  );
+
+const attachTiposEquipamento = async (
+  procedimentos: CalibracaoProcedimento[]
+) => {
+  const ids = procedimentos.map((item) => item.id);
+  if (!ids.length) return procedimentos.map(normalizeProcedimento);
+
+  const { data, error } = await supabase
+    .from("calibracao_procedimento_tipos_equipamento")
+    .select("procedimento_id, tipo_equipamento:tipos_equipamento (id, nome)")
+    .in("procedimento_id", ids);
+  if (error) {
+    if (isTabelaVinculosTiposAusente(error)) {
+      return procedimentos.map((procedimento) =>
+        normalizeProcedimento({
+          ...procedimento,
+          tipos_equipamento: procedimento.tipo_equipamento
+            ? [procedimento.tipo_equipamento]
+            : [],
+        })
+      );
+    }
+    throw new Error(error.message);
+  }
+
+  const porProcedimento = new Map<string, { id: string; nome: string }[]>();
+  for (const vinculo of (data || []) as unknown as ProcedimentoTipoEquipamentoVinculo[]) {
+    if (!vinculo.tipo_equipamento) continue;
+    const atual = porProcedimento.get(vinculo.procedimento_id) || [];
+    atual.push(vinculo.tipo_equipamento);
+    porProcedimento.set(vinculo.procedimento_id, atual);
+  }
+
+  return procedimentos.map((procedimento) => {
+    const tipos = (porProcedimento.get(procedimento.id) || [])
+      .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    return normalizeProcedimento({
+      ...procedimento,
+      tipos_equipamento: tipos.length
+        ? tipos
+        : procedimento.tipo_equipamento
+          ? [procedimento.tipo_equipamento]
+          : [],
+    });
+  });
+};
+
+const salvarTiposEquipamentoProcedimento = async (
+  procedimentoId: string,
+  tipoEquipamentoIds: string[]
+) => {
+  const organizacaoId = await buscarOrganizacaoAtual();
+  const tiposUnicos = Array.from(new Set(tipoEquipamentoIds.filter(Boolean)));
+
+  const { error: deleteError } = await supabase
+    .from("calibracao_procedimento_tipos_equipamento")
+    .delete()
+    .eq("procedimento_id", procedimentoId);
+  if (deleteError) {
+    if (isTabelaVinculosTiposAusente(deleteError)) {
+      throw new Error(
+        "A migration 069_calibracao_procedimentos_multiplos_tipos.sql precisa ser aplicada antes de salvar procedimentos com multiplos tipos."
+      );
+    }
+    throw new Error(deleteError.message);
+  }
+
+  if (!tiposUnicos.length) return;
+
+  const { error: insertError } = await supabase
+    .from("calibracao_procedimento_tipos_equipamento")
+    .insert(
+      tiposUnicos.map((tipoEquipamentoId) => ({
+        organizacao_id: organizacaoId,
+        procedimento_id: procedimentoId,
+        tipo_equipamento_id: tipoEquipamentoId,
+      }))
+    );
+  if (insertError) {
+    if (isTabelaVinculosTiposAusente(insertError)) {
+      throw new Error(
+        "A migration 069_calibracao_procedimentos_multiplos_tipos.sql precisa ser aplicada antes de salvar procedimentos com multiplos tipos."
+      );
+    }
+    throw new Error(insertError.message);
+  }
+};
+
 const validarProcedimento = (input: CalibracaoProcedimentoFormInput) => {
   if (!input.nome.trim()) throw new Error("Informe o nome do procedimento.");
-  if (!input.tipoEquipamentoId) throw new Error("Selecione o tipo de equipamento.");
+  if (!input.tipoEquipamentoIds.length) {
+    throw new Error("Selecione ao menos um tipo de equipamento.");
+  }
 };
 
 const validarTabela = (input: CalibracaoProcedimentoTabelaInput) => {
@@ -311,9 +414,6 @@ const validarTabela = (input: CalibracaoProcedimentoTabelaInput) => {
   }
   if (!input.padraoId || !input.padraoTabelaId) {
     throw new Error(`Selecione o padrao e a tabela metrologica da tabela "${input.nome}".`);
-  }
-  if (input.quantidadeLeituras < 1) {
-    throw new Error(`A tabela "${input.nome}" deve possuir ao menos uma leitura.`);
   }
   if (!input.pontos?.length) {
     throw new Error(`A tabela "${input.nome}" deve possuir ao menos um ponto nominal.`);
@@ -337,9 +437,10 @@ const validarTabela = (input: CalibracaoProcedimentoTabelaInput) => {
 };
 
 const toProcedimentoPayload = (input: CalibracaoProcedimentoFormInput) => {
+  const tipoPrincipal = input.tipoEquipamentoIds[0] || input.tipoEquipamentoId || null;
   const payload: Record<string, unknown> = {
     nome: input.nome.trim(),
-    tipo_equipamento_id: input.tipoEquipamentoId,
+    tipo_equipamento_id: tipoPrincipal,
     metodo_referencia: trimOrNull(input.metodoReferencia),
     observacoes: trimOrNull(input.observacoes),
   };
@@ -356,8 +457,8 @@ const toTabelaPayload = (input: CalibracaoProcedimentoTabelaInput) => ({
   unidade: input.unidade.trim(),
   ordem: input.ordem ?? 0,
   modo_preenchimento: "manual",
-  quantidade_leituras: input.quantidadeLeituras,
-  tipo_medida: trimOrNull(input.tipoMedida),
+  quantidade_leituras: 1,
+  tipo_medida: null,
   resolucao_padrao_default: input.resolucaoPadraoDefault ?? null,
   resolucao_equipamento_default: input.resolucaoEquipamentoDefault ?? null,
   faixa_uso_min: input.faixaUsoMin ?? null,
@@ -443,7 +544,46 @@ export const calibracaoProcedimentosService = {
       .select(selectProcedimento)
       .order("updated_at", { ascending: false });
     if (error) throw new Error(error.message);
-    return (data as unknown as CalibracaoProcedimento[]).map(normalizeProcedimento);
+    return attachTiposEquipamento(data as unknown as CalibracaoProcedimento[]);
+  },
+
+  async buscarProcedimentoAtivoPorTipoEquipamento(tipoEquipamentoId: string) {
+    const { data: vinculos, error: vinculosError } = await supabase
+      .from("calibracao_procedimento_tipos_equipamento")
+      .select("procedimento_id")
+      .eq("tipo_equipamento_id", tipoEquipamentoId);
+
+    if (vinculosError && !isTabelaVinculosTiposAusente(vinculosError)) {
+      throw new Error(vinculosError.message);
+    }
+
+    const procedimentoIds = Array.from(
+      new Set(
+        ((vinculos || []) as Array<{ procedimento_id: string | null }>)
+          .map((vinculo) => vinculo.procedimento_id)
+          .filter(Boolean) as string[]
+      )
+    );
+
+    let query = supabase
+      .from("calibracao_procedimentos")
+      .select(selectProcedimento)
+      .eq("ativo", true)
+      .order("updated_at", { ascending: false })
+      .limit(1);
+
+    query = procedimentoIds.length
+      ? query.in("id", procedimentoIds)
+      : query.eq("tipo_equipamento_id", tipoEquipamentoId);
+
+    const { data, error } = await query.maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) return null;
+
+    const [procedimento] = await attachTiposEquipamento([
+      data as unknown as CalibracaoProcedimento,
+    ]);
+    return procedimento;
   },
 
   async buscarProcedimentoPorId(id: string) {
@@ -453,7 +593,10 @@ export const calibracaoProcedimentosService = {
       .eq("id", id)
       .single();
     if (error) throw new Error(error.message);
-    return normalizeProcedimento(data as unknown as CalibracaoProcedimento);
+    const [procedimento] = await attachTiposEquipamento([
+      data as unknown as CalibracaoProcedimento,
+    ]);
+    return procedimento;
   },
 
   async criarProcedimento(input: CalibracaoProcedimentoFormInput) {
@@ -465,7 +608,11 @@ export const calibracaoProcedimentosService = {
       .select(selectProcedimento)
       .single();
     if (error) throw new Error(error.message);
-    return normalizeProcedimento(data as unknown as CalibracaoProcedimento);
+    await salvarTiposEquipamentoProcedimento(
+      (data as CalibracaoProcedimento).id,
+      input.tipoEquipamentoIds
+    );
+    return this.buscarProcedimentoPorId((data as CalibracaoProcedimento).id);
   },
 
   async atualizarProcedimento(id: string, input: CalibracaoProcedimentoFormInput) {
@@ -477,7 +624,8 @@ export const calibracaoProcedimentosService = {
       .select(selectProcedimento)
       .single();
     if (error) throw new Error(error.message);
-    return normalizeProcedimento(data as unknown as CalibracaoProcedimento);
+    await salvarTiposEquipamentoProcedimento(id, input.tipoEquipamentoIds);
+    return this.buscarProcedimentoPorId((data as CalibracaoProcedimento).id);
   },
 
   async desativarProcedimento(id: string) {
@@ -591,7 +739,9 @@ export const calibracaoProcedimentosService = {
     const copia = await this.criarProcedimento({
       codigo: original.codigo,
       nome: original.nome,
-      tipoEquipamentoId: original.tipo_equipamento_id || "",
+      tipoEquipamentoIds:
+        original.tipos_equipamento?.map((tipo) => tipo.id) ||
+        (original.tipo_equipamento_id ? [original.tipo_equipamento_id] : []),
       metodoReferencia: original.metodo_referencia,
       observacoes: original.observacoes,
       versao,

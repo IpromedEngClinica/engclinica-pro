@@ -12,6 +12,7 @@ import SearchableSelect from "@/components/SearchableSelect";
 import PecaQuickCreateDialog, {
   type PecaQuickCreateResult,
 } from "@/components/PecaQuickCreateDialog";
+import TipoEquipamentoQuickAddDialog from "@/components/TipoEquipamentoQuickAddDialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -395,6 +396,10 @@ const OrcamentoFormDialog = ({
   const [valorDespesasViagem, setValorDespesasViagem] = useState(0);
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
   const [quickCreateIndex, setQuickCreateIndex] = useState<number | null>(null);
+  const [tipoEquipamentoQuickAddOpen, setTipoEquipamentoQuickAddOpen] =
+    useState(false);
+  const [tipoEquipamentoQuickAddIndex, setTipoEquipamentoQuickAddIndex] =
+    useState<number | null>(null);
 
   const isView = mode === "view";
   const isSubmitting = criarOrcamento.isPending || atualizarOrcamento.isPending;
@@ -1709,6 +1714,15 @@ const OrcamentoFormDialog = ({
                             options={tipoEquipamentoOptions}
                             placeholder="Selecione"
                             emptyText="Nenhum tipo encontrado."
+                            onAddNew={
+                              isView
+                                ? undefined
+                                : () => {
+                                    setTipoEquipamentoQuickAddIndex(index);
+                                    setTipoEquipamentoQuickAddOpen(true);
+                                  }
+                            }
+                            addNewLabel="Cadastrar novo tipo"
                           />
                         </div>
                         <div className="space-y-2 md:col-span-2">
@@ -2118,6 +2132,16 @@ const OrcamentoFormDialog = ({
         }
 
         selecionarPecaNoItem(index, peca, true);
+      }}
+    />
+    <TipoEquipamentoQuickAddDialog
+      open={tipoEquipamentoQuickAddOpen}
+      onOpenChange={setTipoEquipamentoQuickAddOpen}
+      onCreated={(tipo) => {
+        const index =
+          tipoEquipamentoQuickAddIndex ?? Math.max(0, servicos.length - 1);
+        updateServico(index, { tipoEquipamentoId: tipo.id });
+        setTipoEquipamentoQuickAddIndex(null);
       }}
     />
     </>

@@ -1,0 +1,93 @@
+{
+  "100": {
+    "cliente_numero_cadastro": 107,
+    "observacao": "Sesi legado consolidado no cliente Serviço Social da Industria - Floriano Peixoto."
+  },
+  "81": {
+    "cliente_numero_cadastro": 56,
+    "observacao": "Ortofarma legado consolidado no cliente atual."
+  },
+  "121": {
+    "cliente_numero_cadastro": 146,
+    "observacao": "Cesama legado consolidado no cliente atual."
+  },
+  "1081": {
+    "cliente_numero_cadastro": 1216,
+    "observacao": "Alfa Imagem LTDA legado consolidado no cliente atual."
+  },
+  "140": {
+    "cliente_numero_cadastro": 627,
+    "observacao": "Dr.Daniel legado consolidado no cliente atual."
+  },
+  "142": {
+    "cliente_numero_cadastro": 450,
+    "observacao": "Arlex Briceno Cale legado consolidado no cliente Arlex Briceno Calle."
+  },
+  "304": {
+    "cliente_numero_cadastro": 450,
+    "observacao": "Arlex Briceno Calle legado consolidado no cliente atual."
+  },
+  "155": {
+    "cliente_numero_cadastro": 154,
+    "setor": "HPS",
+    "observacao": "Prefeitura Municipal de Juiz de Fora - HPS tratado como setor do cliente principal."
+  },
+  "232": {
+    "cliente_numero_cadastro": 154,
+    "setor": "Banco de Leite",
+    "observacao": "Prefeitura Municipal de Juiz de Fora - Banco de Leite tratado como setor do cliente principal."
+  },
+  "199": {
+    "cliente_numero_cadastro": 1026,
+    "observacao": "Unimed Coop. Trabalho Médico legado consolidado no cliente Unimed Juiz de Fora."
+  },
+  "210": {
+    "cliente_numero_cadastro": 648,
+    "observacao": "Bertolino da Costa Neto legado consolidado no cliente GastroImagem Serviços Médicos."
+  },
+  "234": {
+    "cliente_numero_cadastro": 91,
+    "setor": "UPA",
+    "observacao": "Prefeitura Municipal de Três Rios - UPA tratado como setor do cliente principal."
+  },
+  "1278": {
+    "cliente_numero_cadastro": 1278,
+    "observacao": "Prefeitura Municipal de Piranguinho consolidado no cadastro manual atual."
+  },
+  "67": {
+    "cliente_numero_cadastro": 1279,
+    "observacao": "Med Ribeirão consolidado no cadastro manual atual."
+  },
+  "244": {
+    "cliente_numero_cadastro": 1276,
+    "observacao": "FPA CALIBRACAO legado consolidado no cliente/parceiro atual."
+  },
+  "445": {
+    "cliente_numero_cadastro": 439,
+    "observacao": "Apae Rio Pomba legado consolidado no cliente APAE - Rio Pomba."
+  },
+  "3": {
+    "cliente_numero_cadastro": 16,
+    "observacao": "Hospital Jorge Caetano de Mattos legado consolidado no Hospital Jorge Caetano De Mattos Ervalia."
+  },
+  "375": {
+    "cliente_numero_cadastro": 535,
+    "observacao": "Bruno Fabre R Souza legado consolidado no cadastro indicado pelo usuario."
+  },
+  "697": {
+    "cliente_numero_cadastro": 386,
+    "observacao": "Pro Vida Remocoes legado consolidado no cliente ProVida."
+  },
+  "8": {
+    "cliente_numero_cadastro": 9,
+    "observacao": "Prefeitura Municipal de Guarara legado consolidado na Prefeitura Municipal de Guarara."
+  },
+  "828": {
+    "cliente_numero_cadastro": 91,
+    "observacao": "Prefeitura Municipal de Tres Rios legado consolidado no cliente principal."
+  },
+  "918": {
+    "cliente_numero_cadastro": 467,
+    "observacao": "Condominio do Edificio Medcenter legado consolidado no Condominio MedCenter Juiz de Fora."
+  }
+}

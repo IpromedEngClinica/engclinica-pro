@@ -104,13 +104,9 @@ type OrdemServicoResumo = {
   } | null;
 };
 
-type ChecklistPreventivaResumo = {
-  id: string;
+type UltimaPreventivaResumo = {
   equipamento_id: string | null;
-  checklist_preventiva?: Array<{
-    data_validade: string | null;
-    created_at: string;
-  }> | null;
+  data_validade: string | null;
 };
 
 type ContratoResumo = {
@@ -145,67 +141,17 @@ type PreventivaMes = {
 
 type DashboardData = {
   liberadosEntrega: OrdemServicoResumo[];
+  liberadosEntregaTotal: number;
   analiseCompleta: OrdemServicoResumo[];
+  analiseCompletaTotal: number;
   osAbertas: OrdemServicoResumo[];
+  osAbertasTotal: number;
   equipamentosManutencao: EquipamentoResumo[];
   preventivasPorMes: PreventivaMes[];
   contratosVencendo: ContratoResumo[];
   calibracoesVencendo: EquipamentoResumo[];
   padroesVencendo: PadraoResumo[];
 };
-
-const selectOS = `
-  id,
-  numero,
-  empresa_id,
-  equipamento_id,
-  data_abertura,
-  data_fechamento,
-  problema_relatado,
-  descricao_servico,
-  responsavel_texto,
-  status_sistema,
-  ativo,
-  empresa:empresas (
-    id,
-    nome,
-    nome_fantasia,
-    rua,
-    numero,
-    bairro,
-    cidade,
-    estado
-  ),
-  equipamento:equipamentos (
-    id,
-    empresa_id,
-    tipo_texto,
-    fabricante,
-    modelo,
-    numero_serie,
-    patrimonio,
-    tag,
-    setor,
-    status,
-    data_proxima_preventiva,
-    data_proxima_calibracao,
-    ativo,
-    tipo_equipamento:tipos_equipamento (
-      id,
-      nome
-    )
-  ),
-  tipo_os:tipos_os (
-    id,
-    nome
-  ),
-  estado_os:estados_os (
-    id,
-    nome,
-    finaliza_os,
-    cancela_os
-  )
-`;
 
 const selectEquipamentos = `
   id,
@@ -257,15 +203,6 @@ const selectPadroes = `
   nome_padrao,
   laboratorio_calibrador,
   data_validade
-`;
-
-const selectChecklists = `
-  id,
-  equipamento_id,
-  checklist_preventiva:os_checklists_preventiva (
-    data_validade,
-    created_at
-  )
 `;
 
 const normalize = (value?: string | null) =>
@@ -385,39 +322,30 @@ const getEndereco = (empresa?: EmpresaResumo | null) => {
 const getEstadoNome = (os: OrdemServicoResumo) =>
   os.estado_os?.nome || os.status_sistema || "Estado não informado";
 
-const isLiberadoEntrega = (os: OrdemServicoResumo) =>
-  normalize(getEstadoNome(os)).includes("liberado para entrega");
-
-const isAnaliseCompleta = (os: OrdemServicoResumo) => {
-  const estado = normalize(getEstadoNome(os));
-  return estado.includes("analise completa") || estado.includes("analise concluida");
-};
-
-const isAberta = (os: OrdemServicoResumo) =>
-  os.ativo &&
-  os.status_sistema !== "fechada" &&
-  !os.estado_os?.finaliza_os &&
-  !os.estado_os?.cancela_os;
-
-const getLatestPreventivaMap = (ordens: ChecklistPreventivaResumo[]) => {
+const getLatestPreventivaMap = (preventivas: UltimaPreventivaResumo[]) => {
   const map = new Map<string, string>();
 
-  ordens.forEach((os) => {
-    if (!os.equipamento_id) return;
+  preventivas.forEach((preventiva) => {
+    if (!preventiva.equipamento_id || !preventiva.data_validade) return;
 
-    const datas = (os.checklist_preventiva || [])
-      .map((checklist) => checklist.data_validade)
-      .filter((value): value is string => Boolean(value));
-
-    datas.forEach((data) => {
-      const atual = map.get(os.equipamento_id);
-      if (!atual || data > atual) {
-        map.set(os.equipamento_id, data);
-      }
-    });
+    const atual = map.get(preventiva.equipamento_id);
+    if (!atual || preventiva.data_validade > atual) {
+      map.set(preventiva.equipamento_id, preventiva.data_validade);
+    }
   });
 
   return map;
+};
+
+const getDashboardFilterUrl = (params: Record<string, string | boolean>) => {
+  const search = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === false || value === "") return;
+    search.set(key, String(value));
+  });
+
+  return `/ordens-servico?${search.toString()}`;
 };
 
 const getDataPreventivaEfetiva = (
@@ -479,43 +407,70 @@ const montarPreventivasPorMes = (
 };
 
 const carregarDashboard = async (): Promise<DashboardData> => {
-  const { data: perfil, error: perfilError } = await supabase.rpc("current_user_perfil");
-  if (perfilError) throw new Error(perfilError.message);
-  const selectOsPermitido = perfil === "solicitante"
-    ? selectOS.replace("  descricao_servico,\n", "")
-    : selectOS;
-
   const hoje = new Date();
   hoje.setHours(0, 0, 0, 0);
 
   const limiteContratos = toDateOnly(addDays(hoje, 60));
-  const limitePreventivas = toDateOnly(endOfMonth(addMonths(hoje, 5)));
   const limiteCalibracoes = toDateOnly(addDays(hoje, 60));
   const limitePadroes = toDateOnly(addDays(hoje, 60));
 
   const [
-    osResult,
+    osAbertasPaginadas,
+    liberadosEntregaPaginadas,
+    analiseCompletaPaginadas,
     equipamentosPreventivaResult,
     equipamentosManutencaoResult,
     contratosResult,
-    checklistsResult,
+    ultimasPreventivasResult,
     calibracoesResult,
     padroesResult,
   ] = await Promise.all([
-    supabase
-      .from("ordens_servico")
-      .select(selectOsPermitido)
-      .eq("ativo", true)
-      .order("data_abertura", { ascending: false })
-      .limit(500),
+    ordensServicoService.listarPaginado({
+      termo: "",
+      ocultarFechadas: true,
+      estadoNome: undefined,
+      solicitanteNome: undefined,
+      tipoServicoNome: undefined,
+      responsavelTecnico: "",
+      numero: "",
+      page: 1,
+      limit: 200,
+      sortBy: "numero_ordem",
+      ascending: false,
+    }),
+    ordensServicoService.listarPaginado({
+      termo: "",
+      ocultarFechadas: true,
+      estadoNome: "Liberado para Entrega",
+      solicitanteNome: undefined,
+      tipoServicoNome: undefined,
+      responsavelTecnico: "",
+      numero: "",
+      page: 1,
+      limit: 8,
+      sortBy: "numero_ordem",
+      ascending: false,
+    }),
+    ordensServicoService.listarPaginado({
+      termo: "",
+      ocultarFechadas: true,
+      estadoNome: "Análise Completa",
+      solicitanteNome: undefined,
+      tipoServicoNome: undefined,
+      responsavelTecnico: "",
+      numero: "",
+      page: 1,
+      limit: 8,
+      sortBy: "numero_ordem",
+      ascending: false,
+    }),
     supabase
       .from("equipamentos")
       .select(selectEquipamentos)
       .eq("ativo", true)
       .not("data_proxima_preventiva", "is", null)
-      .lte("data_proxima_preventiva", limitePreventivas)
       .order("data_proxima_preventiva", { ascending: true })
-      .limit(800),
+      .limit(3000),
     supabase
       .from("equipamentos")
       .select(selectEquipamentos)
@@ -531,11 +486,7 @@ const carregarDashboard = async (): Promise<DashboardData> => {
       .order("data_proxima_renovacao", { ascending: true })
       .limit(50),
     supabase
-      .from("ordens_servico")
-      .select(selectChecklists)
-      .not("equipamento_id", "is", null)
-      .order("data_fechamento", { ascending: false })
-      .limit(2000),
+      .rpc("listar_ultimas_preventivas_equipamentos", { p_limit: 5000 }),
     supabase
       .from("equipamentos")
       .select(selectEquipamentos)
@@ -554,11 +505,10 @@ const carregarDashboard = async (): Promise<DashboardData> => {
   ]);
 
   const errors = [
-    osResult.error,
     equipamentosPreventivaResult.error,
     equipamentosManutencaoResult.error,
     contratosResult.error,
-    checklistsResult.error,
+    ultimasPreventivasResult.error,
     calibracoesResult.error,
     padroesResult.error,
   ].filter(Boolean);
@@ -567,15 +517,17 @@ const carregarDashboard = async (): Promise<DashboardData> => {
     throw new Error(errors[0]?.message || "Erro ao carregar painel.");
   }
 
-  const ordens = (osResult.data || []) as unknown as OrdemServicoResumo[];
   const latestPreventivaMap = getLatestPreventivaMap(
-    (checklistsResult.data || []) as unknown as ChecklistPreventivaResumo[]
+    (ultimasPreventivasResult.data || []) as unknown as UltimaPreventivaResumo[]
   );
 
   return {
-    liberadosEntrega: ordens.filter(isLiberadoEntrega).slice(0, 8),
-    analiseCompleta: ordens.filter(isAnaliseCompleta).slice(0, 8),
-    osAbertas: ordens.filter(isAberta),
+    liberadosEntrega: liberadosEntregaPaginadas.items as unknown as OrdemServicoResumo[],
+    liberadosEntregaTotal: liberadosEntregaPaginadas.total,
+    analiseCompleta: analiseCompletaPaginadas.items as unknown as OrdemServicoResumo[],
+    analiseCompletaTotal: analiseCompletaPaginadas.total,
+    osAbertas: osAbertasPaginadas.items as unknown as OrdemServicoResumo[],
+    osAbertasTotal: osAbertasPaginadas.total,
     equipamentosManutencao:
       (equipamentosManutencaoResult.data || []) as unknown as EquipamentoResumo[],
     preventivasPorMes: montarPreventivasPorMes(
@@ -595,12 +547,14 @@ const StatCard = ({
   description,
   icon: Icon,
   tone = "default",
+  to,
 }: {
   title: string;
   value: number;
   description: string;
   icon: typeof ClipboardList;
   tone?: "default" | "warning" | "danger" | "success";
+  to?: string;
 }) => {
   const toneClass = {
     default: "bg-primary/10 text-primary",
@@ -609,8 +563,8 @@ const StatCard = ({
     success: "bg-success/10 text-success",
   }[tone];
 
-  return (
-    <Card className="rounded-lg">
+  const content = (
+    <Card className={`rounded-lg ${to ? "transition-colors hover:bg-muted/30" : ""}`}>
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -626,6 +580,17 @@ const StatCard = ({
         <p className="mt-3 text-xs text-muted-foreground">{description}</p>
       </CardContent>
     </Card>
+  );
+
+  if (!to) return content;
+
+  return (
+    <Link
+      to={to}
+      className="block rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+    >
+      {content}
+    </Link>
   );
 };
 
@@ -725,9 +690,9 @@ const Dashboard = () => {
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ["dashboard-operacional"],
     queryFn: carregarDashboard,
-    staleTime: 0,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
+    staleTime: 60 * 1000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
   });
   const [detalhesOpen, setDetalhesOpen] = useState(false);
   const [osDetalhes, setOsDetalhes] = useState<OrdemServicoSupabase | null>(
@@ -969,17 +934,27 @@ const Dashboard = () => {
           <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard
               title="Liberados para entrega"
-              value={data?.liberadosEntrega.length || 0}
+              value={data?.liberadosEntregaTotal || 0}
               description="Equipamentos aguardando retirada ou entrega"
               icon={PackageCheck}
               tone="success"
+              to={getDashboardFilterUrl({
+                estado: "Liberado para Entrega",
+                hideClosed: true,
+              })}
             />
             <StatCard
               title="Análise concluída"
-              value={data?.analiseCompleta.length || 0}
+              value={data?.analiseCompletaTotal || 0}
               description="OS aguardando proposta/decisão do gestor"
               icon={ClipboardCheck}
               tone="warning"
+              to={getDashboardFilterUrl({
+                estado: data?.analiseCompleta[0]
+                  ? getEstadoNome(data.analiseCompleta[0])
+                  : "Analise Completa",
+                hideClosed: true,
+              })}
             />
             <StatCard
               title="Preventivas este mês"
@@ -997,9 +972,10 @@ const Dashboard = () => {
             />
             <StatCard
               title="OS abertas"
-              value={data?.osAbertas.length || 0}
+              value={data?.osAbertasTotal || 0}
               description="Ordens ativas que ainda não foram finalizadas"
               icon={ClipboardList}
+              to={getDashboardFilterUrl({ hideClosed: true })}
             />
             <StatCard
               title="Equipamentos em manutenção"
@@ -1033,7 +1009,13 @@ const Dashboard = () => {
                     OS com equipamento pronto, cliente e endereço para logística.
                   </p>
                 </div>
-                <Link to="/ordens-servico" className="text-sm text-primary hover:underline">
+                <Link
+                  to={getDashboardFilterUrl({
+                    estado: "Liberado para Entrega",
+                    hideClosed: true,
+                  })}
+                  className="text-sm text-primary hover:underline"
+                >
                   Ver OS <ArrowRight className="inline h-3 w-3" />
                 </Link>
               </CardHeader>
@@ -1213,7 +1195,7 @@ const Dashboard = () => {
             </Card>
           </div>
 
-          {(data?.osAbertas.length || 0) > 0 && (
+          {(data?.osAbertasTotal || 0) > 0 && (
             <Card className="mt-6 rounded-lg">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">

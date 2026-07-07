@@ -21,6 +21,7 @@ import OrcamentoFormDialog, {
 } from "@/components/OrcamentoFormDialog";
 import SearchableSelect from "@/components/SearchableSelect";
 import SortableTableHeader from "@/components/SortableTableHeader";
+import ListPagination from "@/components/ListPagination";
 import ListLimitSelect, {
   DEFAULT_LIST_LIMIT,
 } from "@/components/ListLimitSelect";
@@ -45,6 +46,7 @@ import {
   useAlterarStatusOrcamento,
   useOrcamentos,
 } from "@/hooks/useOrcamentos";
+import { usePaginatedList } from "@/hooks/usePaginatedList";
 import {
   OrcamentoStatus,
   OrcamentoSupabase,
@@ -284,22 +286,25 @@ const Orcamentos = () => {
     valorMinFiltro,
   ]);
 
-  const sortGetters: Record<string, (item: OrcamentoSupabase) => unknown> = {
-    numero: (o) => getNumeroOrdenacao(o.numero),
-    data: (o) => o.data_orcamento || o.created_at,
-    cliente: getEmpresaNome,
-    equipamento: (o) => o.identificador || getEquipamentoLabel(o.equipamento),
-    status: (o) => o.status,
-    tipo: (o) => o.tipo_orcamento,
-    origem: (o) => o.origem,
-    os: (o) => o.ordem_servico?.numero,
-    valor_pecas: (o) => o.valor_pecas,
-    valor_servicos: (o) => o.valor_servicos,
-    valor_total: (o) => o.valor_total,
-    forma_pagamento: (o) => o.forma_pagamento,
-    orcamentista: (o) => o.responsavel_orcamentista,
-    validade: (o) => o.data_validade,
-  };
+  const sortGetters = useMemo<Record<string, (item: OrcamentoSupabase) => unknown>>(
+    () => ({
+      numero: (o) => getNumeroOrdenacao(o.numero),
+      data: (o) => o.data_orcamento || o.created_at,
+      cliente: getEmpresaNome,
+      equipamento: (o) => o.identificador || getEquipamentoLabel(o.equipamento),
+      status: (o) => o.status,
+      tipo: (o) => o.tipo_orcamento,
+      origem: (o) => o.origem,
+      os: (o) => o.ordem_servico?.numero,
+      valor_pecas: (o) => o.valor_pecas,
+      valor_servicos: (o) => o.valor_servicos,
+      valor_total: (o) => o.valor_total,
+      forma_pagamento: (o) => o.forma_pagamento,
+      orcamentista: (o) => o.responsavel_orcamentista,
+      validade: (o) => o.data_validade,
+    }),
+    []
+  );
 
   const sortedFiltered = useMemo(
     () =>
@@ -308,13 +313,13 @@ const Orcamentos = () => {
         sortGetters[sortKey] || sortGetters.data,
         sortDirection
       ),
-    [filtered, sortDirection, sortKey]
+    [filtered, sortDirection, sortGetters, sortKey]
   );
 
-  const visibleOrcamentos = useMemo(
-    () => sortedFiltered.slice(0, listLimit),
-    [listLimit, sortedFiltered]
-  );
+  const {
+    paginatedItems: visibleOrcamentos,
+    ...orcamentosPagination
+  } = usePaginatedList(sortedFiltered, listLimit);
 
   const handleSort = (key: string) => {
     if (sortKey === key) {
@@ -1042,6 +1047,10 @@ const Orcamentos = () => {
                 )}
               </tbody>
             </table>
+            <ListPagination
+              {...orcamentosPagination}
+              onPageChange={orcamentosPagination.setPage}
+            />
           </div>
         )}
       </div>

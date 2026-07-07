@@ -32,6 +32,7 @@ describe("assinaturas nos PDFs", () => {
     expect(html).toContain("data:image/png;base64,tecnico");
     expect(html).toContain("Cliente Teste");
     expect(html).toContain("Tecnico Teste");
+    expect(html).toContain("T&eacute;cnico Executor");
   });
 
   it("omite observacao tecnica do plano e o campo de data da assinatura", () => {
@@ -50,25 +51,29 @@ describe("assinaturas nos PDFs", () => {
     expect(html).toContain("grid-template-columns: 1fr 1fr");
   });
 
-  it("insere assinaturas do executor e do responsavel na calibracao", () => {
+  it("insere assinaturas do executor, responsavel e solicitante na calibracao", () => {
     const html = buildCalibracaoCertificadoHtml(
       {
         numero_certificado: 1,
         data_emissao: "2026-06-15",
         criterio_conformidade_aplicado: false,
+        responsavel_solicitante: "Solicitante Teste",
         tabelas: [],
       } as CalibracaoExecucao,
       "logo",
       {
         tecnico: assinatura("Executor Teste", "executor"),
         responsavel: assinatura("Responsavel Teste", "responsavel"),
+        solicitante: assinatura("Solicitante Teste", "solicitante"),
       }
     );
 
     expect(html).toContain("data:image/png;base64,executor");
     expect(html).toContain("data:image/png;base64,responsavel");
+    expect(html).toContain("data:image/png;base64,solicitante");
     expect(html).toContain("Executor Teste");
     expect(html).toContain("Responsavel Teste");
+    expect(html).toContain("Solicitante Teste");
   });
 
   it("insere assinaturas do executor e do responsavel na seguranca eletrica", () => {

@@ -1,10 +1,14 @@
 import aciLogo from "@/assets/aci-logo-hd.png";
 import type { CalibracaoExecucao } from "@/services/calibracaoExecucoesService";
-import { formatNomeArquivoCertificadoCalibracao } from "@/services/calibracaoExecucoesService";
-import { buildCalibracaoCertificadoHtml } from "@/utils/calibracaoCertificadoPdfTemplate";
+import { formatNomeDownloadCertificadoCalibracao } from "@/services/calibracaoExecucoesService";
+import {
+  buildCalibracaoCertificadoHtml,
+  CALIBRACAO_CERTIFICADO_FOOTER,
+} from "@/utils/calibracaoCertificadoPdfTemplate";
 import { renderHtmlToPdf } from "@/utils/pdfHtmlRenderer";
 import { imageToDataUrl } from "@/utils/pdfImageUtils";
 import { assinaturasService } from "@/services/assinaturasService";
+import { renderHtmlToPdfWithPrintToPdf } from "@/utils/printToPdfRenderer";
 
 export const gerarPdfCalibracaoCertificado = async (
   execucao: CalibracaoExecucao,
@@ -19,9 +23,23 @@ export const gerarPdfCalibracaoCertificado = async (
       empresaId: execucao.empresa_id,
     }),
   ]);
-  return renderHtmlToPdf({
-    html: buildCalibracaoCertificadoHtml(execucao, logo, assinaturas),
-    fileName: formatNomeArquivoCertificadoCalibracao(execucao),
+  const html = buildCalibracaoCertificadoHtml(execucao, logo, assinaturas);
+  const fileName = formatNomeDownloadCertificadoCalibracao(execucao);
+  const printToPdf = await renderHtmlToPdfWithPrintToPdf({
+    html,
+    fileName,
     save,
+    footerText: CALIBRACAO_CERTIFICADO_FOOTER,
+    footerFontSizePx: 7.2,
+  });
+
+  if (printToPdf) return printToPdf;
+
+  return renderHtmlToPdf({
+    html,
+    fileName,
+    save,
+    footerText: CALIBRACAO_CERTIFICADO_FOOTER,
+    footerHeightMm: 16,
   });
 };

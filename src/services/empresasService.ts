@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabaseClient";
+import { normalizarNomeCidade } from "@/utils/brasil";
 
 export type EmpresaSetorSupabase = {
   id: string;
@@ -21,6 +22,7 @@ export type EmpresaSetorSupabase = {
 
 export type EmpresaSupabase = {
   id: string;
+  numero_cadastro: number;
   organizacao_id: string;
   nome: string;
   nome_fantasia: string | null;
@@ -90,8 +92,13 @@ export type ListarEmpresasFiltros = {
   statusFiltro?: StatusEmpresaFiltro;
 };
 
+export type ExcluirEmpresaInput = {
+  excluirEquipamentos?: boolean;
+};
+
 const selectEmpresas = `
   id,
+  numero_cadastro,
   organizacao_id,
   nome,
   nome_fantasia,
@@ -142,6 +149,8 @@ const normalizarEmpresa = (empresa: EmpresaSupabase): EmpresaSupabase => ({
     .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")),
 });
 
+const EMPRESAS_PAGE_SIZE = 1000;
+
 const normalizarSetoresInput = (setores?: EmpresaSetorFormInput[]) => {
   const vistos = new Set<string>();
 
@@ -173,7 +182,7 @@ const toSetorPayload = (
   numero: setor.numero || null,
   complemento: setor.complemento || null,
   bairro: setor.bairro || null,
-  cidade: setor.cidade || null,
+  cidade: normalizarNomeCidade(setor.cidade) || null,
   estado: setor.estado?.toUpperCase() || null,
   observacoes: setor.observacoes || null,
   mesmo_endereco_cliente: setor.mesmoEnderecoCliente ?? false,
@@ -237,26 +246,38 @@ const salvarSetoresEmpresa = async (
 export const empresasService = {
   async listar(filtros?: ListarEmpresasFiltros) {
     const statusFiltro = filtros?.statusFiltro || "ativas";
-    let query = supabase
-      .from("empresas")
-      .select(selectEmpresas)
-      .order("created_at", { ascending: false });
+    const empresas: EmpresaSupabase[] = [];
 
-    if (statusFiltro === "ativas") {
-      query = query.eq("ativo", true);
+    for (let from = 0; ; from += EMPRESAS_PAGE_SIZE) {
+      let query = supabase
+        .from("empresas")
+        .select(selectEmpresas)
+        .order("created_at", { ascending: false })
+        .range(from, from + EMPRESAS_PAGE_SIZE - 1);
+
+      if (statusFiltro === "ativas") {
+        query = query.eq("ativo", true);
+      }
+
+      if (statusFiltro === "inativas") {
+        query = query.eq("ativo", false);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      const pagina = (data || []) as unknown as EmpresaSupabase[];
+      empresas.push(...pagina);
+
+      if (pagina.length < EMPRESAS_PAGE_SIZE) {
+        break;
+      }
     }
 
-    if (statusFiltro === "inativas") {
-      query = query.eq("ativo", false);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    return ((data || []) as unknown as EmpresaSupabase[]).map(normalizarEmpresa);
+    return empresas.map(normalizarEmpresa);
   },
 
   async buscarPorId(id: string) {
@@ -271,6 +292,19 @@ export const empresasService = {
     }
 
     return normalizarEmpresa(data as unknown as EmpresaSupabase);
+  },
+
+  async contarEquipamentos(empresaId: string) {
+    const { count, error } = await supabase
+      .from("equipamentos")
+      .select("id", { count: "exact", head: true })
+      .eq("empresa_id", empresaId);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return count || 0;
   },
 
   async criar(input: EmpresaFormInput) {
@@ -302,7 +336,7 @@ export const empresasService = {
         numero: input.numero || null,
         complemento: input.complemento || null,
         bairro: input.bairro || null,
-        cidade: input.cidade || null,
+        cidade: normalizarNomeCidade(input.cidade) || null,
         estado: input.estado || null,
         contato: input.contato || null,
         email: input.email || null,
@@ -343,7 +377,7 @@ export const empresasService = {
         numero: input.numero || null,
         complemento: input.complemento || null,
         bairro: input.bairro || null,
-        cidade: input.cidade || null,
+        cidade: normalizarNomeCidade(input.cidade) || null,
         estado: input.estado || null,
         contato: input.contato || null,
         email: input.email || null,
@@ -371,5 +405,34 @@ export const empresasService = {
     }
 
     return this.buscarPorId(id);
+  },
+
+  async excluir(id: string, input: ExcluirEmpresaInput = {}) {
+    const { data: perfil, error: perfilError } = await supabase.rpc(
+      "current_user_perfil"
+    );
+
+    if (perfilError) {
+      throw new Error(perfilError.message);
+    }
+
+    if (!["admin", "gestor"].includes(String(perfil || ""))) {
+      throw new Error("Somente Admin e Gestor podem excluir clientes.");
+    }
+
+    const { error } = await supabase.rpc("excluir_empresa_controlada", {
+      p_empresa_id: id,
+      p_excluir_equipamentos: input.excluirEquipamentos ?? false,
+    });
+
+    if (error) {
+      if (error.code === "23503") {
+        throw new Error(
+          "Este cliente ou algum equipamento vinculado possui registros históricos e não pode ser excluído definitivamente. Desative o cadastro para preservar o histórico."
+        );
+      }
+
+      throw new Error(error.message);
+    }
   },
 };

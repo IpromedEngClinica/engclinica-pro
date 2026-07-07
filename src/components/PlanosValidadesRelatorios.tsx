@@ -2,10 +2,12 @@ import { useMemo, useState } from "react";
 import { AlertTriangle, CalendarClock, CheckCircle2, Search, type LucideIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import ListLimitSelect, { DEFAULT_LIST_LIMIT } from "@/components/ListLimitSelect";
+import ListPagination from "@/components/ListPagination";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useValidadesRelatoriosPlanos } from "@/hooks/usePlanos";
+import { usePaginatedList } from "@/hooks/usePaginatedList";
 import type { PlanoValidadeRelatorio } from "@/services/planosService";
 
 const TODOS = "todos";
@@ -87,7 +89,10 @@ const PlanosValidadesRelatorios = () => {
     });
   }, [relatoriosAtuais, search, situacao]);
 
-  const visiveis = filtrados.slice(0, listLimit);
+  const {
+    paginatedItems: visiveis,
+    ...relatoriosPagination
+  } = usePaginatedList(filtrados, listLimit);
 
   return (
     <div className="space-y-4">
@@ -171,6 +176,10 @@ const PlanosValidadesRelatorios = () => {
             )}
           </tbody>
         </table>
+        <ListPagination
+          {...relatoriosPagination}
+          onPageChange={relatoriosPagination.setPage}
+        />
       </div>
     </div>
   );

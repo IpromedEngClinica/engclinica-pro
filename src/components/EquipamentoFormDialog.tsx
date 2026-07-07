@@ -48,6 +48,7 @@ interface Props {
 
 const emptyForm: EquipamentoFormInput = {
   empresaId: "",
+  empresaSetorId: "",
   tipoEquipamentoId: "",
   tipoTexto: "",
   fabricante: "",
@@ -102,6 +103,7 @@ const EquipamentoFormDialog = ({
 
   const readOnly = mode === "view";
   const saving = criarEquipamento.isPending || atualizarEquipamento.isPending;
+  const statusLocadoAutomatico = form.status === "Locado";
 
   const empresasDisponiveis = useMemo(
     () =>
@@ -165,6 +167,7 @@ const EquipamentoFormDialog = ({
     if (equipamento && (mode === "edit" || mode === "view")) {
       setForm({
         empresaId: equipamento.empresa_id,
+        empresaSetorId: equipamento.empresa_setor_id || "",
         tipoEquipamentoId: equipamento.tipo_equipamento_id || "",
         tipoTexto: equipamento.tipo_texto || "",
         fabricante: equipamento.fabricante || "",
@@ -186,6 +189,7 @@ const EquipamentoFormDialog = ({
     setForm({
       ...emptyForm,
       empresaId: empresaInicialId || empresaInicial?.id || "",
+      empresaSetorId: "",
     });
   }, [open, equipamento, mode, empresaInicialId, empresaInicial]);
 
@@ -193,8 +197,16 @@ const EquipamentoFormDialog = ({
     if (!open || readOnly || mode !== "create") return;
     if (!form.empresaId || form.setor || setorOptions.length !== 1) return;
 
-    setForm((prev) => ({ ...prev, setor: setorOptions[0] }));
-  }, [open, readOnly, mode, form.empresaId, form.setor, setorOptions]);
+    const setor = selectedEmpresa?.setores?.find(
+      (item) => item.nome === setorOptions[0]
+    );
+
+    setForm((prev) => ({
+      ...prev,
+      setor: setorOptions[0],
+      empresaSetorId: setor?.id || "",
+    }));
+  }, [open, readOnly, mode, form.empresaId, form.setor, setorOptions, selectedEmpresa]);
 
   const update = (field: keyof EquipamentoFormInput, value: string) => {
     if (readOnly) return;
@@ -216,12 +228,27 @@ const EquipamentoFormDialog = ({
     setForm((prev) => ({
       ...prev,
       empresaId: empresa?.id || "",
+      empresaSetorId:
+        setoresEmpresa.length === 1
+          ? empresa?.setores?.find((setor) => setor.nome === setoresEmpresa[0])
+              ?.id || ""
+          : "",
       setor:
         setoresEmpresa.length === 1
           ? setoresEmpresa[0]
           : setoresEmpresa.includes(prev.setor || "")
             ? prev.setor
             : "",
+    }));
+  };
+
+  const handleSetorChange = (value: string) => {
+    const setor = selectedEmpresa?.setores?.find((item) => item.nome === value);
+
+    setForm((prev) => ({
+      ...prev,
+      setor: value,
+      empresaSetorId: setor?.id || "",
     }));
   };
 
@@ -252,17 +279,14 @@ const EquipamentoFormDialog = ({
       return;
     }
 
-    if (!form.fabricante?.trim()) {
-      toast({
-        title: "Informe o fabricante do equipamento.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     try {
       const payload: EquipamentoFormInput = {
         ...form,
+        empresaSetorId:
+          selectedEmpresa?.setores?.find((setor) => setor.nome === form.setor)
+            ?.id ||
+          form.empresaSetorId ||
+          "",
         fabricante: form.fabricante?.trim(),
         modelo: form.modelo?.trim(),
         numeroSerie: form.numeroSerie?.trim(),
@@ -348,7 +372,7 @@ const EquipamentoFormDialog = ({
             </div>
 
             <div className="space-y-2">
-              <Label className="text-sm">Fabricante *</Label>
+              <Label className="text-sm">Fabricante</Label>
               <Input
                 placeholder="Ex: Philips"
                 value={form.fabricante}
@@ -369,7 +393,7 @@ const EquipamentoFormDialog = ({
 
             <div className="space-y-2">
               <Label className="text-sm">{readOnly ? "Status" : "Estado"}</Label>
-              {readOnly ? (
+              {readOnly || statusLocadoAutomatico ? (
                 <Input
                   value={getEquipamentoStatusLabel(equipamento, form.status)}
                   disabled
@@ -467,7 +491,7 @@ const EquipamentoFormDialog = ({
                 <>
                   <SearchableSelect
                     value={form.setor || ""}
-                    onValueChange={(value) => update("setor", value)}
+                    onValueChange={handleSetorChange}
                     options={setorOptions}
                     placeholder="Selecione o setor cadastrado"
                     emptyText="Nenhum setor encontrado."

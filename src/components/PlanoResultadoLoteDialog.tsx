@@ -8,11 +8,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type {
+  ResultadoCancelamentoItensCiclo,
   ResultadoFinalizacaoPreventivasLote,
   ResultadoNaoLocalizados,
 } from "@/services/planosService";
 
-type Resultado = ResultadoFinalizacaoPreventivasLote | ResultadoNaoLocalizados;
+type Resultado =
+  | ResultadoFinalizacaoPreventivasLote
+  | ResultadoNaoLocalizados
+  | ResultadoCancelamentoItensCiclo;
 
 type Props = {
   open: boolean;
@@ -26,12 +30,19 @@ const isPreventivaResultado = (
 ): resultado is ResultadoFinalizacaoPreventivasLote =>
   "totalFinalizados" in resultado;
 
+const isCancelamentoResultado = (
+  resultado: Resultado
+): resultado is ResultadoCancelamentoItensCiclo =>
+  "totalCancelados" in resultado;
+
 const PlanoResultadoLoteDialog = ({ open, onOpenChange, resultado, titulo }: Props) => {
   if (!resultado) return null;
 
   const totalSucesso = isPreventivaResultado(resultado)
     ? resultado.totalFinalizados
-    : resultado.totalAtualizados;
+    : isCancelamentoResultado(resultado)
+      ? resultado.totalCancelados
+      : resultado.totalAtualizados;
   const sucessos = isPreventivaResultado(resultado)
     ? resultado.finalizados.map((item) => ({
         id: item.itemId,
@@ -40,6 +51,14 @@ const PlanoResultadoLoteDialog = ({ open, onOpenChange, resultado, titulo }: Pro
         documento: item.numeroOs ? `OS ${item.numeroOs}` : "OS vinculada",
         detalhes: "Checklist conforme e aprovado.",
       }))
+    : isCancelamentoResultado(resultado)
+      ? resultado.cancelados.map((item) => ({
+          id: item.equipamentoId,
+          equipamento: item.equipamentoDescricao,
+          resultado: "Cancelado",
+          documento: "-",
+          detalhes: "Itens pendentes do equipamento removidos desta execucao.",
+        }))
     : resultado.atualizados.map((item) => ({
         id: item.equipamentoId,
         equipamento: item.equipamentoDescricao,

@@ -37,6 +37,48 @@ export const getUfLabel = (sigla: string) => {
 
 export const onlyDigits = (value: string) => value.replace(/\D/g, "");
 
+const CIDADE_PARTICULAS_MINUSCULAS = new Set([
+  "da",
+  "das",
+  "de",
+  "di",
+  "do",
+  "dos",
+  "e",
+]);
+
+const normalizarEspacos = (value: string) =>
+  value.replace(/\s+/g, " ").trim();
+
+const capitalizarParteNome = (parte: string) => {
+  if (!parte) return parte;
+
+  const lower = parte.toLocaleLowerCase("pt-BR");
+  return lower.charAt(0).toLocaleUpperCase("pt-BR") + lower.slice(1);
+};
+
+export const normalizarNomeCidade = (value?: string | null) => {
+  const cidade = normalizarEspacos(value || "");
+
+  if (!cidade) return "";
+
+  return cidade
+    .split(" ")
+    .map((palavra, index) => {
+      const lower = palavra.toLocaleLowerCase("pt-BR");
+
+      if (index > 0 && CIDADE_PARTICULAS_MINUSCULAS.has(lower)) {
+        return lower;
+      }
+
+      return palavra
+        .split("-")
+        .map((parte) => capitalizarParteNome(parte))
+        .join("-");
+    })
+    .join(" ");
+};
+
 export type ViaCepResponse = {
   cep: string;
   logradouro: string;

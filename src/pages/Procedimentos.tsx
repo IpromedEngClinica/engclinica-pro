@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import ListLimitSelect, {
   DEFAULT_LIST_LIMIT,
 } from "@/components/ListLimitSelect";
+import ListPagination from "@/components/ListPagination";
 import PageHeader from "@/components/PageHeader";
 import ProcedimentoPreventivaFormDialog from "@/components/ProcedimentoPreventivaFormDialog";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ import {
   useDesativarProcedimentoPreventiva,
   useProcedimentosPreventiva,
 } from "@/hooks/useProcedimentosPreventiva";
+import { usePaginatedList } from "@/hooks/usePaginatedList";
 import type { ProcedimentoPreventiva } from "@/services/procedimentosPreventivaService";
 
 const Procedimentos = () => {
@@ -43,10 +45,10 @@ const Procedimentos = () => {
     });
   }, [procedimentos, search]);
 
-  const visibleProcedimentos = useMemo(
-    () => filtered.slice(0, listLimit),
-    [filtered, listLimit]
-  );
+  const {
+    paginatedItems: visibleProcedimentos,
+    ...procedimentosPagination
+  } = usePaginatedList(filtered, listLimit);
 
   const openCreate = () => {
     setEditing(null);
@@ -227,6 +229,10 @@ const Procedimentos = () => {
                 )}
               </tbody>
             </table>
+            <ListPagination
+              {...procedimentosPagination}
+              onPageChange={procedimentosPagination.setPage}
+            />
           </div>
         )}
       </div>

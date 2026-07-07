@@ -119,6 +119,35 @@ export type OrdemServicoFormInput = {
   acessorios?: OrdemServicoAcessorioFormInput[];
 };
 
+export type OrdensServicoSortField =
+  | "numero"
+  | "numero_ordem"
+  | "data_abertura"
+  | "created_at"
+  | "responsavel_texto";
+
+export type ListarOrdensServicoFiltros = {
+  termo?: string;
+  ocultarFechadas?: boolean;
+  estadoNome?: string;
+  solicitanteNome?: string;
+  tipoServicoNome?: string;
+  responsavelTecnico?: string;
+  numero?: string;
+};
+
+export type ListarOrdensServicoPaginadoFiltros = ListarOrdensServicoFiltros & {
+  page: number;
+  limit: number;
+  sortBy?: OrdensServicoSortField;
+  ascending?: boolean;
+};
+
+export type OrdensServicoPaginadoResult = {
+  items: OrdemServicoSupabase[];
+  total: number;
+};
+
 const selectOrdensServico = `
   id,
   organizacao_id,
@@ -281,21 +310,295 @@ const getSelectOrdensServico = async () => {
     : selectOrdensServico;
 };
 
-const toDatabasePayload = (input: OrdemServicoFormInput) => ({
-  empresa_id: input.empresaId,
-  equipamento_id: input.equipamentoId || null,
-  tipo_os_id: input.tipoOsId || null,
-  estado_os_id: input.estadoOsId || null,
-  tecnico_responsavel_id: input.tecnicoResponsavelId || null,
-  ...(input.dataAbertura ? { data_abertura: input.dataAbertura } : {}),
-  solicitante_texto: input.solicitanteTexto || null,
-  responsavel_texto: input.responsavelTexto || null,
-  problema_relatado: input.problemaRelatado || null,
-  origem_problema: input.origemProblema || null,
-  descricao_servico: input.descricaoServico || null,
-  observacoes: input.observacoes || null,
-  status_sistema: input.statusSistema || "aberta",
+const selectOrdensServicoListagem = `
+  id,
+  organizacao_id,
+  numero,
+  empresa_id,
+  equipamento_id,
+  tipo_os_id,
+  estado_os_id,
+  tecnico_responsavel_id,
+  solicitante_texto,
+  responsavel_texto,
+  data_abertura,
+  data_fechamento,
+  problema_relatado,
+  origem_problema,
+  prioridade,
+  status_sistema,
+  plano_ciclo_id,
+  ativo,
+  created_at,
+  updated_at,
+  empresa:empresas (
+    id,
+    organizacao_id,
+    nome,
+    nome_fantasia,
+    cpf_cnpj,
+    cep,
+    rua,
+    numero,
+    complemento,
+    bairro,
+    cidade,
+    estado,
+    contato,
+    email,
+    celular,
+    telefone,
+    ativo
+  ),
+  equipamento:equipamentos (
+    id,
+    organizacao_id,
+    empresa_id,
+    tipo_equipamento_id,
+    tipo_texto,
+    fabricante,
+    modelo,
+    numero_serie,
+    patrimonio,
+    tag,
+    setor,
+    status,
+    ativo,
+    tipo_equipamento:tipos_equipamento (
+      id,
+      nome
+    )
+  ),
+  tipo_os:tipos_os (
+    id,
+    nome
+  ),
+  estado_os:estados_os (
+    id,
+    nome,
+    finaliza_os,
+    cancela_os
+  )
+`;
+
+type OrdemServicoResumoRpcRow = {
+  total_count?: number | string | null;
+  id: string;
+  organizacao_id: string;
+  numero: string;
+  empresa_id: string;
+  equipamento_id: string | null;
+  tipo_os_id: string | null;
+  estado_os_id: string | null;
+  tecnico_responsavel_id: string | null;
+  solicitante_texto: string | null;
+  responsavel_texto: string | null;
+  data_abertura: string;
+  data_fechamento: string | null;
+  problema_relatado: string | null;
+  origem_problema: string | null;
+  prioridade: string;
+  status_sistema: string;
+  plano_ciclo_id: string | null;
+  ativo: boolean;
+  created_at: string;
+  updated_at: string;
+  empresa_nome: string | null;
+  empresa_nome_fantasia: string | null;
+  empresa_cpf_cnpj: string | null;
+  empresa_cep: string | null;
+  empresa_rua: string | null;
+  empresa_numero: string | null;
+  empresa_complemento: string | null;
+  empresa_bairro: string | null;
+  empresa_cidade: string | null;
+  empresa_estado: string | null;
+  empresa_contato: string | null;
+  empresa_email: string | null;
+  empresa_celular: string | null;
+  empresa_telefone: string | null;
+  empresa_ativo: boolean | null;
+  equipamento_organizacao_id: string | null;
+  equipamento_empresa_id: string | null;
+  equipamento_tipo_equipamento_id: string | null;
+  equipamento_tipo_texto: string | null;
+  equipamento_fabricante: string | null;
+  equipamento_modelo: string | null;
+  equipamento_numero_serie: string | null;
+  equipamento_patrimonio: string | null;
+  equipamento_tag: string | null;
+  equipamento_setor: string | null;
+  equipamento_status: string | null;
+  equipamento_ativo: boolean | null;
+  tipo_equipamento_nome: string | null;
+  tipo_os_nome: string | null;
+  estado_os_nome: string | null;
+  estado_os_finaliza_os: boolean | null;
+  estado_os_cancela_os: boolean | null;
+};
+
+const mapOrdemServicoResumo = (
+  row: OrdemServicoResumoRpcRow
+): OrdemServicoSupabase => ({
+  id: row.id,
+  organizacao_id: row.organizacao_id,
+  numero: row.numero,
+  empresa_id: row.empresa_id,
+  equipamento_id: row.equipamento_id,
+  tipo_os_id: row.tipo_os_id,
+  estado_os_id: row.estado_os_id,
+  tecnico_responsavel_id: row.tecnico_responsavel_id,
+  solicitante_texto: row.solicitante_texto,
+  responsavel_texto: row.responsavel_texto,
+  data_abertura: row.data_abertura,
+  data_fechamento: row.data_fechamento,
+  problema_relatado: row.problema_relatado,
+  origem_problema: row.origem_problema,
+  descricao_servico: null,
+  observacoes: null,
+  prioridade: row.prioridade,
+  status_sistema: row.status_sistema,
+  plano_ciclo_id: row.plano_ciclo_id,
+  ativo: row.ativo,
+  created_at: row.created_at,
+  updated_at: row.updated_at,
+  empresa: row.empresa_id
+    ? ({
+        id: row.empresa_id,
+        organizacao_id: row.organizacao_id,
+        nome: row.empresa_nome || "",
+        nome_fantasia: row.empresa_nome_fantasia,
+        cpf_cnpj: row.empresa_cpf_cnpj,
+        cep: row.empresa_cep,
+        rua: row.empresa_rua,
+        numero: row.empresa_numero,
+        complemento: row.empresa_complemento,
+        bairro: row.empresa_bairro,
+        cidade: row.empresa_cidade,
+        estado: row.empresa_estado,
+        contato: row.empresa_contato,
+        email: row.empresa_email,
+        celular: row.empresa_celular,
+        telefone: row.empresa_telefone,
+        ativo: row.empresa_ativo ?? true,
+      } as EmpresaSupabase)
+    : null,
+  equipamento: row.equipamento_id
+    ? ({
+        id: row.equipamento_id,
+        organizacao_id: row.equipamento_organizacao_id || row.organizacao_id,
+        empresa_id: row.equipamento_empresa_id || row.empresa_id,
+        tipo_equipamento_id: row.equipamento_tipo_equipamento_id,
+        tipo_texto: row.equipamento_tipo_texto,
+        fabricante: row.equipamento_fabricante,
+        modelo: row.equipamento_modelo,
+        numero_serie: row.equipamento_numero_serie,
+        patrimonio: row.equipamento_patrimonio,
+        tag: row.equipamento_tag,
+        setor: row.equipamento_setor,
+        status: row.equipamento_status,
+        ativo: row.equipamento_ativo ?? true,
+        tipo_equipamento: row.equipamento_tipo_equipamento_id
+          ? {
+              id: row.equipamento_tipo_equipamento_id,
+              nome: row.tipo_equipamento_nome || "",
+            }
+          : null,
+      } as EquipamentoSupabase)
+    : null,
+  tipo_os: row.tipo_os_id
+    ? {
+        id: row.tipo_os_id,
+        nome: row.tipo_os_nome || "",
+      }
+    : null,
+  estado_os: row.estado_os_id
+    ? {
+        id: row.estado_os_id,
+        nome: row.estado_os_nome || "",
+        finaliza_os: row.estado_os_finaliza_os ?? false,
+        cancela_os: row.estado_os_cancela_os ?? false,
+      }
+    : null,
 });
+
+type OrdemServicoDatabasePayload = {
+  empresa_id: string;
+  equipamento_id: string | null;
+  tipo_os_id: string | null;
+  estado_os_id: string | null;
+  tecnico_responsavel_id: string | null;
+  data_abertura?: string;
+  data_fechamento?: string | null;
+  solicitante_texto: string | null;
+  responsavel_texto: string | null;
+  problema_relatado: string | null;
+  origem_problema: string | null;
+  descricao_servico: string | null;
+  observacoes: string | null;
+  status_sistema: string;
+};
+
+const buscarEstadoOperacional = async (estadoOsId?: string | null) => {
+  if (!estadoOsId) return null;
+
+  const { data, error } = await supabase
+    .from("estados_os")
+    .select("id, finaliza_os, cancela_os")
+    .eq("id", estadoOsId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
+};
+
+const toDatabasePayload = async (
+  input: OrdemServicoFormInput,
+  options: {
+    dataAberturaFallback?: string | null;
+    dataFechamentoFallback?: string | null;
+  } = {}
+): Promise<OrdemServicoDatabasePayload> => {
+  const estado = await buscarEstadoOperacional(input.estadoOsId);
+  const dataAbertura = input.dataAbertura || options.dataAberturaFallback || null;
+  const payload: OrdemServicoDatabasePayload = {
+    empresa_id: input.empresaId,
+    equipamento_id: input.equipamentoId || null,
+    tipo_os_id: input.tipoOsId || null,
+    estado_os_id: input.estadoOsId || null,
+    tecnico_responsavel_id: input.tecnicoResponsavelId || null,
+    ...(input.dataAbertura ? { data_abertura: input.dataAbertura } : {}),
+    solicitante_texto: input.solicitanteTexto || null,
+    responsavel_texto: input.responsavelTexto || null,
+    problema_relatado: input.problemaRelatado || null,
+    origem_problema: input.origemProblema || null,
+    descricao_servico: input.descricaoServico || null,
+    observacoes: input.observacoes || null,
+    status_sistema: input.statusSistema || "aberta",
+  };
+
+  if (estado?.finaliza_os || estado?.cancela_os) {
+    const fechamento =
+      options.dataFechamentoFallback ||
+      dataAbertura ||
+      new Date().toISOString();
+
+    if (!input.dataAbertura && !options.dataAberturaFallback) {
+      payload.data_abertura = fechamento;
+    }
+
+    payload.data_fechamento = fechamento;
+    payload.status_sistema = estado.finaliza_os ? "fechada" : "cancelada";
+    return payload;
+  }
+
+  payload.status_sistema = "aberta";
+  payload.data_fechamento = null;
+  return payload;
+};
 
 type AcessorioNormalizado = {
   descricao: string;
@@ -425,7 +728,7 @@ const montarDescricaoAlteracoes = async ({
   }
 
   if (texto(osAnterior.responsavel_texto) !== texto(input.responsavelTexto)) {
-    alteracoes.push("Responsável técnico alterado.");
+    alteracoes.push("Técnico executor alterado.");
   }
 
   if (texto(osAnterior.problema_relatado) !== texto(input.problemaRelatado)) {
@@ -511,7 +814,7 @@ const atualizarStatusEquipamento = async (
 
   const { data: equipamento, error: equipamentoError } = await supabase
     .from("equipamentos")
-    .select("id, ativo")
+    .select("id, ativo, status")
     .eq("id", equipamentoId)
     .maybeSingle();
 
@@ -520,6 +823,7 @@ const atualizarStatusEquipamento = async (
   }
 
   if (!equipamento || equipamento.ativo === false) return;
+  if (equipamento.status === "Locado") return;
 
   const { error } = await supabase
     .from("equipamentos")
@@ -610,6 +914,172 @@ const buscarOrdemServicoPorId = async (id: string) => {
   return data as unknown as OrdemServicoSupabase;
 };
 
+const buscarEmpresaIdsPorTermo = async (termo: string) => {
+  const value = `%${termo.trim()}%`;
+  const { data, error } = await supabase
+    .from("empresas")
+    .select("id")
+    .or(`nome.ilike.${value},nome_fantasia.ilike.${value},cpf_cnpj.ilike.${value}`)
+    .limit(300);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data || []).map((item) => item.id as string);
+};
+
+const buscarEmpresaIdsPorNome = async (nome: string) => {
+  const [porNome, porFantasia] = await Promise.all([
+    supabase.from("empresas").select("id").eq("nome", nome).limit(300),
+    supabase.from("empresas").select("id").eq("nome_fantasia", nome).limit(300),
+  ]);
+
+  if (porNome.error) throw new Error(porNome.error.message);
+  if (porFantasia.error) throw new Error(porFantasia.error.message);
+
+  return Array.from(
+    new Set([
+      ...(porNome.data || []).map((item) => item.id as string),
+      ...(porFantasia.data || []).map((item) => item.id as string),
+    ])
+  );
+};
+
+const buscarEquipamentoIdsPorTermo = async (termo: string) => {
+  const rawTerm = termo.trim();
+  const value = `%${rawTerm}%`;
+  const valueNormalizado = `%${normalizarTexto(rawTerm)}%`;
+  const filters = [
+    `tipo_texto.ilike.${value}`,
+    `fabricante.ilike.${value}`,
+    `modelo.ilike.${value}`,
+    `numero_serie.ilike.${value}`,
+    `patrimonio.ilike.${value}`,
+    `tag.ilike.${value}`,
+    `setor.ilike.${value}`,
+  ];
+
+  if (valueNormalizado !== value) {
+    filters.push(
+      `tipo_texto.ilike.${valueNormalizado}`,
+      `fabricante.ilike.${valueNormalizado}`,
+      `modelo.ilike.${valueNormalizado}`,
+      `setor.ilike.${valueNormalizado}`
+    );
+  }
+
+  const { data, error } = await supabase
+    .from("equipamentos")
+    .select("id")
+    .or(filters.join(","))
+    .limit(300);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data || []).map((item) => item.id as string);
+};
+
+const buscarTipoOsIdsPorNome = async (nome: string) => {
+  const { data, error } = await supabase
+    .from("tipos_os")
+    .select("id")
+    .eq("nome", nome)
+    .limit(100);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data || []).map((item) => item.id as string);
+};
+
+const buscarEstadoOsIdsPorNome = async (nome: string) => {
+  const { data, error } = await supabase
+    .from("estados_os")
+    .select("id")
+    .eq("nome", nome)
+    .limit(100);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data || []).map((item) => item.id as string);
+};
+
+const aplicarFiltrosOrdensServico = async <T>(
+  query: T,
+  filtros?: ListarOrdensServicoFiltros
+) => {
+  let nextQuery = query as any;
+
+  if (filtros?.ocultarFechadas) {
+    nextQuery = nextQuery.not("status_sistema", "in", "(fechada,cancelada)");
+  }
+
+  if (filtros?.estadoNome) {
+    const estadoIds = await buscarEstadoOsIdsPorNome(filtros.estadoNome);
+    nextQuery = estadoIds.length
+      ? nextQuery.in("estado_os_id", estadoIds)
+      : nextQuery.eq("estado_os_id", "00000000-0000-0000-0000-000000000000");
+  }
+
+  if (filtros?.solicitanteNome) {
+    const empresaIds = await buscarEmpresaIdsPorNome(filtros.solicitanteNome);
+    nextQuery = empresaIds.length
+      ? nextQuery.in("empresa_id", empresaIds)
+      : nextQuery.eq("empresa_id", "00000000-0000-0000-0000-000000000000");
+  }
+
+  if (filtros?.tipoServicoNome) {
+    const tipoIds = await buscarTipoOsIdsPorNome(filtros.tipoServicoNome);
+    nextQuery = tipoIds.length
+      ? nextQuery.in("tipo_os_id", tipoIds)
+      : nextQuery.eq("tipo_os_id", "00000000-0000-0000-0000-000000000000");
+  }
+
+  if (filtros?.responsavelTecnico?.trim()) {
+    nextQuery = nextQuery.ilike(
+      "responsavel_texto",
+      `%${filtros.responsavelTecnico.trim()}%`
+    );
+  }
+
+  if (filtros?.numero?.trim()) {
+    nextQuery = nextQuery.ilike("numero", `%${filtros.numero.trim()}%`);
+  }
+
+  if (filtros?.termo?.trim()) {
+    const rawTerm = filtros.termo.trim();
+    const termo = `%${rawTerm}%`;
+    const empresaIds = await buscarEmpresaIdsPorTermo(rawTerm);
+    const equipamentoIds = await buscarEquipamentoIdsPorTermo(rawTerm);
+
+    const orFilters = [
+      `numero.ilike.${termo}`,
+      `solicitante_texto.ilike.${termo}`,
+      `responsavel_texto.ilike.${termo}`,
+      `problema_relatado.ilike.${termo}`,
+      `origem_problema.ilike.${termo}`,
+    ];
+
+    if (empresaIds.length) {
+      orFilters.push(`empresa_id.in.(${empresaIds.join(",")})`);
+    }
+
+    if (equipamentoIds.length) {
+      orFilters.push(`equipamento_id.in.(${equipamentoIds.join(",")})`);
+    }
+
+    nextQuery = nextQuery.or(orFilters.join(","));
+  }
+
+  return nextQuery as T;
+};
+
 export const ordensServicoService = {
   async buscarPorId(id: string) {
     return buscarOrdemServicoPorId(id);
@@ -621,7 +1091,7 @@ export const ordensServicoService = {
       .from("ordens_servico")
       .select(select)
       .eq("ativo", true)
-      .order("numero", { ascending: false })
+      .order("numero_ordem", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -629,6 +1099,48 @@ export const ordensServicoService = {
     }
 
     return data as unknown as OrdemServicoSupabase[];
+  },
+
+  async listarPaginado(
+    filtros: ListarOrdensServicoPaginadoFiltros
+  ): Promise<OrdensServicoPaginadoResult> {
+    const page = Math.max(1, filtros.page || 1);
+    const limit = Math.max(1, filtros.limit || 25);
+    const from = (page - 1) * limit;
+    const sortBy = filtros.sortBy || "numero_ordem";
+
+    const { data, error } = await supabase.rpc("listar_ordens_servico_resumo", {
+      p_termo: filtros.termo || null,
+      p_ocultar_fechadas: filtros.ocultarFechadas || false,
+      p_estado_nome: filtros.estadoNome || null,
+      p_solicitante_nome: filtros.solicitanteNome || null,
+      p_tipo_servico_nome: filtros.tipoServicoNome || null,
+      p_responsavel_tecnico: filtros.responsavelTecnico || null,
+      p_numero: filtros.numero || null,
+      p_offset: from,
+      p_limit: limit,
+      p_sort_by: sortBy,
+      p_ascending: filtros.ascending ?? false,
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const items = ((data || []) as OrdemServicoResumoRpcRow[])
+      .map(mapOrdemServicoResumo);
+    const totalCount = data?.[0]?.total_count;
+    const total =
+      typeof totalCount === "number"
+        ? totalCount
+        : typeof totalCount === "string"
+          ? Number(totalCount)
+          : from + items.length;
+
+    return {
+      items,
+      total: Number.isFinite(total) ? total : from + items.length,
+    };
   },
 
   async criar(input: OrdemServicoFormInput) {
@@ -644,11 +1156,13 @@ export const ordensServicoService = {
       throw new Error("Não foi possível identificar a organização do usuário.");
     }
 
+    const payload = await toDatabasePayload(input);
+
     const { data: osCriada, error } = await supabase
       .from("ordens_servico")
       .insert({
         organizacao_id: organizacaoId,
-        ...toDatabasePayload(input),
+        ...payload,
         prioridade: "normal",
         ativo: true,
       })
@@ -707,6 +1221,8 @@ export const ordensServicoService = {
           equipamento_id,
           tipo_os_id,
           estado_os_id,
+          data_abertura,
+          data_fechamento,
           responsavel_texto,
           problema_relatado,
           origem_problema,
@@ -728,10 +1244,14 @@ export const ordensServicoService = {
       .eq("ordem_servico_id", id);
 
     const acessorios = normalizarAcessorios(input.acessorios);
+    const payload = await toDatabasePayload(input, {
+      dataAberturaFallback: osAnterior.data_abertura,
+      dataFechamentoFallback: osAnterior.data_fechamento,
+    });
 
     const { error } = await supabase
       .from("ordens_servico")
-      .update(toDatabasePayload(input))
+      .update(payload)
       .eq("id", id);
 
     if (error) {

@@ -18,8 +18,15 @@ export type GerarRelatorioAnualPlanoOptions = {
   incluirCalibracao: boolean;
   incluirSegurancaEletrica: boolean;
   exibirProximaVisita: boolean;
-  exibirOcorrencias: boolean;
+  exibirOcorrencias?: boolean;
+  exibirOcorrenciasNc?: boolean;
+  exibirOcorrenciasNl?: boolean;
   agruparPorSetor: boolean;
+  mesesVisitadosPreventiva?: string[] | null;
+  mesReferenciaPreventivaAtual?: string | null;
+  mesesPrevistosCronograma?: string[] | null;
+  cronogramaMesInicio?: string | null;
+  nomeCicloArquivo?: string | null;
   save?: boolean;
 };
 
@@ -60,7 +67,76 @@ const equipamentoNome = (item: PlanoEquipamento) =>
 const setorNome = (item: PlanoEquipamento) =>
   item.setor?.nome || item.equipamento?.setor || "Sem setor";
 
+const frequenciaLabel = (value?: string | null) =>
+  getPlanoFrequenciaLabel(value);
+
 const monthKey = (dateIso: string) => dateIso.slice(0, 7);
+
+const temSelecaoManualDeMeses = (opcoes: GerarRelatorioAnualPlanoOptions) =>
+  Array.isArray(opcoes.mesesVisitadosPreventiva) ||
+  Array.isArray(opcoes.mesesPrevistosCronograma);
+
+const isMesPreventivaRealizadoPorVisita = (
+  mesKey: string,
+  opcoes: GerarRelatorioAnualPlanoOptions
+) => {
+  const mesesVisitados = opcoes.mesesVisitadosPreventiva;
+
+  if (mesesVisitados?.length) {
+    return mesesVisitados.includes(mesKey);
+  }
+
+  return opcoes.mesReferenciaPreventivaAtual?.slice(0, 7) === mesKey;
+};
+
+const isMesPlanejado = (
+  mesKey: string,
+  dados: PlanoRelatorioAnualDados,
+  opcoes: GerarRelatorioAnualPlanoOptions
+) => {
+  if (Array.isArray(opcoes.mesesPrevistosCronograma)) {
+    return opcoes.mesesPrevistosCronograma.includes(mesKey);
+  }
+
+  return dados.datasPrevistas.some((data) => monthKey(data) === mesKey);
+};
+
+const servicoIncluido = (
+  tipo: PlanoTipoServico,
+  opcoes: GerarRelatorioAnualPlanoOptions
+) =>
+  (tipo === "preventiva" && opcoes.incluirPreventiva) ||
+  (tipo === "calibracao" && opcoes.incluirCalibracao) ||
+  (tipo === "seguranca_eletrica" && opcoes.incluirSegurancaEletrica);
+
+const ocultarEquipamentoNaoLocalizado = (
+  item: PlanoEquipamento,
+  dados: PlanoRelatorioAnualDados,
+  opcoes: GerarRelatorioAnualPlanoOptions
+) => {
+  const exibirNl = opcoes.exibirOcorrenciasNl ?? false;
+  if (exibirNl) return false;
+
+  const itens = dados.ciclos
+    .flatMap((ciclo) => ciclo.itens || [])
+    .filter(
+      (cicloItem) =>
+        cicloItem.status !== "cancelado" &&
+        cicloItem.equipamento_id === item.equipamento_id &&
+        servicoIncluido(cicloItem.tipo_servico, opcoes)
+    );
+
+  if (!itens.length) return false;
+
+  const temNaoLocalizado = itens.some(
+    (cicloItem) => cicloItem.status === "nao_localizado"
+  );
+  const temOutroStatus = itens.some(
+    (cicloItem) => cicloItem.status !== "nao_localizado"
+  );
+
+  return temNaoLocalizado && !temOutroStatus;
+};
 
 const itemNaoConforme = (itemIdOs?: string | null) => Boolean(itemIdOs);
 
@@ -84,21 +160,38 @@ const buildMarcadores = (
 ) => {
   const marcadores: string[] = [];
   const servicos = servicosEquipamento(item, opcoes);
-  const planejado = dados.datasPrevistas.some((data) => monthKey(data) === mesKey);
+  const planejado = isMesPlanejado(mesKey, dados, opcoes);
+  const selecaoManual = temSelecaoManualDeMeses(opcoes);
+  const realizadoManual = Boolean(opcoes.mesesVisitadosPreventiva?.includes(mesKey));
   const ciclosMes = dados.ciclos.filter((ciclo) => monthKey(ciclo.data_prevista) === mesKey);
 
   servicos.forEach((servico) => {
+    if (selecaoManual) {
+      if (realizadoManual) marcadores.push(`${servico}-R`);
+      else if (planejado) marcadores.push(`${servico}-P`);
+      return;
+    }
+
     const tipo = servico === "MP" ? "preventiva" : servico === "CAL" ? "calibracao" : "seguranca_eletrica";
     const itensServico = ciclosMes.flatMap((ciclo) => ciclo.itens || []).filter((cicloItem) =>
-      cicloItem.equipamento_id === item.equipamento_id && cicloItem.tipo_servico === tipo
+      cicloItem.status !== "cancelado" &&
+      cicloItem.equipamento_id === item.equipamento_id &&
+      cicloItem.tipo_servico === tipo
     );
     const concluido = itensServico.some((cicloItem) => cicloItem.status === "concluido");
     const aberto = itensServico.some((cicloItem) => cicloItem.status === "aberto" || cicloItem.status === "pendente");
-    const naoLocalizado = itensServico.some((cicloItem) => cicloItem.status === "nao_localizado");
-    const naoConforme = opcoes.exibirOcorrencias && itensServico.some((cicloItem) => osNaoConforme(dados, cicloItem.os_id));
+    const exibirNc = opcoes.exibirOcorrenciasNc ?? opcoes.exibirOcorrencias ?? true;
+    const exibirNl = opcoes.exibirOcorrenciasNl ?? false;
+    const naoLocalizado = exibirNl && itensServico.some((cicloItem) => cicloItem.status === "nao_localizado");
+    const naoConforme = exibirNc && itensServico.some((cicloItem) => osNaoConforme(dados, cicloItem.os_id));
+    const realizadoPorReferencia =
+      servico === "MP" &&
+      isMesPreventivaRealizadoPorVisita(mesKey, opcoes);
 
     if (naoLocalizado) marcadores.push("NL");
-    if (concluido) marcadores.push(`${servico}-R`);
+    if (!naoLocalizado && (concluido || realizadoPorReferencia)) {
+      marcadores.push(`${servico}-R`);
+    }
     else if (aberto) marcadores.push("EA");
     else if (planejado) marcadores.push(`${servico}-P`);
     if (naoConforme) marcadores.push("NC");
@@ -120,7 +213,7 @@ const renderTabela = (
   dados: PlanoRelatorioAnualDados,
   opcoes: GerarRelatorioAnualPlanoOptions
 ) => `
-  <table>
+  <table class="cronograma-table">
     <thead>
       <tr>
         <th>#</th><th>Equipamento</th><th>N Serie</th><th>Patrimonio</th><th>Modelo</th><th>Fabricante</th><th>Servicos</th><th>Periodicidade</th>
@@ -137,7 +230,7 @@ const renderTabela = (
           <td>${escapeHtml(item.equipamento?.modelo)}</td>
           <td>${escapeHtml(item.equipamento?.fabricante)}</td>
           <td>${servicosEquipamento(item, opcoes).map((servico) => `<span class="svc">${servico}</span>`).join("")}</td>
-          <td>${escapeHtml(getPlanoFrequenciaLabel(dados.plano.frequencia))}</td>
+          <td>${escapeHtml(frequenciaLabel(dados.plano.frequencia))}</td>
           ${dados.meses.map((mes) => {
             const marcadores = buildMarcadores(item, mes.key, dados, opcoes);
             return `<td class="month-cell">${marcadores.map((marker) => `<span class="${chipClass(marker)}">${marker}</span>`).join("")}</td>`;
@@ -152,7 +245,7 @@ export const gerarPdfRelatorioAnualPlano = async (
   dados: PlanoRelatorioAnualDados,
   opcoes: GerarRelatorioAnualPlanoOptions
 ) => {
-  const [logo, assinaturas] = await Promise.all([
+  const [logo, assinaturas, minhaAssinatura] = await Promise.all([
     imageToDataUrl(aciLogo),
     assinaturasService.resolverDocumento({
       tecnicoUsuarioId: dados.plano.responsavel_id,
@@ -160,9 +253,16 @@ export const gerarPdfRelatorioAnualPlano = async (
       responsavelNome: dados.plano.responsavel?.nome,
       empresaId: dados.plano.empresa_id,
     }),
+    assinaturasService.buscarMinhaAssinaturaDocumento().catch(() => null),
   ]);
-  const assinaturaResponsavel = assinaturas.responsavel || assinaturas.tecnico;
-  const equipamentosOrdenados = [...dados.equipamentos].sort((a, b) => {
+  const assinaturaResponsavel =
+    assinaturas.responsavel || assinaturas.tecnico || minhaAssinatura;
+  const cicloFileSuffix = opcoes.nomeCicloArquivo
+    ? `_${normalizeRelatorioPlanoFileName(opcoes.nomeCicloArquivo)}`
+    : "";
+  const equipamentosOrdenados = dados.equipamentos
+    .filter((item) => !ocultarEquipamentoNaoLocalizado(item, dados, opcoes))
+    .sort((a, b) => {
     const setorA = setorNome(a);
     const setorB = setorNome(b);
     if (setorA !== setorB) return setorA === "Sem setor" ? 1 : setorA.localeCompare(setorB, "pt-BR");
@@ -192,18 +292,35 @@ export const gerarPdfRelatorioAnualPlano = async (
         .meta div.validity { background: #fff1f2; border-color: #fecdd3; }
         .label { display: block; color: #6b7280; font-size: 10px; text-transform: uppercase; }
         .value { display: block; margin-top: 2px; font-size: 12px; font-weight: 700; }
+        .setor-block { overflow: visible; height: auto; max-height: none; break-inside: auto; page-break-inside: auto; margin: 0 0 16px; }
+        .setor-title { margin: 18px 0 8px; font-size: 15px; break-after: avoid-page; page-break-after: avoid; }
         h2 { margin: 18px 0 8px; font-size: 15px; page-break-after: avoid; }
-        table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 9px; }
-        th { background: #f3f4f6; border: 1px solid #e5e7eb; padding: 5px 4px; text-align: left; }
-        td { border: 1px solid #ececec; padding: 4px; vertical-align: top; overflow-wrap: anywhere; }
-        th:nth-child(1), td:nth-child(1) { width: 24px; }
-        th:nth-child(2), td:nth-child(2) { width: 118px; }
-        th:nth-child(3), td:nth-child(3), th:nth-child(4), td:nth-child(4) { width: 70px; }
-        th:nth-child(5), td:nth-child(5), th:nth-child(6), td:nth-child(6) { width: 74px; }
-        th:nth-child(7), td:nth-child(7) { width: 56px; }
-        th:nth-child(8), td:nth-child(8) { width: 68px; }
-        .month { text-align: center; width: 48px; }
-        .month-cell { text-align: center; min-height: 24px; }
+        .cronograma-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 9px; break-inside: auto; page-break-inside: auto; }
+        .cronograma-table thead { display: table-header-group !important; break-inside: avoid; page-break-inside: avoid; }
+        .cronograma-table tbody { display: table-row-group !important; break-inside: auto; page-break-inside: auto; }
+        .cronograma-table tr { height: auto; min-height: 0; break-inside: avoid-page !important; page-break-inside: avoid !important; }
+        .cronograma-table th { background: #f3f4f6; border: 1px solid #e5e7eb; padding: 5px 4px; text-align: left; }
+        .cronograma-table th,
+        .cronograma-table td {
+          height: auto;
+          min-height: 0;
+          line-height: 1.15;
+          overflow: visible;
+          white-space: normal;
+          word-break: normal;
+          overflow-wrap: anywhere;
+          break-inside: avoid-page !important;
+          page-break-inside: avoid !important;
+        }
+        .cronograma-table td { border: 1px solid #ececec; padding: 4px; vertical-align: top; }
+        .cronograma-table th:nth-child(1), .cronograma-table td:nth-child(1) { width: 24px; }
+        .cronograma-table th:nth-child(2), .cronograma-table td:nth-child(2) { width: 118px; }
+        .cronograma-table th:nth-child(3), .cronograma-table td:nth-child(3), .cronograma-table th:nth-child(4), .cronograma-table td:nth-child(4) { width: 70px; }
+        .cronograma-table th:nth-child(5), .cronograma-table td:nth-child(5), .cronograma-table th:nth-child(6), .cronograma-table td:nth-child(6) { width: 74px; }
+        .cronograma-table th:nth-child(7), .cronograma-table td:nth-child(7) { width: 56px; }
+        .cronograma-table th:nth-child(8), .cronograma-table td:nth-child(8) { width: 68px; }
+        .month { text-align: center; width: 48px; white-space: nowrap; }
+        .month-cell { text-align: center; min-height: 24px; white-space: nowrap; }
         .chip, .svc { display: inline-block; margin: 1px; padding: 2px 3px; border-radius: 4px; font-size: 7.5px; font-weight: 700; white-space: nowrap; }
         .svc { background: #eef2ff; color: #3730a3; }
         .p { background: #dbeafe; color: #1e40af; }
@@ -235,11 +352,13 @@ export const gerarPdfRelatorioAnualPlano = async (
         <div><span class="label">Quantidade</span><span class="value">${dados.equipamentos.length}</span></div>
         <div><span class="label">Data de emissao</span><span class="value">${formatDate(opcoes.emitidoEm)}</span></div>
         <div class="validity"><span class="label">Validade ate</span><span class="value">${formatDate(opcoes.validadeAte)}</span></div>
-        <div><span class="label">Frequencia</span><span class="value">${escapeHtml(getPlanoFrequenciaLabel(dados.plano.frequencia))}</span></div>
+        <div><span class="label">Frequencia</span><span class="value">${escapeHtml(frequenciaLabel(dados.plano.frequencia))}</span></div>
       </section>
       ${grupos.map((grupo) => `
-        <h2>Setor: ${escapeHtml(grupo.setor)}</h2>
+        <section class="setor-block">
+        <h2 class="setor-title">Setor: ${escapeHtml(grupo.setor)}</h2>
         ${renderTabela(grupo.equipamentos, dados, opcoes)}
+        </section>
       `).join("")}
       <h2>Legenda</h2>
       <div class="legend">
@@ -265,8 +384,9 @@ export const gerarPdfRelatorioAnualPlano = async (
 
   return renderHtmlToPdf({
     html,
-    fileName: `relatorio_anual_${normalizeRelatorioPlanoFileName(dados.plano.titulo)}_${dados.dataInicio}_${dados.dataFim}.pdf`,
+    fileName: `relatorio_anual_${normalizeRelatorioPlanoFileName(dados.plano.titulo)}_${dados.dataInicio}_${dados.dataFim}${cicloFileSuffix}.pdf`,
     orientation: "l",
     save: opcoes.save ?? true,
+    fixedPageSlices: true,
   });
 };

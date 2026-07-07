@@ -13,6 +13,7 @@ import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
 import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import LaudoObsolescenciaDetalhesDialog from "@/components/LaudoObsolescenciaDetalhesDialog";
 import LaudoObsolescenciaFormDialog from "@/components/LaudoObsolescenciaFormDialog";
+import ListPagination from "@/components/ListPagination";
 import ListLimitSelect, {
   DEFAULT_LIST_LIMIT,
 } from "@/components/ListLimitSelect";
@@ -27,6 +28,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { useLaudosObsolescencia } from "@/hooks/useLaudosObsolescencia";
+import { usePaginatedList } from "@/hooks/usePaginatedList";
 import {
   LaudoObsolescenciaSupabase,
   laudosObsolescenciaService,
@@ -101,18 +103,20 @@ const LaudosObsolescencia = () => {
     });
   }, [laudos, search]);
 
-  const sortGetters: Record<
-    string,
-    (item: LaudoObsolescenciaSupabase) => unknown
-  > = {
-    numero: (l) => l.numero,
-    data: (l) => l.data_criacao || l.created_at,
-    empresa: getEmpresaNome,
-    equipamento: (l) => getEquipamentoLabel(l.equipamento),
-    motivo: (l) => l.motivo_texto,
-    status: getEquipamentoStatus,
-    responsavel: (l) => l.responsavel_nome,
-  };
+  const sortGetters = useMemo<
+    Record<string, (item: LaudoObsolescenciaSupabase) => unknown>
+  >(
+    () => ({
+      numero: (l) => l.numero,
+      data: (l) => l.data_criacao || l.created_at,
+      empresa: getEmpresaNome,
+      equipamento: (l) => getEquipamentoLabel(l.equipamento),
+      motivo: (l) => l.motivo_texto,
+      status: getEquipamentoStatus,
+      responsavel: (l) => l.responsavel_nome,
+    }),
+    []
+  );
 
   const sortedFiltered = useMemo(
     () =>
@@ -121,13 +125,13 @@ const LaudosObsolescencia = () => {
         sortGetters[sortKey] || sortGetters.data,
         sortDirection
       ),
-    [filtered, sortDirection, sortKey]
+    [filtered, sortDirection, sortGetters, sortKey]
   );
 
-  const visibleLaudos = useMemo(
-    () => sortedFiltered.slice(0, listLimit),
-    [listLimit, sortedFiltered]
-  );
+  const {
+    paginatedItems: visibleLaudos,
+    ...laudosPagination
+  } = usePaginatedList(sortedFiltered, listLimit);
 
   const handleSort = (key: string) => {
     if (sortKey === key) {
@@ -415,6 +419,10 @@ const LaudosObsolescencia = () => {
                 )}
               </tbody>
             </table>
+            <ListPagination
+              {...laudosPagination}
+              onPageChange={laudosPagination.setPage}
+            />
           </div>
         )}
       </div>

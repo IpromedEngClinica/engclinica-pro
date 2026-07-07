@@ -14,6 +14,8 @@ export type EquipamentoSupabase = {
   patrimonio: string | null;
   tag: string | null;
   setor: string | null;
+  empresa_setor_id: string | null;
+  local_instalacao: string | null;
   status: string;
   data_aquisicao: string | null;
   data_instalacao: string | null;
@@ -34,6 +36,7 @@ export type EquipamentoSupabase = {
 
 export type EquipamentoFormInput = {
   empresaId: string;
+  empresaSetorId?: string;
   tipoEquipamentoId?: string;
   tipoTexto?: string;
   fabricante?: string;
@@ -56,6 +59,38 @@ export type ListarEquipamentosFiltros = {
   statusFiltro?: StatusEquipamentoFiltro;
   empresaId?: string;
   termo?: string;
+  estado?: string;
+  empresaNome?: string;
+  tipoEquipamentoNome?: string;
+  fabricante?: string;
+  modelo?: string;
+  tag?: string;
+  serie?: string;
+  patrimonio?: string;
+  setor?: string;
+};
+
+export type EquipamentosSortField =
+  | "numero_cadastro"
+  | "status"
+  | "modelo"
+  | "fabricante"
+  | "tag"
+  | "numero_serie"
+  | "patrimonio"
+  | "setor"
+  | "created_at";
+
+export type ListarEquipamentosPaginadoFiltros = ListarEquipamentosFiltros & {
+  page: number;
+  limit: number;
+  sortBy?: EquipamentosSortField;
+  ascending?: boolean;
+};
+
+export type EquipamentosPaginadoResult = {
+  items: EquipamentoSupabase[];
+  total: number;
 };
 
 const selectEquipamentos = `
@@ -71,6 +106,8 @@ const selectEquipamentos = `
   patrimonio,
   tag,
   setor,
+  empresa_setor_id,
+  local_instalacao,
   status,
   data_aquisicao,
   data_instalacao,
@@ -112,6 +149,183 @@ const selectEquipamentos = `
   )
 `;
 
+const selectEquipamentosListagem = `
+  id,
+  numero_cadastro,
+  organizacao_id,
+  empresa_id,
+  tipo_equipamento_id,
+  tipo_texto,
+  fabricante,
+  modelo,
+  numero_serie,
+  patrimonio,
+  tag,
+  setor,
+  empresa_setor_id,
+  local_instalacao,
+  status,
+  data_aquisicao,
+  data_instalacao,
+  data_ultima_preventiva,
+  data_proxima_preventiva,
+  data_ultima_calibracao,
+  data_proxima_calibracao,
+  observacoes,
+  ativo,
+  created_at,
+  updated_at,
+  tipo_equipamento:tipos_equipamento (
+    id,
+    nome
+  )
+`;
+
+const selectEmpresasEquipamentoListagem = `
+  id,
+  numero_cadastro,
+  organizacao_id,
+  nome,
+  nome_fantasia,
+  tipo_cliente,
+  tipo_relacao,
+  representante_comercial_setor,
+  cpf_cnpj,
+  cep,
+  rua,
+  numero,
+  complemento,
+  bairro,
+  cidade,
+  estado,
+  contato,
+  email,
+  celular,
+  telefone,
+  observacoes,
+  incluir_criterio_aceitacao_calibracao,
+  ativo,
+  created_at,
+  updated_at
+`;
+
+type EquipamentoResumoRpcRow = {
+  total_count?: number | string | null;
+  id: string;
+  numero_cadastro: number;
+  organizacao_id: string;
+  empresa_id: string;
+  tipo_equipamento_id: string | null;
+  tipo_texto: string | null;
+  fabricante: string | null;
+  modelo: string | null;
+  numero_serie: string | null;
+  patrimonio: string | null;
+  tag: string | null;
+  setor: string | null;
+  empresa_setor_id: string | null;
+  local_instalacao: string | null;
+  status: string;
+  data_aquisicao: string | null;
+  data_instalacao: string | null;
+  data_ultima_preventiva: string | null;
+  data_proxima_preventiva: string | null;
+  data_ultima_calibracao: string | null;
+  data_proxima_calibracao: string | null;
+  observacoes: string | null;
+  ativo: boolean;
+  created_at: string;
+  updated_at: string;
+  empresa_numero_cadastro: number | null;
+  empresa_nome: string | null;
+  empresa_nome_fantasia: string | null;
+  empresa_tipo_cliente: string | null;
+  empresa_tipo_relacao: string | null;
+  empresa_representante_comercial_setor: string | null;
+  empresa_cpf_cnpj: string | null;
+  empresa_cep: string | null;
+  empresa_rua: string | null;
+  empresa_numero: string | null;
+  empresa_complemento: string | null;
+  empresa_bairro: string | null;
+  empresa_cidade: string | null;
+  empresa_estado: string | null;
+  empresa_contato: string | null;
+  empresa_email: string | null;
+  empresa_celular: string | null;
+  empresa_telefone: string | null;
+  empresa_observacoes: string | null;
+  empresa_incluir_criterio_aceitacao_calibracao: boolean | null;
+  empresa_ativo: boolean | null;
+  empresa_created_at: string | null;
+  empresa_updated_at: string | null;
+  tipo_equipamento_nome: string | null;
+};
+
+const mapEquipamentoResumo = (row: EquipamentoResumoRpcRow): EquipamentoSupabase => ({
+  id: row.id,
+  numero_cadastro: row.numero_cadastro,
+  organizacao_id: row.organizacao_id,
+  empresa_id: row.empresa_id,
+  tipo_equipamento_id: row.tipo_equipamento_id,
+  tipo_texto: row.tipo_texto,
+  fabricante: row.fabricante,
+  modelo: row.modelo,
+  numero_serie: row.numero_serie,
+  patrimonio: row.patrimonio,
+  tag: row.tag,
+  setor: row.setor,
+  empresa_setor_id: row.empresa_setor_id,
+  local_instalacao: row.local_instalacao,
+  status: row.status,
+  data_aquisicao: row.data_aquisicao,
+  data_instalacao: row.data_instalacao,
+  data_ultima_preventiva: row.data_ultima_preventiva,
+  data_proxima_preventiva: row.data_proxima_preventiva,
+  data_ultima_calibracao: row.data_ultima_calibracao,
+  data_proxima_calibracao: row.data_proxima_calibracao,
+  observacoes: row.observacoes,
+  ativo: row.ativo,
+  created_at: row.created_at,
+  updated_at: row.updated_at,
+  empresa: row.empresa_id
+    ? ({
+        id: row.empresa_id,
+        numero_cadastro: row.empresa_numero_cadastro || 0,
+        organizacao_id: row.organizacao_id,
+        nome: row.empresa_nome || "",
+        nome_fantasia: row.empresa_nome_fantasia,
+        tipo_cliente: row.empresa_tipo_cliente,
+        tipo_relacao: row.empresa_tipo_relacao || "cliente",
+        representante_comercial_setor: row.empresa_representante_comercial_setor,
+        cpf_cnpj: row.empresa_cpf_cnpj,
+        cep: row.empresa_cep,
+        rua: row.empresa_rua,
+        numero: row.empresa_numero,
+        complemento: row.empresa_complemento,
+        bairro: row.empresa_bairro,
+        cidade: row.empresa_cidade,
+        estado: row.empresa_estado,
+        contato: row.empresa_contato,
+        email: row.empresa_email,
+        celular: row.empresa_celular,
+        telefone: row.empresa_telefone,
+        observacoes: row.empresa_observacoes,
+        incluir_criterio_aceitacao_calibracao:
+          row.empresa_incluir_criterio_aceitacao_calibracao ?? false,
+        ativo: row.empresa_ativo ?? true,
+        created_at: row.empresa_created_at || row.created_at,
+        updated_at: row.empresa_updated_at || row.updated_at,
+      } as EmpresaSupabase)
+    : null,
+  tipo_equipamento: row.tipo_equipamento_id
+    ? {
+        id: row.tipo_equipamento_id,
+        nome: row.tipo_equipamento_nome || "",
+      }
+    : null,
+});
+
 const toDatabasePayload = (input: EquipamentoFormInput) => ({
   empresa_id: input.empresaId,
   tipo_equipamento_id: input.tipoEquipamentoId || null,
@@ -122,6 +336,7 @@ const toDatabasePayload = (input: EquipamentoFormInput) => ({
   patrimonio: input.patrimonio || null,
   tag: input.tag || null,
   setor: input.setor || null,
+  empresa_setor_id: input.empresaSetorId || null,
   status: input.status || "Ativo",
   data_ultima_preventiva: input.dataUltimaPreventiva || null,
   data_proxima_preventiva: input.dataProximaPreventiva || null,
@@ -130,50 +345,298 @@ const toDatabasePayload = (input: EquipamentoFormInput) => ({
   observacoes: input.observacoes || null,
 });
 
-export const equipamentosService = {
-  async listar(filtros?: ListarEquipamentosFiltros) {
-    const statusFiltro = filtros?.statusFiltro || "ativos";
+const EQUIPAMENTOS_PAGE_SIZE = 1000;
 
-    let query = supabase
-      .from("equipamentos")
-      .select(selectEquipamentos)
-      .eq("empresa.ativo", true)
-      .order("created_at", { ascending: false });
+const normalizarTextoBusca = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
 
-    if (statusFiltro === "ativos") {
-      query = query.eq("ativo", true);
-    }
+const aplicarFiltrosEquipamentos = async <T>(
+  query: T,
+  filtros?: ListarEquipamentosFiltros
+) => {
+  let nextQuery = query as any;
+  const statusFiltro = filtros?.statusFiltro || "ativos";
 
-    if (statusFiltro === "desativados") {
-      query = query.eq("ativo", false);
-    }
+  if (statusFiltro === "ativos") {
+    nextQuery = nextQuery.eq("ativo", true);
+  }
 
-    if (filtros?.empresaId) {
-      query = query.eq("empresa_id", filtros.empresaId);
-    }
+  if (statusFiltro === "desativados") {
+    nextQuery = nextQuery.eq("ativo", false);
+  }
 
-    if (filtros?.termo?.trim()) {
-      const termo = `%${filtros.termo.trim()}%`;
-      query = query.or(
-        [
-          `tipo_texto.ilike.${termo}`,
-          `fabricante.ilike.${termo}`,
-          `modelo.ilike.${termo}`,
-          `numero_serie.ilike.${termo}`,
-          `patrimonio.ilike.${termo}`,
-          `tag.ilike.${termo}`,
-          `setor.ilike.${termo}`,
-        ].join(",")
+  if (filtros?.empresaId) {
+    nextQuery = nextQuery.eq("empresa_id", filtros.empresaId);
+  }
+
+  if (filtros?.empresaNome) {
+    const empresaIds = await buscarEmpresaIdsPorNome(filtros.empresaNome);
+    nextQuery = empresaIds.length
+      ? nextQuery.in("empresa_id", empresaIds)
+      : nextQuery.eq("empresa_id", "00000000-0000-0000-0000-000000000000");
+  }
+
+  if (filtros?.tipoEquipamentoNome) {
+    const tipoIds = await buscarTipoEquipamentoIdsPorNome(
+      filtros.tipoEquipamentoNome
+    );
+    nextQuery = tipoIds.length
+      ? nextQuery.in("tipo_equipamento_id", tipoIds)
+      : nextQuery.eq(
+          "tipo_equipamento_id",
+          "00000000-0000-0000-0000-000000000000"
+        );
+  }
+
+  if (filtros?.estado) {
+    nextQuery = nextQuery.eq("status", filtros.estado);
+  }
+
+  if (filtros?.fabricante) {
+    nextQuery = nextQuery.eq("fabricante", filtros.fabricante);
+  }
+
+  if (filtros?.setor) {
+    nextQuery = nextQuery.eq("setor", filtros.setor);
+  }
+
+  if (filtros?.modelo?.trim()) {
+    nextQuery = nextQuery.ilike("modelo", `%${filtros.modelo.trim()}%`);
+  }
+
+  if (filtros?.tag?.trim()) {
+    nextQuery = nextQuery.ilike("tag", `%${filtros.tag.trim()}%`);
+  }
+
+  if (filtros?.serie?.trim()) {
+    nextQuery = nextQuery.ilike("numero_serie", `%${filtros.serie.trim()}%`);
+  }
+
+  if (filtros?.patrimonio?.trim()) {
+    nextQuery = nextQuery.ilike("patrimonio", `%${filtros.patrimonio.trim()}%`);
+  }
+
+  if (filtros?.termo?.trim()) {
+    const rawTerm = filtros.termo.trim();
+    const termo = `%${rawTerm}%`;
+    const termoNormalizado = `%${normalizarTextoBusca(rawTerm)}%`;
+    const empresaIds = await buscarEmpresaIdsPorTermo(rawTerm);
+
+    const orFilters = [
+      `tipo_texto.ilike.${termo}`,
+      `fabricante.ilike.${termo}`,
+      `modelo.ilike.${termo}`,
+      `numero_serie.ilike.${termo}`,
+      `patrimonio.ilike.${termo}`,
+      `tag.ilike.${termo}`,
+      `setor.ilike.${termo}`,
+    ];
+
+    if (termoNormalizado !== termo) {
+      orFilters.push(
+        `tipo_texto.ilike.${termoNormalizado}`,
+        `fabricante.ilike.${termoNormalizado}`,
+        `modelo.ilike.${termoNormalizado}`,
+        `setor.ilike.${termoNormalizado}`
       );
     }
 
-    const { data, error } = await query;
+    if (empresaIds.length) {
+      orFilters.push(`empresa_id.in.(${empresaIds.join(",")})`);
+    }
+
+    nextQuery = nextQuery.or(orFilters.join(","));
+  }
+
+  return nextQuery as T;
+};
+
+const buscarEmpresaIdsPorTermo = async (termo: string) => {
+  const value = `%${termo.trim()}%`;
+  const { data, error } = await supabase
+    .from("empresas")
+    .select("id")
+    .or(`nome.ilike.${value},nome_fantasia.ilike.${value},cpf_cnpj.ilike.${value}`)
+    .limit(200);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data || []).map((item) => item.id as string);
+};
+
+const buscarEmpresaIdsPorNome = async (nome: string) => {
+  const [porNome, porFantasia] = await Promise.all([
+    supabase
+      .from("empresas")
+      .select("id")
+      .eq("nome", nome)
+      .limit(500),
+    supabase
+      .from("empresas")
+      .select("id")
+      .eq("nome_fantasia", nome)
+      .limit(500),
+  ]);
+
+  if (porNome.error) {
+    throw new Error(porNome.error.message);
+  }
+
+  if (porFantasia.error) {
+    throw new Error(porFantasia.error.message);
+  }
+
+  return Array.from(
+    new Set([
+      ...(porNome.data || []).map((item) => item.id as string),
+      ...(porFantasia.data || []).map((item) => item.id as string),
+    ])
+  );
+};
+
+const buscarTipoEquipamentoIdsPorNome = async (nome: string) => {
+  const { data, error } = await supabase
+    .from("tipos_equipamento")
+    .select("id")
+    .eq("nome", nome)
+    .limit(100);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data || []).map((item) => item.id as string);
+};
+
+const carregarEmpresasDaPagina = async (
+  equipamentos: EquipamentoSupabase[]
+) => {
+  const empresaIds = Array.from(
+    new Set(equipamentos.map((item) => item.empresa_id).filter(Boolean))
+  );
+
+  if (empresaIds.length === 0) {
+    return equipamentos;
+  }
+
+  const { data, error } = await supabase
+    .from("empresas")
+    .select(selectEmpresasEquipamentoListagem)
+    .in("id", empresaIds);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const empresasPorId = new Map(
+    ((data || []) as unknown as EmpresaSupabase[]).map((empresa) => [
+      empresa.id,
+      empresa,
+    ])
+  );
+
+  return equipamentos.map((equipamento) => ({
+    ...equipamento,
+    empresa: empresasPorId.get(equipamento.empresa_id) || null,
+  }));
+};
+
+export const equipamentosService = {
+  async listar(filtros?: ListarEquipamentosFiltros) {
+    const equipamentos: EquipamentoSupabase[] = [];
+
+    for (let from = 0; ; from += EQUIPAMENTOS_PAGE_SIZE) {
+      const baseQuery = supabase
+        .from("equipamentos")
+        .select(selectEquipamentos)
+        .eq("empresa.ativo", true)
+        .order("created_at", { ascending: false })
+        .range(from, from + EQUIPAMENTOS_PAGE_SIZE - 1);
+      const query = await aplicarFiltrosEquipamentos(baseQuery, filtros);
+
+      const { data, error } = await query;
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      const pagina = (data || []) as unknown as EquipamentoSupabase[];
+      equipamentos.push(...pagina);
+
+      if (pagina.length < EQUIPAMENTOS_PAGE_SIZE) {
+        break;
+      }
+    }
+
+    return equipamentos;
+  },
+
+  async listarPaginado(
+    filtros: ListarEquipamentosPaginadoFiltros
+  ): Promise<EquipamentosPaginadoResult> {
+    const page = Math.max(1, filtros.page || 1);
+    const limit = Math.max(1, filtros.limit || 25);
+    const from = (page - 1) * limit;
+    const sortBy = filtros.sortBy || "numero_cadastro";
+
+    const { data, error } = await supabase.rpc("listar_equipamentos_resumo", {
+      p_termo: filtros.termo || null,
+      p_status_filtro: filtros.statusFiltro || "ativos",
+      p_empresa_id: filtros.empresaId || null,
+      p_estado: filtros.estado || null,
+      p_empresa_nome: filtros.empresaNome || null,
+      p_tipo_equipamento_nome: filtros.tipoEquipamentoNome || null,
+      p_fabricante: filtros.fabricante || null,
+      p_modelo: filtros.modelo || null,
+      p_tag: filtros.tag || null,
+      p_serie: filtros.serie || null,
+      p_patrimonio: filtros.patrimonio || null,
+      p_setor: filtros.setor || null,
+      p_offset: from,
+      p_limit: limit,
+      p_sort_by: sortBy,
+      p_ascending: filtros.ascending ?? false,
+    });
 
     if (error) {
       throw new Error(error.message);
     }
 
-    return data as unknown as EquipamentoSupabase[];
+    const items = ((data || []) as EquipamentoResumoRpcRow[]).map(
+      mapEquipamentoResumo
+    );
+    const totalCount = data?.[0]?.total_count;
+    const total =
+      typeof totalCount === "number"
+        ? totalCount
+        : typeof totalCount === "string"
+          ? Number(totalCount)
+          : from + items.length;
+
+    return {
+      items,
+      total: Number.isFinite(total) ? total : from + items.length,
+    };
+  },
+
+  async contar(filtros?: ListarEquipamentosFiltros) {
+    const baseQuery = supabase
+      .from("equipamentos")
+      .select("id", { count: "exact", head: true });
+
+    const query = await aplicarFiltrosEquipamentos(baseQuery, filtros);
+    const { count, error } = await query;
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return count || 0;
   },
 
   async buscarPorId(id: string) {
@@ -264,9 +727,26 @@ export const equipamentosService = {
   },
 
   async atualizar(id: string, input: EquipamentoFormInput) {
+    const { data: equipamentoAtual, error: equipamentoAtualError } = await supabase
+      .from("equipamentos")
+      .select("empresa_id")
+      .eq("id", id)
+      .single();
+
+    if (equipamentoAtualError) {
+      throw new Error(equipamentoAtualError.message);
+    }
+
+    const payload = {
+      ...toDatabasePayload(input),
+      ...(equipamentoAtual?.empresa_id !== input.empresaId
+        ? { empresa_setor_id: null, local_instalacao: null }
+        : {}),
+    };
+
     const { data, error } = await supabase
       .from("equipamentos")
-      .update(toDatabasePayload(input))
+      .update(payload)
       .eq("id", id)
       .select(selectEquipamentos)
       .single();

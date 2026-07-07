@@ -1,7 +1,6 @@
 import { AlertCircle, Minus, Plus, Trash2 } from "lucide-react";
 import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -15,7 +14,7 @@ import type { CalibracaoExecucaoTabelaInput } from "@/services/calibracaoExecuco
 import type { CalibracaoProcedimentoPadraoSelecionavel } from "@/services/calibracaoProcedimentosService";
 import {
   calcularPontoCalibracao,
-  encontrarPontoPadraoExato,
+  selecionarPontoPadraoReferencia,
   type RegraDecisao,
 } from "@/utils/calibracaoCalculos";
 import { formatarDataPadrao } from "@/utils/calibracaoValidade";
@@ -63,7 +62,7 @@ const CalibracaoExecucaoTabelaEditor = ({
           item.valor === null ? [] : [item.valor]
         );
         if (leituras.length !== tabela.quantidadeLeituras || !tabelaPadrao) return null;
-        const correspondente = encontrarPontoPadraoExato(
+        const correspondente = selecionarPontoPadraoReferencia(
           ponto.valorNominal,
           (tabelaPadrao.pontos || []).map((item) => ({
             valorNominal: item.valor_nominal,
@@ -158,22 +157,17 @@ const CalibracaoExecucaoTabelaEditor = ({
           </div>
 
           <div className="space-y-2 rounded-lg border bg-muted/10 p-3">
-            <label className="flex items-center gap-2 text-sm">
-              <Checkbox
-                checked={tabela.incluirCriterio}
-                disabled={disabled}
-                onCheckedChange={(checked) =>
-                  update({ incluirCriterio: Boolean(checked) })
-                }
-              />
-              Incluir criterio de aceitacao?
-            </label>
+            <div className="text-sm font-medium">
+              {tabela.incluirCriterio
+                ? "Criterio de aceitacao aplicado pelo cadastro do cliente"
+                : "Cliente sem criterio de aceitacao para esta calibracao"}
+            </div>
             {tabela.incluirCriterio && (
               <>
                 <SelectField
                   label="Tipo de criterio *"
                   value={tabela.criterioTipo || ""}
-                  disabled={disabled}
+                  disabled
                   options={[
                     ["absoluto", "Absoluto"],
                     ["percentual", "Percentual"],
@@ -189,20 +183,20 @@ const CalibracaoExecucaoTabelaEditor = ({
                   <Decimal
                     label="Valor minimo *"
                     value={tabela.criterioValorMinimo}
-                    disabled={disabled}
+                    disabled
                     onChange={(criterioValorMinimo) => update({ criterioValorMinimo })}
                   />
                 )}
                 <Decimal
                   label="Valor maximo *"
                   value={tabela.criterioValorMaximo}
-                  disabled={disabled}
+                  disabled
                   onChange={(criterioValorMaximo) => update({ criterioValorMaximo })}
                 />
                 <SelectField
                   label="Regra de decisao *"
                   value={tabela.regraDecisao || ""}
-                  disabled={disabled}
+                  disabled
                   options={[
                     ["aceitacao_simples", "Aceitacao simples"],
                     ["considerando_incerteza", "Considerando incerteza"],
@@ -247,7 +241,7 @@ const CalibracaoExecucaoTabelaEditor = ({
                 return <tr key={`${ponto.valorNominal}-${pontoIndex}`} className="h-10 border-b last:border-0">
                   <td className="px-2 py-1.5">{ponto.valorNominalTexto || tabelaPadrao?.pontos?.find((item) => Math.abs(item.valor_nominal - ponto.valorNominal) < 1e-10)?.valor_nominal_texto || formatDecimalPtBr(ponto.valorNominal)}</td>
                   {ponto.leituras.map((leitura, leituraIndex) => <td key={leituraIndex} className="px-2 py-1.5"><Input className="h-8 min-w-[90px] w-24" inputMode="decimal" disabled={disabled} value={leitura.valorTexto} onChange={(event) => { const valorTexto = event.target.value; updatePonto(pontoIndex, { leituras: ponto.leituras.map((item, index) => index === leituraIndex ? { valor: normalizeDecimalInput(valorTexto), valorTexto } : item) }); }} /></td>)}
-                  <Value value={calculo?.media} casas={casasResolucaoEquipamento} /><Value value={calculo?.tendenciaCorrigida ?? calculo?.tendenciaBruta} casas={casasResolucaoEquipamento} />
+                  <Value value={calculo?.media} casas={casasResolucaoEquipamento} /><Value value={calculo?.tendenciaCorrigida ?? calculo?.tendenciaBruta} casas={calculo?.casasDecimaisIncerteza ?? casasResolucaoEquipamento} />
                   <Value value={calculo?.incertezaExpandidaReportada} casas={calculo?.casasDecimaisIncerteza} />
                   <Value value={calculo?.fatorK} />
                   {mostrarResultado && <td className="px-2 py-1.5">{calculo ? resultadoLabel[calculo.resultadoConformidade] : "-"}</td>}

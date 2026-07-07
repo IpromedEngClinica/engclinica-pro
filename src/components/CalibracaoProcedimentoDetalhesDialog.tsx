@@ -29,6 +29,14 @@ interface Props {
 
 const formatNumber = (value?: number | null) => formatDecimalPtBr(value) || "-";
 const Field = ({ label, children }: { label: string; children: ReactNode }) => <div className="text-sm"><span className="font-medium text-muted-foreground">{label}: </span><span>{children}</span></div>;
+const getTiposProcedimentoLabel = (procedimento: CalibracaoProcedimento) => {
+  const tipos = procedimento.tipos_equipamento?.length
+    ? procedimento.tipos_equipamento
+    : procedimento.tipo_equipamento
+      ? [procedimento.tipo_equipamento]
+      : [];
+  return tipos.length ? tipos.map((tipo) => tipo.nome).join(", ") : "-";
+};
 
 const fatorLabel = (tabela: CalibracaoProcedimentoTabela) => {
   if (tabela.fator_confiabilidade_modo === "calcular_95") return "Calcular k para 95%";
@@ -37,7 +45,9 @@ const fatorLabel = (tabela: CalibracaoProcedimentoTabela) => {
 };
 
 const criterioLabel = (tabela: CalibracaoProcedimentoTabela) => {
-  if (!tabela.incluir_criterio_aceitacao) return "Nao incluir";
+  if (!tabela.criterio_aceitacao_tipo || tabela.criterio_aceitacao_valor_maximo == null) {
+    return "Nao configurado";
+  }
   if (tabela.criterio_aceitacao_tipo === "faixa") {
     return `Faixa: ${formatNumber(tabela.criterio_aceitacao_valor_minimo)} a ${formatNumber(tabela.criterio_aceitacao_valor_maximo)}`;
   }
@@ -67,7 +77,7 @@ const CalibracaoProcedimentoDetalhesDialog = ({
         <section className="space-y-3 rounded-lg border p-4">
           <div className="grid gap-3 md:grid-cols-3">
             <Field label="Procedimento">{procedimento.nome}</Field>
-            <Field label="Tipo de equipamento">{procedimento.tipo_equipamento?.nome || "-"}</Field>
+            <Field label="Tipos de equipamento">{getTiposProcedimentoLabel(procedimento)}</Field>
             <Field label="Versao interna">{procedimento.versao}</Field>
             <Field label="Status"><Badge variant="outline" className={procedimento.ativo ? "border-green-200 bg-green-50 text-green-700" : "border-red-200 bg-red-50 text-red-700"}>{procedimento.ativo ? "Ativo" : "Desativado"}</Badge></Field>
             <Field label="Norma utilizada">{procedimento.metodo_referencia || "-"}</Field>
@@ -93,8 +103,6 @@ const CalibracaoProcedimentoDetalhesDialog = ({
                   <div className="grid gap-3 rounded-lg border p-3 md:grid-cols-3">
                     <Field label="Grandeza">{tabela.grandeza}</Field>
                     <Field label="Unidade">{tabela.unidade}</Field>
-                    <Field label="Leituras">{tabela.quantidade_leituras}</Field>
-                    <Field label="Tipo de medida">{tabela.tipo_medida || "-"}</Field>
                     <Field label="Fator de confiabilidade">{fatorLabel(tabela)}</Field>
                     <Field label="Resolucao padrao">{formatNumber(tabela.resolucao_padrao_default)}</Field>
                     <Field label="Resolucao equipamento">{formatNumber(tabela.resolucao_equipamento_default)}</Field>

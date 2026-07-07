@@ -27,21 +27,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useEmpresas } from "@/hooks/useEmpresas";
-import { useEquipamentos } from "@/hooks/useEquipamentos";
 import {
   useAtualizarRelatorioVisitaExterna,
   useAtualizarRelatorioControlePatrimonial,
   useCriarRelatorioVisitaExterna,
   useCriarRelatorioControlePatrimonial,
   useRelatorios,
+  useRelatoriosEquipamentosOpcoes,
 } from "@/hooks/useRelatorios";
 import { toast } from "@/hooks/use-toast";
-import type { EquipamentoSupabase } from "@/services/equipamentosService";
 import {
   FILTROS_CONTROLE_PATRIMONIAL_PADRAO,
   FILTROS_VISITA_EXTERNA_PADRAO,
   getTipoEquipamentoRelatorio,
   relatoriosService,
+  type RelatorioEquipamentoOpcao,
   type RelatorioControlePatrimonialFiltros,
   type RelatorioTipo,
   type RelatorioRegistro,
@@ -67,7 +67,7 @@ const uniqueSorted = (values: string[]) =>
   );
 
 const filterEquipamentosByEmpresas = (
-  equipamentos: EquipamentoSupabase[],
+  equipamentos: RelatorioEquipamentoOpcao[],
   empresaIds: string[]
 ) => {
   const empresaSet = new Set(empresaIds);
@@ -77,7 +77,7 @@ const filterEquipamentosByEmpresas = (
 };
 
 const filterEquipamentosByTipos = (
-  equipamentos: EquipamentoSupabase[],
+  equipamentos: RelatorioEquipamentoOpcao[],
   tipos: string[]
 ) => {
   const tipoSet = new Set(tipos);
@@ -89,7 +89,7 @@ const filterEquipamentosByTipos = (
 };
 
 const filterEquipamentosBySetores = (
-  equipamentos: EquipamentoSupabase[],
+  equipamentos: RelatorioEquipamentoOpcao[],
   setores: string[]
 ) => {
   const setorSet = new Set(setores);
@@ -100,7 +100,7 @@ const filterEquipamentosBySetores = (
     : equipamentos;
 };
 
-const getStatusFiltroEquipamento = (equipamento: EquipamentoSupabase) =>
+const getStatusFiltroEquipamento = (equipamento: RelatorioEquipamentoOpcao) =>
   equipamento.ativo === false ? "Desativado" : equipamento.status || "Ativo";
 
 const SelectField = ({
@@ -170,7 +170,9 @@ const SearchableMultiSelectField = ({
   };
 
   const displayValue = () => {
-    if (!values.length) return "Todos";
+    if (!values.length || (options.length > 0 && values.length >= options.length)) {
+      return "Todos";
+    }
     if (values.length === 1) return selectedLabels[0] || "1 selecionado";
     return `${values.length} selecionados`;
   };
@@ -214,7 +216,7 @@ const SearchableMultiSelectField = ({
               <button
                 type="button"
                 className="w-full rounded-sm px-2 py-2 text-left text-sm font-medium text-primary hover:bg-accent"
-                onClick={() => onChange(options.map((option) => option.value))}
+                onClick={() => onChange([])}
               >
                 Selecionar todos
               </button>
@@ -260,10 +262,12 @@ const Relatorios = () => {
   const { data: empresas = [], isLoading: empresasLoading } = useEmpresas({
     statusFiltro: "ativas",
   });
+  const empresaIdsParaOpcoes =
+    tipoRelatorio === "visita_externa"
+      ? filtrosVisita.empresaIds
+      : filtros.empresaIds;
   const { data: equipamentos = [], isLoading: equipamentosLoading } =
-    useEquipamentos({
-      statusFiltro: "todos",
-    });
+    useRelatoriosEquipamentosOpcoes(empresaIdsParaOpcoes);
   const {
     data: relatorios = [],
     isLoading: relatoriosLoading,
@@ -361,38 +365,58 @@ const Relatorios = () => {
   );
 
   const quantidadePrevistaVisita = visitaEquipamentosPorSetor.length;
+  const filtrosEquipamentosAtivos =
+    tipoRelatorio === "visita_externa"
+      ? filtrosVisita.tipoEquipamentoLabels.length > 0 ||
+        filtrosVisita.setorLabels.length > 0
+      : filtros.tipoEquipamentoLabels.length > 0 || filtros.status.length > 0;
 
   useEffect(() => {
     setFiltros((current) => ({
       ...current,
-      tipoEquipamentoLabels: current.tipoEquipamentoLabels.filter((tipo) =>
-        tipoOptions.includes(tipo)
-      ),
+      tipoEquipamentoLabels:
+        tipoOptions.length > 0 &&
+        current.tipoEquipamentoLabels.length >= tipoOptions.length
+          ? []
+          : current.tipoEquipamentoLabels.filter((tipo) =>
+              tipoOptions.includes(tipo)
+            ),
     }));
   }, [tipoOptions]);
 
   useEffect(() => {
     setFiltros((current) => ({
       ...current,
-      status: current.status.filter((status) => statusOptions.includes(status)),
+      status:
+        statusOptions.length > 0 && current.status.length >= statusOptions.length
+          ? []
+          : current.status.filter((status) => statusOptions.includes(status)),
     }));
   }, [statusOptions]);
 
   useEffect(() => {
     setFiltrosVisita((current) => ({
       ...current,
-      tipoEquipamentoLabels: current.tipoEquipamentoLabels.filter((tipo) =>
-        visitaTipoOptions.includes(tipo)
-      ),
+      tipoEquipamentoLabels:
+        visitaTipoOptions.length > 0 &&
+        current.tipoEquipamentoLabels.length >= visitaTipoOptions.length
+          ? []
+          : current.tipoEquipamentoLabels.filter((tipo) =>
+              visitaTipoOptions.includes(tipo)
+            ),
     }));
   }, [visitaTipoOptions]);
 
   useEffect(() => {
     setFiltrosVisita((current) => ({
       ...current,
-      setorLabels: current.setorLabels.filter((setor) =>
-        visitaSetorOptions.includes(setor)
-      ),
+      setorLabels:
+        visitaSetorOptions.length > 0 &&
+        current.setorLabels.length >= visitaSetorOptions.length
+          ? []
+          : current.setorLabels.filter((setor) =>
+              visitaSetorOptions.includes(setor)
+            ),
     }));
   }, [visitaSetorOptions]);
 
@@ -433,17 +457,38 @@ const Relatorios = () => {
   };
 
   const setTipos = (tipoEquipamentoLabels: string[]) => {
+    const todosSelecionados =
+      tipoOptions.length > 0 && tipoEquipamentoLabels.length >= tipoOptions.length;
     setFiltros((current) => ({
       ...current,
-      tipoEquipamentoLabels,
+      tipoEquipamentoLabels: todosSelecionados ? [] : tipoEquipamentoLabels,
       status: [],
     }));
   };
 
   const setStatusList = (status: string[]) => {
+    const todosSelecionados =
+      statusOptions.length > 0 && status.length >= statusOptions.length;
     setFiltros((current) => ({
       ...current,
-      status,
+      status: todosSelecionados ? [] : status,
+    }));
+  };
+
+  const limparFiltrosEquipamentos = () => {
+    if (tipoRelatorio === "visita_externa") {
+      setFiltrosVisita((current) => ({
+        ...current,
+        tipoEquipamentoLabels: [],
+        setorLabels: [],
+      }));
+      return;
+    }
+
+    setFiltros((current) => ({
+      ...current,
+      tipoEquipamentoLabels: [],
+      status: [],
     }));
   };
 
@@ -457,17 +502,23 @@ const Relatorios = () => {
   };
 
   const setVisitaTipos = (tipoEquipamentoLabels: string[]) => {
+    const todosSelecionados =
+      visitaTipoOptions.length > 0 &&
+      tipoEquipamentoLabels.length >= visitaTipoOptions.length;
     setFiltrosVisita((current) => ({
       ...current,
-      tipoEquipamentoLabels,
+      tipoEquipamentoLabels: todosSelecionados ? [] : tipoEquipamentoLabels,
       setorLabels: [],
     }));
   };
 
   const setVisitaSetores = (setorLabels: string[]) => {
+    const todosSelecionados =
+      visitaSetorOptions.length > 0 &&
+      setorLabels.length >= visitaSetorOptions.length;
     setFiltrosVisita((current) => ({
       ...current,
-      setorLabels,
+      setorLabels: todosSelecionados ? [] : setorLabels,
     }));
   };
 
@@ -550,7 +601,6 @@ const Relatorios = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const loadingOptions = empresasLoading || equipamentosLoading;
   const saving =
     criarRelatorio.isPending ||
     atualizarRelatorio.isPending ||
@@ -640,10 +690,23 @@ const Relatorios = () => {
             <div className="rounded-md border bg-muted/40 px-3 py-2">
               <p className="text-xs text-muted-foreground">Equipamentos</p>
               <p className="text-xl font-semibold">
-                {tipoRelatorio === "visita_externa"
-                  ? quantidadePrevistaVisita
-                  : quantidadePrevista}
+                {!empresaIdsParaOpcoes.length
+                  ? "-"
+                  : equipamentosLoading
+                    ? "..."
+                    : tipoRelatorio === "visita_externa"
+                      ? quantidadePrevistaVisita
+                      : quantidadePrevista}
               </p>
+              {empresaIdsParaOpcoes.length > 0 && filtrosEquipamentosAtivos && (
+                <button
+                  type="button"
+                  className="mt-1 text-left text-[11px] font-medium text-primary hover:underline"
+                  onClick={limparFiltrosEquipamentos}
+                >
+                  Filtros ativos. Limpar
+                </button>
+              )}
             </div>
           </div>
 
@@ -674,14 +737,18 @@ const Relatorios = () => {
                   ]}
                 />
                 <SearchableMultiSelectField
-                  disabled={loadingOptions}
+                  disabled={empresasLoading}
                   label="Empresa"
                   values={filtros.empresaIds}
                   onChange={setEmpresas}
                   options={empresaOptions}
                 />
                 <SearchableMultiSelectField
-                  disabled={loadingOptions || !tipoOptions.length}
+                  disabled={
+                    equipamentosLoading ||
+                    !filtros.empresaIds.length ||
+                    !tipoOptions.length
+                  }
                   label="Tipo de Equipamento"
                   values={filtros.tipoEquipamentoLabels}
                   onChange={setTipos}
@@ -692,7 +759,11 @@ const Relatorios = () => {
                   }))}
                 />
                 <SearchableMultiSelectField
-                  disabled={loadingOptions || !statusOptions.length}
+                  disabled={
+                    equipamentosLoading ||
+                    !filtros.empresaIds.length ||
+                    !statusOptions.length
+                  }
                   label="Estado"
                   values={filtros.status}
                   onChange={setStatusList}
@@ -705,14 +776,18 @@ const Relatorios = () => {
             ) : (
               <>
                 <SearchableMultiSelectField
-                  disabled={loadingOptions}
+                  disabled={empresasLoading}
                   label="Empresa"
                   values={filtrosVisita.empresaIds}
                   onChange={setVisitaEmpresas}
                   options={empresaOptions}
                 />
                 <SearchableMultiSelectField
-                  disabled={loadingOptions || !visitaTipoOptions.length}
+                  disabled={
+                    equipamentosLoading ||
+                    !filtrosVisita.empresaIds.length ||
+                    !visitaTipoOptions.length
+                  }
                   label="Tipo de Equipamento"
                   values={filtrosVisita.tipoEquipamentoLabels}
                   onChange={setVisitaTipos}
@@ -733,7 +808,11 @@ const Relatorios = () => {
                   ]}
                 />
                 <SearchableMultiSelectField
-                  disabled={loadingOptions || !visitaSetorOptions.length}
+                  disabled={
+                    equipamentosLoading ||
+                    !filtrosVisita.empresaIds.length ||
+                    !visitaSetorOptions.length
+                  }
                   label="Setor"
                   values={filtrosVisita.setorLabels}
                   onChange={setVisitaSetores}

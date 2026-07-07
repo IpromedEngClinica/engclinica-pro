@@ -22,6 +22,8 @@ export type PeriodicidadeVisita =
   | "Sob demanda"
   | "Nao se aplica";
 
+export const CONTRATO_VENDEDORES = ["Dayvid", "Lauro", "ACI"] as const;
+
 export type ContratoDocumentoSupabase = {
   id: string;
   organizacao_id: string;
@@ -49,6 +51,8 @@ export type ContratoSupabase = {
   termos_aditivos_limite: number | null;
   periodicidade_visita: string | null;
   vendedor: string | null;
+  valor_previsto: number | null;
+  mes_ultima_visita: string | null;
   objeto: string | null;
   observacoes: string | null;
   ativo: boolean;
@@ -77,6 +81,8 @@ export type ContratoFormInput = {
   termosAditivosLimite?: number | null;
   periodicidadeVisita?: string | null;
   vendedor?: string | null;
+  valorPrevisto?: number | null;
+  mesUltimaVisita?: string | null;
   objeto?: string | null;
   observacoes?: string | null;
 };
@@ -110,6 +116,8 @@ const selectContrato = `
   termos_aditivos_limite,
   periodicidade_visita,
   vendedor,
+  valor_previsto,
+  mes_ultima_visita,
   objeto,
   observacoes,
   ativo,
@@ -183,6 +191,15 @@ const toDatabasePayload = (input: ContratoFormInput) => ({
       : Number(input.termosAditivosLimite),
   periodicidade_visita: input.periodicidadeVisita || null,
   vendedor: input.vendedor?.trim() || null,
+  valor_previsto:
+    input.valorPrevisto === null ||
+    input.valorPrevisto === undefined ||
+    Number.isNaN(Number(input.valorPrevisto))
+      ? null
+      : Number(input.valorPrevisto),
+  mes_ultima_visita: input.mesUltimaVisita
+    ? `${input.mesUltimaVisita.slice(0, 7)}-01`
+    : null,
   objeto: input.objeto?.trim() || null,
   observacoes: input.observacoes?.trim() || null,
 });
@@ -264,6 +281,62 @@ export const getDiasContratoTexto = (dataProximaRenovacao?: string | null) => {
   if (dias < 0) return `Vencido ha ${Math.abs(dias)} dia(s)`;
   if (dias === 0) return "Vence hoje";
   return `Faltam ${dias} dia(s)`;
+};
+
+const periodicidadeMeses: Record<string, number> = {
+  Semanal: 1,
+  Quinzenal: 1,
+  Mensal: 1,
+  Bimestral: 2,
+  Trimestral: 3,
+  Semestral: 6,
+  Anual: 12,
+};
+
+const toMonthKey = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+
+export const getMesReferenciaAtual = () => toMonthKey(new Date());
+
+export const formatarMesContrato = (value?: string | null) => {
+  if (!value) return "-";
+  const date = new Date(`${value.slice(0, 7)}-01T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "-";
+
+  const label = date.toLocaleDateString("pt-BR", {
+    month: "long",
+    year: "numeric",
+  });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+};
+
+export const calcularProximoMesFaturamentoContrato = (
+  contrato: Pick<ContratoSupabase, "periodicidade_visita" | "mes_ultima_visita">
+) => {
+  const meses = contrato.periodicidade_visita
+    ? periodicidadeMeses[contrato.periodicidade_visita]
+    : undefined;
+
+  if (!meses || !contrato.mes_ultima_visita) return null;
+
+  const date = new Date(`${contrato.mes_ultima_visita.slice(0, 7)}-01T00:00:00`);
+  if (Number.isNaN(date.getTime())) return null;
+
+  date.setMonth(date.getMonth() + meses);
+  return toMonthKey(date);
+};
+
+export const isFaturamentoPrevistoNoMes = (
+  contrato: Pick<
+    ContratoSupabase,
+    "periodicidade_visita" | "mes_ultima_visita" | "valor_previsto"
+  >,
+  mesReferencia = getMesReferenciaAtual()
+) => {
+  if (!contrato.valor_previsto || contrato.valor_previsto <= 0) return false;
+
+  const proximoMes = calcularProximoMesFaturamentoContrato(contrato);
+  return Boolean(proximoMes && proximoMes <= mesReferencia);
 };
 
 export const contratosService = {

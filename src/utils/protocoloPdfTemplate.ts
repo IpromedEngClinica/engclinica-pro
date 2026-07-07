@@ -1,10 +1,48 @@
 import type { ProtocoloOSSupabase } from "@/services/protocolosService";
+import { PDF_DOCUMENT_BASE_CSS } from "@/utils/pdfDocumentStyles";
+
+export const PROTOCOLO_FOOTER =
+  "ACI Comercio LTDA - Assistencia Tecnica Hospitalar e Engenharia Clinica - Rua Jose Martins da Silva, 215 - Ceramica - Juiz de Fora - MG - CEP 36.080-370 - PABX: (32) 3221-7944 - E-mail: acicomercio@yahoo.com.br - CNPJ: 71.208.094/0001-37";
 
 const EMPTY = "-";
-const FOOTER_TEXT =
-  "ACI Comercio LTDA - Assistencia Tecnica Hospitalar e Engenharia Clinica - Rua Jose Martins da Silva, 215 - Ceramica - Juiz de Fora - MG Cep 36.080-370 - Pabx 32 3221-7944 - E-mail: acicomercio@yahoo.com.br - CNPJ: 71.208.094/0001-37";
 
-const escapeHtml = (value?: string | number | null) => {
+const text = {
+  protocoloEntrega: "Protocolo de Entrega",
+  protocoloRecolhimento: "Protocolo de Recolhimento",
+  semNumero: "sem n\u00famero",
+  emissao: "Emiss\u00e3o:",
+  dadosCliente: "Dados do Cliente",
+  endereco: "Endere\u00e7o:",
+  instrumentoEquipamento: "Instrumento / Equipamento",
+  identificacao: "Identifica\u00e7\u00e3o:",
+  numeroSerie: "N\u00famero de S\u00e9rie:",
+  patrimonio: "Patrim\u00f4nio:",
+  dadosEntrega: "Dados da Entrega",
+  dadosRecolhimento: "Dados do Recolhimento",
+  dataEntrega: "Data da entrega:",
+  dataRecolhimento: "Data do recolhimento:",
+  responsavelRecebimento: "Respons\u00e1vel pelo recebimento:",
+  responsavelColeta: "Respons\u00e1vel pela coleta:",
+  acessoriosEquipamento: "Acess\u00f3rios do Equipamento",
+  semAcessorios: "Sem Acess\u00f3rios",
+  descricao: "Descri\u00e7\u00e3o",
+  observacao: "Observa\u00e7\u00e3o",
+  observacoes: "Observa\u00e7\u00f5es",
+  nao: "N\u00e3o",
+  problemaRelatado: "Problema relatado",
+  declaracoes: "Declara\u00e7\u00f5es",
+  assinaturas: "Assinaturas",
+  assinaturaRecebimento: "Respons\u00e1vel pelo recebimento",
+  assinaturaEntregaCliente: "Respons\u00e1vel pela entrega",
+  assinaturaAciEntrega: "Respons\u00e1vel ACI pela entrega",
+  assinaturaAciColeta: "Respons\u00e1vel ACI pela coleta",
+  declaracaoEntrega:
+    "Com esta assinatura, declaro que o equipamento me foi entregue com os acess\u00f3rios descritos na data acima e o mesmo foi testado em minha presen\u00e7a, ou caso n\u00e3o foi testado, assumo a responsabilidade por test\u00e1-lo posteriormente.",
+  declaracaoPrazo:
+    "A Comiss\u00e3o de Defesa do Consumidor estabelece, nas diretrizes do C\u00f3digo de Defesa do Consumidor, o prazo de 180 dias para a retirada, pelo propriet\u00e1rio, de equipamentos eletr\u00f4nicos, m\u00e1quinas e motores deixados na assist\u00eancia t\u00e9cnica para conserto. Em caso de n\u00e3o retirada, o prestador de servi\u00e7o fica autorizado a alienar, doar, reutilizar, desmontar, destruir ou destinar o bem \u00e0 sucata.",
+};
+
+const esc = (value?: string | number | null) => {
   if (value === null || value === undefined || value === "") return EMPTY;
 
   return String(value)
@@ -15,145 +53,127 @@ const escapeHtml = (value?: string | number | null) => {
     .replace(/'/g, "&#039;");
 };
 
-const normalizar = (value?: string | null) =>
-  (value || "")
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, "_");
+const hasValue = (value?: string | number | null) => {
+  if (value === null || value === undefined) return false;
+  const content = String(value).trim();
+  return content !== "" && content !== EMPTY;
+};
 
-const formatDateTime = (iso?: string | null) => {
-  if (!iso) return EMPTY;
+const escPreserveBreaks = (value?: string | number | null) =>
+  esc(value).replace(/\n/g, "<br>");
 
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return EMPTY;
+const formatDateTime = (value?: string | null) => {
+  if (!value) return EMPTY;
 
-  return d.toLocaleString("pt-BR", {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return EMPTY;
+
+  return date.toLocaleString("pt-BR", {
     dateStyle: "short",
     timeStyle: "short",
   });
 };
 
-const formatTipo = (tipo?: string | null) => {
-  const map: Record<string, string> = {
-    recolhimento: "Recolhimento",
-    entrega: "Entrega",
-  };
-
-  return map[normalizar(tipo)] || tipo || EMPTY;
-};
-
-const getTipoBadge = (tipo?: string | null) =>
-  normalizar(tipo) === "entrega"
-    ? `<span class="badge badge-success">${escapeHtml(formatTipo(tipo))}</span>`
-    : `<span class="badge badge-warning">${escapeHtml(formatTipo(tipo))}</span>`;
-
-const getEmpresaRecord = (protocolo: ProtocoloOSSupabase) =>
-  (protocolo.empresa || {}) as Record<string, unknown>;
-
-const getStringField = (record: Record<string, unknown>, keys: string[]) => {
-  for (const key of keys) {
-    const value = record[key];
-
-    if (typeof value === "string" && value.trim()) {
-      return value.trim();
-    }
-  }
-
-  return "";
-};
-
-const getEmpresaNome = (protocolo: ProtocoloOSSupabase) =>
-  protocolo.empresa?.nome_fantasia ||
-  protocolo.empresa?.nome ||
-  "Nao informado";
-
-const getEmpresaCampo = (protocolo: ProtocoloOSSupabase, keys: string[]) =>
-  getStringField(getEmpresaRecord(protocolo), keys);
-
-const getEnderecoEmpresa = (protocolo: ProtocoloOSSupabase) => {
-  const empresa = getEmpresaRecord(protocolo);
-  const linha1 = [
-    getStringField(empresa, ["rua", "logradouro", "endereco"]),
-    getStringField(empresa, ["numero"]),
-    getStringField(empresa, ["complemento"]),
-  ]
-    .filter(Boolean)
-    .join(", ");
-  const linha2 = [
-    getStringField(empresa, ["bairro"]),
-    getStringField(empresa, ["cidade", "municipio"]),
-    getStringField(empresa, ["estado", "uf"]),
-  ]
-    .filter(Boolean)
-    .join(" - ");
-  const cep = getStringField(empresa, ["cep"]);
-
-  return [linha1, linha2, cep ? `CEP ${cep}` : ""].filter(Boolean).join(" - ");
-};
-
-const getEquipamentoTipo = (protocolo: ProtocoloOSSupabase) =>
-  protocolo.equipamento?.tipo_equipamento?.nome ||
-  protocolo.equipamento?.tipo_texto ||
-  "";
-
 const getTitulo = (protocolo: ProtocoloOSSupabase) =>
   protocolo.tipo === "entrega"
-    ? `Protocolo de Entrega N&ordm; ${escapeHtml(protocolo.numero)}`
-    : `Protocolo de Recolhimento N&ordm; ${escapeHtml(protocolo.numero)}`;
+    ? text.protocoloEntrega
+    : text.protocoloRecolhimento;
+
+const getEmpresaNome = (protocolo: ProtocoloOSSupabase) =>
+  protocolo.empresa?.nome || protocolo.empresa?.nome_fantasia || EMPTY;
+
+const getEnderecoEmpresa = (protocolo: ProtocoloOSSupabase) => {
+  const empresa = protocolo.empresa;
+  if (!empresa) return EMPTY;
+
+  const linha1 = [empresa.rua, empresa.numero, empresa.complemento]
+    .filter(Boolean)
+    .join(", ");
+  const linha2 = [empresa.bairro, empresa.cidade, empresa.estado]
+    .filter(Boolean)
+    .join(" - ");
+  const cep = empresa.cep ? `CEP ${empresa.cep}` : "";
+
+  return [linha1, linha2, cep].filter(Boolean).join(" - ") || EMPTY;
+};
+
+const getContatoEmpresa = (protocolo: ProtocoloOSSupabase) =>
+  [
+    protocolo.empresa?.contato,
+    protocolo.empresa?.telefone || protocolo.empresa?.celular,
+  ]
+    .filter(Boolean)
+    .join(" / ") || EMPTY;
+
+const getTipoEquipamento = (protocolo: ProtocoloOSSupabase) =>
+  protocolo.equipamento?.tipo_equipamento?.nome ||
+  protocolo.equipamento?.tipo_texto ||
+  EMPTY;
+
+const getIdentificacaoEquipamento = (protocolo: ProtocoloOSSupabase) =>
+  protocolo.equipamento?.tag ||
+  protocolo.equipamento?.patrimonio ||
+  protocolo.equipamento?.numero_serie ||
+  EMPTY;
 
 const getDataOperacionalLabel = (protocolo: ProtocoloOSSupabase) =>
-  protocolo.tipo === "entrega" ? "Data da entrega" : "Data do recolhimento";
+  protocolo.tipo === "entrega" ? text.dataEntrega : text.dataRecolhimento;
 
 const getDataOperacional = (protocolo: ProtocoloOSSupabase) =>
   protocolo.tipo === "entrega"
     ? protocolo.data_entrega || protocolo.data_protocolo
     : protocolo.data_recolhimento || protocolo.data_protocolo;
 
-const buildField = (label: string, value?: string | number | null) => `
-  <div class="field">
-    <span class="field-label">${label}</span>
-    <div class="field-value">${escapeHtml(value)}</div>
+const field = (label: string, value?: string | number | null, wide = false) => `
+  <div class="field ${wide ? "field-address" : ""}">
+    <span class="field-label">${esc(label)}</span>
+    <span class="field-value">${esc(value)}</span>
   </div>
 `;
 
-const buildAcessoriosHtml = (protocolo: ProtocoloOSSupabase) => {
+const optionalField = (
+  label: string,
+  value?: string | number | null,
+  wide = false
+) => (hasValue(value) ? field(label, value, wide) : "");
+
+const sectionTitle = (number: string, title: string) => `
+  <h2 class="section-title">${esc(number)}. ${esc(title)}</h2>
+`;
+
+const buildAcessorios = (protocolo: ProtocoloOSSupabase) => {
   const acessorios = protocolo.acessorios || [];
-
-  if (!acessorios.length) return "";
-
-  const title =
-    protocolo.tipo === "entrega"
-      ? "4 - Acess&oacute;rios Entregues"
-      : "4 - Acess&oacute;rios Recebidos";
-
-  const rows = acessorios
-    .map(
-      (item, index) => `
-        <tr>
-          <td class="col-item">${index + 1}</td>
-          <td>${escapeHtml(item.descricao)}</td>
-          <td class="numeric">${escapeHtml(item.quantidade || 1)}</td>
-          <td>${item.conferido ? "Sim" : "Nao"}</td>
-          <td>${escapeHtml(item.observacoes)}</td>
-        </tr>
-      `
-    )
-    .join("");
+  const rows = acessorios.length
+    ? acessorios
+        .map(
+          (item, index) => `
+            <tr>
+              <td class="nowrap">${index + 1}</td>
+              <td class="text-left">${esc(item.descricao)}</td>
+              <td class="nowrap">${esc(item.quantidade || 1)}</td>
+              <td>${item.conferido ? "Sim" : text.nao}</td>
+              <td class="text-left">${esc(item.observacoes)}</td>
+            </tr>
+          `
+        )
+        .join("")
+    : `
+      <tr>
+        <td colspan="5" class="text-left empty-accessories">${text.semAcessorios}</td>
+      </tr>
+    `;
 
   return `
     <section class="section">
-      <div class="section-title">${title}</div>
-
-      <table class="table">
+      ${sectionTitle("4", text.acessoriosEquipamento)}
+      <table class="data-table protocol-accessories">
         <thead>
           <tr>
-            <th>Item</th>
-            <th>Descricao</th>
+            <th>#</th>
+            <th class="text-left">${text.descricao}</th>
             <th>Quantidade</th>
             <th>Conferido</th>
-            <th>Observacao</th>
+            <th class="text-left">${text.observacao}</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -162,244 +182,96 @@ const buildAcessoriosHtml = (protocolo: ProtocoloOSSupabase) => {
   `;
 };
 
-const BASE_CSS = `
-  @page { size: A4; margin: 14mm; }
+const buildObservacoes = (number: string, protocolo: ProtocoloOSSupabase) =>
+  hasValue(protocolo.problema_relatado) || hasValue(protocolo.observacoes)
+    ? `
+      <section class="section">
+        ${sectionTitle(number, text.observacoes)}
+        <div class="soft-box text-box observations-box">
+          ${
+            hasValue(protocolo.problema_relatado)
+              ? `
+                <strong>${text.problemaRelatado}</strong>
+                <div>${escPreserveBreaks(protocolo.problema_relatado)}</div>
+              `
+              : ""
+          }
+          ${
+            hasValue(protocolo.observacoes)
+              ? `
+                <strong>${text.observacoes}</strong>
+                <div>${escPreserveBreaks(protocolo.observacoes)}</div>
+              `
+              : ""
+          }
+        </div>
+      </section>
+    `
+    : "";
 
-  :root {
-    --primary: #C5161D;
-    --text: #111827;
-    --muted: #6B7280;
-    --section-bg: #F9FAFB;
-    --card-bg: #FFFFFF;
-    --border: #E5E7EB;
-    --success: #16A34A;
-    --danger: #DC2626;
-    --warning: #D97706;
+const signatureBlock = (label: string, name?: string | null) => `
+  <div class="signature-block">
+    <div class="signature-image-placeholder"></div>
+    <div class="signature-line"></div>
+    <div class="signature-name">${esc(name)}</div>
+    <div class="signature-role">${esc(label)}</div>
+  </div>
+`;
+
+const buildDeclaracoes = (number: string) => `
+  <section class="section protocol-declarations">
+    ${sectionTitle(number, text.declaracoes)}
+    <div class="soft-box text-box declaration-box">
+      <p>${text.declaracaoEntrega}</p>
+      <p>${text.declaracaoPrazo}</p>
+    </div>
+  </section>
+`;
+
+const styles = `
+  ${PDF_DOCUMENT_BASE_CSS}
+
+  .text-box {
+    color: var(--value);
+    white-space: normal;
   }
 
-  * { box-sizing: border-box; }
-
-  body {
-    margin: 0;
-    font-family: Arial, Helvetica, sans-serif;
-    color: var(--text);
-    background: #fff;
-    font-size: 8.8pt;
-    line-height: 1.28;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    text-rendering: optimizeLegibility;
-  }
-
-  .document {
-    width: 1123px;
-    min-height: 1588px;
-    padding: 42px 42px 28px;
-    background: #fff;
-  }
-
-  .top-bar {
-    height: 5px;
-    background: var(--primary);
-    border-radius: 999px;
-    margin-bottom: 12px;
-  }
-
-  .header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 24px;
-    margin-bottom: 14px;
-  }
-
-  .logo {
-    width: 140px;
-    height: auto;
+  .text-box strong {
     display: block;
+    margin: 0 0 4px;
+    color: var(--ink);
   }
 
-  .header-info { text-align: right; }
-
-  .header-info h1 {
-    margin: 0 0 8px;
-    font-size: 16pt;
-    line-height: 1.1;
-    font-weight: 700;
-    color: var(--text);
+  .observations-box div + strong {
+    margin-top: 8px;
   }
 
-  .header-info .meta {
-    color: var(--muted);
-    font-size: 8.2pt;
-    font-weight: 600;
-    line-height: 1.45;
+  .protocol-accessories th:first-child,
+  .protocol-accessories td:first-child {
+    width: 34px;
   }
 
-  .section {
-    margin-top: 10px;
-    break-inside: avoid;
-    page-break-inside: avoid;
+  .empty-accessories {
+    color: var(--ink);
+    font-weight: 650;
   }
 
-  .section-title {
-    margin: 0 0 6px;
-    padding-bottom: 4px;
-    border-bottom: 1px solid var(--border);
-    font-size: 11pt;
-    font-weight: 700;
-    color: var(--text);
-    letter-spacing: 0;
-    line-height: 1.2;
+  .protocol-declarations {
+    margin-top: 14px;
   }
 
-  .card {
-    background: #ffffff;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 8px 10px;
-    break-inside: avoid;
-    page-break-inside: avoid;
-  }
-
-  .grid-2 {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 7px 16px;
-  }
-
-  .grid-3 {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 7px 14px;
-  }
-
-  .field {
-    min-width: 0;
-    break-inside: avoid;
-    page-break-inside: avoid;
-  }
-
-  .field-label {
-    display: block;
-    margin-bottom: 1px;
-    color: var(--muted);
-    font-size: 7.2pt;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.02em;
-  }
-
-  .field-value {
-    color: var(--text);
-    font-size: 8.8pt;
-    font-weight: 600;
-    word-break: break-word;
-  }
-
-  .badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 999px;
-    padding: 3px 8px;
-    font-size: 7.5pt;
-    font-weight: 700;
-    white-space: nowrap;
-    line-height: 1.2;
-  }
-
-  .badge-success { background: rgba(22, 163, 74, 0.12); color: var(--success); }
-  .badge-danger { background: rgba(220, 38, 38, 0.12); color: var(--danger); }
-  .badge-warning { background: rgba(217, 119, 6, 0.13); color: var(--warning); }
-  .badge-muted { background: #EEF2F7; color: var(--muted); }
-
-  .table {
-    width: 100%;
-    border-collapse: collapse;
-    background: #ffffff;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    overflow: hidden;
-    font-size: 8.2pt;
-    page-break-inside: auto;
-  }
-
-  .table thead { display: table-header-group; }
-  .table tr { page-break-inside: avoid; break-inside: avoid; }
-
-  .table th {
-    background: #F3F4F6;
-    color: var(--text);
-    font-size: 7.4pt;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.02em;
-    padding: 5px 6px;
-    border-bottom: 1px solid var(--border);
-    text-align: left;
-  }
-
-  .table td {
-    padding: 5px 6px;
-    border-bottom: 1px solid var(--border);
-    vertical-align: middle;
-    color: var(--text);
-    font-weight: 500;
-  }
-
-  .table tbody tr:last-child td { border-bottom: 0; }
-  .col-item { width: 34px; text-align: center; color: var(--muted); font-weight: 700; }
-  .numeric { text-align: right; white-space: nowrap; }
-
-  .text-block {
-    min-height: 30px;
-    white-space: pre-wrap;
-    color: var(--text);
-    font-weight: 400;
-  }
-
-  .signatures {
-    display: grid;
-    grid-template-columns: 1fr 1fr 120px;
-    column-gap: 26px;
-    margin-top: 26px;
-    align-items: start;
-    break-inside: avoid;
-    page-break-inside: avoid;
-  }
-
-  .signature-block {
-    height: 58px;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
-    text-align: center;
-    color: var(--muted);
-    font-size: 8pt;
-    font-weight: 600;
-  }
-
-  .signature-line {
-    width: 100%;
-    border-top: 1px dashed #9CA3AF;
-    height: 1px;
-    margin: 0 0 7px;
-  }
-
-  .footer {
-    margin-top: 22px;
-    padding-top: 8px;
-    padding-bottom: 10px;
-    border-top: 1px solid var(--border);
-    color: #9CA3AF;
-    font-size: 8pt;
+  .declaration-box {
+    border-left: 3px solid var(--brand);
+    font-size: 10.2px;
     line-height: 1.35;
-    text-align: center;
-    break-inside: avoid;
-    page-break-inside: avoid;
+  }
+
+  .declaration-box p {
+    margin: 0;
+  }
+
+  .declaration-box p + p {
+    margin-top: 7px;
   }
 `;
 
@@ -408,137 +280,102 @@ export const buildProtocoloHtml = (
   logoSrc: string
 ) => {
   const isEntrega = protocolo.tipo === "entrega";
-  const dadosTitle = isEntrega
-    ? "3 - Dados da Entrega"
-    : "3 - Dados do Recolhimento";
+  const numero = protocolo.numero || text.semNumero;
+  const hasObservacoes =
+    hasValue(protocolo.problema_relatado) || hasValue(protocolo.observacoes);
+  const observacoesNumero = "5";
+  const includeDeclaracoes = isEntrega;
+  const declaracoesNumero = hasObservacoes ? "6" : "5";
+  const assinaturasNumero = includeDeclaracoes
+    ? hasObservacoes
+      ? "7"
+      : "6"
+    : hasObservacoes
+      ? "6"
+      : "5";
   const responsavelLabel = isEntrega
-    ? "Responsavel pelo recebimento"
-    : "Responsavel pela coleta";
-  const observacoesTitle = protocolo.acessorios?.length
-    ? "5 - Observa&ccedil;&otilde;es"
-    : "4 - Observa&ccedil;&otilde;es";
-  const assinaturasTitle = protocolo.acessorios?.length
-    ? "6 - Assinaturas"
-    : "5 - Assinaturas";
+    ? text.responsavelRecebimento
+    : text.responsavelColeta;
   const assinaturaCliente = isEntrega
-    ? "Assinatura de quem recebeu"
-    : "Assinatura do cliente/entregador";
-  const assinaturaACI = isEntrega
-    ? "Responsavel tecnico"
-    : "Responsavel pela coleta";
+    ? text.assinaturaRecebimento
+    : text.assinaturaEntregaCliente;
+  const assinaturaAci = isEntrega
+    ? text.assinaturaAciEntrega
+    : text.assinaturaAciColeta;
 
-  return `
-<!doctype html>
-<html lang="pt-BR">
-<head>
-  <meta charset="utf-8" />
-  <title>Protocolo ${escapeHtml(protocolo.numero)}</title>
-  <style>${BASE_CSS}</style>
-</head>
+  return `<!doctype html>
+  <html lang="pt-BR">
+    <head>
+      <meta charset="utf-8">
+      <style>${styles}</style>
+    </head>
+    <body>
+      <main class="document">
+        <header class="document-header">
+          <img class="logo" src="${logoSrc}" alt="ACI">
+          <div class="document-title">
+            <h1>${esc(getTitulo(protocolo))}</h1>
+            <div class="document-code">N\u00ba ${esc(numero)}</div>
+            <div class="document-meta">
+              ${text.emissao} ${formatDateTime(protocolo.data_protocolo)}
+              ${hasValue(protocolo.ordem_servico?.numero) ? `<br>OS: ${esc(protocolo.ordem_servico?.numero)}` : ""}
+            </div>
+          </div>
+        </header>
 
-<body>
-  <main class="document">
-    <div class="top-bar"></div>
+        <section class="section">
+          ${sectionTitle("1", text.dadosCliente)}
+          <div class="info-grid info-grid-2 client-identification">
+            ${field("Nome:", getEmpresaNome(protocolo))}
+            ${field("Contato:", getContatoEmpresa(protocolo))}
+            ${field(text.endereco, getEnderecoEmpresa(protocolo), true)}
+            ${field("CPF/CNPJ:", protocolo.empresa?.cpf_cnpj)}
+            ${field("E-mail:", protocolo.empresa?.email, true)}
+            ${field("Fantasia:", protocolo.empresa?.nome_fantasia)}
+          </div>
+        </section>
 
-    <header class="header">
-      <div>
-        <img class="logo" src="${logoSrc}" alt="ACI Equipamentos Hospitalares" />
-      </div>
+        <section class="section">
+          ${sectionTitle("2", text.instrumentoEquipamento)}
+          <div class="info-grid info-grid-3">
+            ${optionalField("Tipo:", getTipoEquipamento(protocolo))}
+            ${optionalField(text.identificacao, getIdentificacaoEquipamento(protocolo))}
+            ${optionalField("Modelo:", protocolo.equipamento?.modelo)}
+            ${optionalField("Fabricante:", protocolo.equipamento?.fabricante)}
+            ${optionalField(text.numeroSerie, protocolo.equipamento?.numero_serie)}
+            ${optionalField(text.patrimonio, protocolo.equipamento?.patrimonio)}
+            ${optionalField("TAG:", protocolo.equipamento?.tag)}
+            ${optionalField("Setor:", protocolo.equipamento?.setor)}
+          </div>
+        </section>
 
-      <div class="header-info">
-        <h1>${getTitulo(protocolo)}</h1>
-        <div class="meta">
-          <div>Tipo: ${getTipoBadge(protocolo.tipo)}</div>
-          <div>Data: ${escapeHtml(formatDateTime(protocolo.data_protocolo))}</div>
-          <div>OS: ${escapeHtml(protocolo.ordem_servico?.numero)}</div>
-        </div>
-      </div>
-    </header>
+        <section class="section">
+          ${sectionTitle("3", isEntrega ? text.dadosEntrega : text.dadosRecolhimento)}
+          <div class="info-grid info-grid-3">
+            ${field(responsavelLabel, protocolo.responsavel_nome)}
+            ${field("Documento:", protocolo.responsavel_documento)}
+            ${field("Contato:", protocolo.responsavel_contato)}
+            ${field(getDataOperacionalLabel(protocolo), formatDateTime(getDataOperacional(protocolo)))}
+            ${field("OS vinculada:", protocolo.ordem_servico?.numero)}
+            ${field("Status:", protocolo.status)}
+          </div>
+        </section>
 
-    <section class="section">
-      <div class="section-title">1 - Dados do Cliente</div>
+        ${buildAcessorios(protocolo)}
 
-      <div class="card grid-2">
-        ${buildField("Nome", getEmpresaNome(protocolo))}
-        ${buildField("CPF/CNPJ", getEmpresaCampo(protocolo, ["cpf_cnpj", "cnpj", "cpf", "documento"]))}
-        ${buildField("Endereco", getEnderecoEmpresa(protocolo))}
-        ${buildField("Contato", getEmpresaCampo(protocolo, ["contato", "celular", "telefone"]))}
-        ${buildField("E-mail", getEmpresaCampo(protocolo, ["email", "e_mail"]))}
-        ${buildField("Nome fantasia", protocolo.empresa?.nome_fantasia)}
-      </div>
-    </section>
+        ${buildObservacoes(observacoesNumero, protocolo)}
 
-    <section class="section">
-      <div class="section-title">2 - Instrumento / Equipamento</div>
+        ${includeDeclaracoes ? buildDeclaracoes(declaracoesNumero) : ""}
 
-      <div class="card grid-3">
-        ${buildField("Tipo", getEquipamentoTipo(protocolo))}
-        ${buildField("Fabricante", protocolo.equipamento?.fabricante)}
-        ${buildField("Modelo", protocolo.equipamento?.modelo)}
-        ${buildField("Serie", protocolo.equipamento?.numero_serie)}
-        ${buildField("Patrimonio", protocolo.equipamento?.patrimonio)}
-        ${buildField("TAG", protocolo.equipamento?.tag)}
-        ${buildField("Setor", protocolo.equipamento?.setor)}
-      </div>
-    </section>
-
-    <section class="section">
-      <div class="section-title">${dadosTitle}</div>
-
-      <div class="card grid-2">
-        ${buildField(responsavelLabel, protocolo.responsavel_nome)}
-        ${buildField("Documento", protocolo.responsavel_documento)}
-        ${buildField("Contato", protocolo.responsavel_contato)}
-        ${buildField(getDataOperacionalLabel(protocolo), formatDateTime(getDataOperacional(protocolo)))}
-        ${buildField("OS vinculada", protocolo.ordem_servico?.numero)}
-        ${buildField("Status", protocolo.status)}
-      </div>
-    </section>
-
-    ${buildAcessoriosHtml(protocolo)}
-
-    <section class="section">
-      <div class="section-title">${observacoesTitle}</div>
-
-      <div class="card grid-2">
-        <div class="field">
-          <span class="field-label">Problema relatado</span>
-          <div class="text-block">${escapeHtml(protocolo.problema_relatado)}</div>
-        </div>
-
-        <div class="field">
-          <span class="field-label">Observacoes</span>
-          <div class="text-block">${escapeHtml(protocolo.observacoes)}</div>
-        </div>
-      </div>
-    </section>
-
-    <section class="section">
-      <div class="section-title">${assinaturasTitle}</div>
-    </section>
-
-    <section class="signatures">
-      <div class="signature-block">
-        <div class="signature-line"></div>
-        <div>${assinaturaCliente}</div>
-      </div>
-
-      <div class="signature-block">
-        <div class="signature-line"></div>
-        <div>${assinaturaACI} / ACI</div>
-      </div>
-
-      <div class="signature-block">
-        <div class="signature-line"></div>
-        <div>Data</div>
-      </div>
-    </section>
-
-    <footer class="footer">
-      ${escapeHtml(FOOTER_TEXT)}
-    </footer>
-  </main>
-</body>
-</html>
-  `;
+        <section class="section summary-signatures">
+          ${sectionTitle(assinaturasNumero, text.assinaturas)}
+          <div class="signature-area">
+            ${signatureBlock(assinaturaCliente, protocolo.responsavel_nome)}
+            ${signatureBlock(assinaturaAci, "")}
+            ${signatureBlock("Data", "")}
+          </div>
+        </section>
+      </main>
+    </body>
+  </html>`;
 };

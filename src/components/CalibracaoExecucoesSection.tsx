@@ -7,6 +7,7 @@ import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import ListLimitSelect, {
   DEFAULT_LIST_LIMIT,
 } from "@/components/ListLimitSelect";
+import ListPagination from "@/components/ListPagination";
 import SortableTableHeader from "@/components/SortableTableHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { useCalibracaoExecucoes, useCancelarCalibracaoExecucao } from "@/hooks/useCalibracaoExecucoes";
+import { usePaginatedList } from "@/hooks/usePaginatedList";
 import {
   calibracaoExecucoesService,
   formatNumeroCertificadoCalibracao,
@@ -64,10 +66,10 @@ const CalibracaoExecucoesSection = () => {
     vencimento: (item) => item.data_validade || item.validade_mes,
   }), []);
   const sorted = useMemo(() => sortByValue(filtered, getters[sortKey], sortDirection), [filtered, getters, sortDirection, sortKey]);
-  const visibleExecucoes = useMemo(
-    () => sorted.slice(0, listLimit),
-    [listLimit, sorted]
-  );
+  const {
+    paginatedItems: visibleExecucoes,
+    ...execucoesPagination
+  } = usePaginatedList(sorted, listLimit);
   const sort = (key: string) => { if (sortKey === key) setSortDirection((current) => current === "asc" ? "desc" : "asc"); else { setSortKey(key); setSortDirection("asc"); } };
 
   const handleCancelar = async (item: CalibracaoExecucao) => {
@@ -144,7 +146,7 @@ const CalibracaoExecucoesSection = () => {
     <div className="rounded-xl border bg-card"><div className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between"><div className="relative max-w-sm flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-9" placeholder="Buscar calibracao..." value={search} onChange={(event) => setSearch(event.target.value)} /></div><div className="flex flex-col gap-2 sm:flex-row sm:items-center"><ListLimitSelect value={listLimit} onChange={setListLimit} total={sorted.length} /><Button variant="outline" size="sm" onClick={() => refetch()}>Atualizar</Button><Button size="sm" onClick={() => { setSelected(null); setFormOpen(true); }}><Plus className="mr-2 h-4 w-4" /> Nova Calibracao</Button></div></div>
       <div className="overflow-x-auto"><table className="w-full min-w-[980px] text-sm"><thead><tr className="border-y bg-muted/50">
         {[["Numero do certificado", "numero_certificado"], ["Cliente", "cliente"], ["Equipamento", "equipamento"], ["Data de calibracao", "data_calibracao"], ["Vencimento", "vencimento"]].map(([label, key]) => <th key={key} className="px-3 py-2 text-left"><SortableTableHeader label={label} sortField={key} sortKey={sortKey} sortDirection={sortDirection} onSort={sort} /></th>)}<th className="px-3 py-2 text-right">Acoes</th>
-      </tr></thead><tbody>{visibleExecucoes.map((item) => <tr key={item.id} className="border-b last:border-0 hover:bg-muted/30"><td className="px-3 py-2"><button className="font-medium text-primary hover:underline" onClick={() => { setSelected(item); setDetailsOpen(true); }}>{formatNumeroCertificadoCalibracao(item.numero_certificado)}</button></td><td className="px-3 py-2"><button className="text-left text-primary hover:underline" onClick={() => abrirEmpresa(item)}>{item.empresa?.nome_fantasia || item.empresa?.nome || "-"}</button></td><td className="px-3 py-2"><button className="text-left text-primary hover:underline" onClick={() => abrirEquipamento(item)}>{formatarIdentificacaoCompletaEquipamento(item.equipamento)}</button></td><td className="px-3 py-2">{date(item.data_calibracao)}</td><td className="px-3 py-2">{date(item.data_validade || item.validade_mes)}</td><td className="px-3 py-2 text-right"><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => { setSelected(item); setDetailsOpen(true); }}><Eye className="mr-2 h-4 w-4" /> Visualizar</DropdownMenuItem>{item.status !== "cancelada" && <DropdownMenuItem onClick={() => handleEditar(item)}><Pencil className="mr-2 h-4 w-4" /> Editar</DropdownMenuItem>}<DropdownMenuSeparator /><DropdownMenuItem onClick={() => gerarPdf(item)}><FileText className="mr-2 h-4 w-4" /> {item.pdf_storage_path ? "Regenerar PDF" : "Gerar PDF"}</DropdownMenuItem>{item.pdf_storage_path && <><DropdownMenuItem onClick={() => abrirPdf(item)}><Eye className="mr-2 h-4 w-4" /> Visualizar PDF</DropdownMenuItem><DropdownMenuItem onClick={() => abrirPdf(item, true)}><Download className="mr-2 h-4 w-4" /> Baixar PDF</DropdownMenuItem></>}{["rascunho", "em_execucao"].includes(item.status) && <><DropdownMenuSeparator /><DropdownMenuItem className="text-destructive" onClick={() => handleCancelar(item)}><Ban className="mr-2 h-4 w-4" /> Cancelar calibracao</DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu></td></tr>)}{!sorted.length && <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">Nenhuma calibracao encontrada.</td></tr>}</tbody></table></div>
+      </tr></thead><tbody>{visibleExecucoes.map((item) => <tr key={item.id} className="border-b last:border-0 hover:bg-muted/30"><td className="px-3 py-2"><button className="font-medium text-primary hover:underline" onClick={() => { setSelected(item); setDetailsOpen(true); }}>{formatNumeroCertificadoCalibracao(item.numero_certificado)}</button></td><td className="px-3 py-2"><button className="text-left text-primary hover:underline" onClick={() => abrirEmpresa(item)}>{item.empresa?.nome_fantasia || item.empresa?.nome || "-"}</button></td><td className="px-3 py-2"><button className="text-left text-primary hover:underline" onClick={() => abrirEquipamento(item)}>{formatarIdentificacaoCompletaEquipamento(item.equipamento)}</button></td><td className="px-3 py-2">{date(item.data_calibracao)}</td><td className="px-3 py-2">{date(item.data_validade || item.validade_mes)}</td><td className="px-3 py-2 text-right"><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => { setSelected(item); setDetailsOpen(true); }}><Eye className="mr-2 h-4 w-4" /> Visualizar</DropdownMenuItem>{item.status !== "cancelada" && <DropdownMenuItem onClick={() => handleEditar(item)}><Pencil className="mr-2 h-4 w-4" /> Editar</DropdownMenuItem>}<DropdownMenuSeparator /><DropdownMenuItem onClick={() => gerarPdf(item)}><FileText className="mr-2 h-4 w-4" /> {item.pdf_storage_path ? "Regenerar PDF" : "Gerar PDF"}</DropdownMenuItem>{item.pdf_storage_path && <><DropdownMenuItem onClick={() => abrirPdf(item)}><Eye className="mr-2 h-4 w-4" /> Visualizar PDF</DropdownMenuItem><DropdownMenuItem onClick={() => abrirPdf(item, true)}><Download className="mr-2 h-4 w-4" /> Baixar PDF</DropdownMenuItem></>}{["rascunho", "em_execucao"].includes(item.status) && <><DropdownMenuSeparator /><DropdownMenuItem className="text-destructive" onClick={() => handleCancelar(item)}><Ban className="mr-2 h-4 w-4" /> Cancelar calibracao</DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu></td></tr>)}{!sorted.length && <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">Nenhuma calibracao encontrada.</td></tr>}</tbody></table><ListPagination {...execucoesPagination} onPageChange={execucoesPagination.setPage} /></div>
     </div>
   </div>;
 };

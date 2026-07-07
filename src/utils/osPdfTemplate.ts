@@ -1,12 +1,15 @@
 import type { EmpresaSupabase } from "@/services/empresasService";
 import type { OrdemServicoSupabase } from "@/services/ordensServicoService";
 import type { AssinaturasDocumento } from "@/services/assinaturasService";
+import { PDF_DOCUMENT_BASE_CSS } from "@/utils/pdfDocumentStyles";
 
-const FOOTER_TEXT =
-  "ACI Comércio LTDA - Assistência Técnica Hospitalar e Engenharia Clínica - Rua José Martins da Silva, 215 - Cerâmica - Juiz de Fora - MG Cep 36.080-370 - Pabx 32 3221-7944 - E-mail: acicomercio@yahoo.com.br - CNPJ: 71.208.094/0001-37";
+export const ORDEM_SERVICO_FOOTER_TEXT =
+  "ACI Comercio LTDA - Assistencia Tecnica Hospitalar e Engenharia Clinica - Rua Jose Martins da Silva, 215 - Ceramica - Juiz de Fora - MG Cep 36.080-370 - Pabx 32 3221-7944 - E-mail: acicomercio@yahoo.com.br - CNPJ: 71.208.094/0001-37";
+
+const EMPTY = "-";
 
 const escapeHtml = (value?: string | number | null) => {
-  if (value === null || value === undefined || value === "") return "—";
+  if (value === null || value === undefined || value === "") return EMPTY;
 
   return String(value)
     .replace(/&/g, "&amp;")
@@ -17,63 +20,57 @@ const escapeHtml = (value?: string | number | null) => {
 };
 
 const formatDateTime = (iso?: string | null) => {
-  if (!iso) return "—";
+  if (!iso) return EMPTY;
 
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return EMPTY;
 
-  return d.toLocaleString("pt-BR", {
+  return date.toLocaleString("pt-BR", {
     dateStyle: "short",
     timeStyle: "short",
   });
 };
 
 const formatDate = (iso?: string | null) => {
-  if (!iso) return "—";
+  if (!iso) return EMPTY;
 
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return EMPTY;
 
-  return d.toLocaleDateString("pt-BR");
+  return date.toLocaleDateString("pt-BR");
 };
 
 const getEmpresaNome = (os: OrdemServicoSupabase) =>
-  os.empresa?.nome_fantasia || os.empresa?.nome || os.solicitante_texto || "—";
+  os.empresa?.nome_fantasia || os.empresa?.nome || os.solicitante_texto || EMPTY;
 
 const getEnderecoEmpresa = (empresa?: EmpresaSupabase | null) => {
-  if (!empresa) return "—";
+  if (!empresa) return EMPTY;
 
   const linha1 = [empresa.rua, empresa.numero, empresa.complemento]
     .filter(Boolean)
     .join(", ");
-
   const linha2 = [empresa.bairro, empresa.cidade, empresa.estado]
     .filter(Boolean)
     .join(" - ");
-
   const cep = empresa.cep ? `CEP ${empresa.cep}` : "";
 
-  return [linha1, linha2, cep].filter(Boolean).join(" - ") || "—";
+  return [linha1, linha2, cep].filter(Boolean).join(" - ") || EMPTY;
 };
 
 const getTipoEquipamento = (os: OrdemServicoSupabase) =>
-  os.equipamento?.tipo_equipamento?.nome ||
-  os.equipamento?.tipo_texto ||
-  "—";
+  os.equipamento?.tipo_equipamento?.nome || os.equipamento?.tipo_texto || EMPTY;
 
 const getContato = (empresa?: EmpresaSupabase | null) =>
-  empresa?.contato || empresa?.celular || empresa?.telefone || "—";
+  empresa?.contato || empresa?.celular || empresa?.telefone || EMPTY;
 
 const getChecklistPreventiva = (os: OrdemServicoSupabase) => {
   const checklist = os.checklist_preventiva;
-
   if (Array.isArray(checklist)) return checklist[0] || null;
-
   return checklist || null;
 };
 
-const normalizarResposta = (resposta?: string | null) =>
-  (resposta || "")
+const normalizeAnswer = (answer?: string | null) =>
+  (answer || "")
     .toString()
     .trim()
     .toLowerCase()
@@ -82,109 +79,124 @@ const normalizarResposta = (resposta?: string | null) =>
     .replace(/\s+/g, "_")
     .replace(/-/g, "_");
 
-const formatResposta = (respostaRaw?: string | null) => {
-  const resposta = normalizarResposta(respostaRaw);
-
-  const map: Record<string, string> = {
+const formatAnswer = (answerRaw?: string | null) => {
+  const answer = normalizeAnswer(answerRaw);
+  const labels: Record<string, string> = {
     conforme: "Conforme",
-    nao_conforme: "Não Conforme",
+    nao_conforme: "Nao conforme",
     nao_aplica: "N/A",
     n_a: "N/A",
     na: "N/A",
     aprovado: "Aprovado para uso",
-    nao_aprovado: "Não aprovado para uso",
-    aprovado_com_restricao: "Aprovado com restrição",
+    nao_aprovado: "Nao aprovado para uso",
+    aprovado_com_restricao: "Aprovado com restricao",
   };
 
-  return map[resposta] || respostaRaw || "—";
+  return labels[answer] || answerRaw || EMPTY;
 };
 
-const getChecklistStatus = (respostaRaw?: string | null) => {
-  const resposta = normalizarResposta(respostaRaw);
+const getChecklistStatus = (answerRaw?: string | null) => {
+  const answer = normalizeAnswer(answerRaw);
 
-  if (resposta === "conforme" || resposta === "aprovado") {
+  if (answer === "conforme" || answer === "aprovado") {
     return {
-      statusClass: "status-success",
-      icon: "✓",
-      label: formatResposta(respostaRaw),
+      className: "status-ok",
+      symbol: formatAnswer(answerRaw),
+      label: formatAnswer(answerRaw),
     };
   }
 
-  if (resposta === "nao_conforme" || resposta === "nao_aprovado") {
+  if (answer === "nao_conforme" || answer === "nao_aprovado") {
     return {
-      statusClass: "status-danger",
-      icon: "✕",
-      label: formatResposta(respostaRaw),
+      className: "status-fail",
+      symbol: formatAnswer(answerRaw),
+      label: formatAnswer(answerRaw),
     };
   }
 
-  if (resposta === "aprovado_com_restricao") {
+  if (answer === "aprovado_com_restricao") {
     return {
-      statusClass: "status-warning",
-      icon: "!",
-      label: formatResposta(respostaRaw),
+      className: "status-alert",
+      symbol: formatAnswer(answerRaw),
+      label: formatAnswer(answerRaw),
     };
   }
 
   return {
-    statusClass: "status-muted",
-    icon: "—",
-    label: "N/A",
+    className: "status-na",
+    symbol: "N/A",
+    label: "Nao se aplica",
   };
 };
 
-const getResultadoBadge = (resultado?: string | null) => {
-  const normalized = normalizarResposta(resultado);
+const getResultadoLabel = (resultado?: string | null) => {
+  const normalized = normalizeAnswer(resultado);
 
-  if (normalized === "aprovado") {
-    return '<span class="badge badge-success">Aprovado para uso</span>';
-  }
-
-  if (normalized === "nao_aprovado") {
-    return '<span class="badge badge-danger">Não aprovado para uso</span>';
-  }
-
-  if (normalized === "aprovado_com_restricao") {
-    return '<span class="badge badge-warning">Aprovado com restrição</span>';
-  }
-
-  return '<span class="badge badge-muted">—</span>';
+  if (normalized === "aprovado") return "Aprovado para uso";
+  if (normalized === "nao_aprovado") return "Nao aprovado para uso";
+  if (normalized === "aprovado_com_restricao") return "Aprovado com restricao";
+  return EMPTY;
 };
 
-const buildAcessoriosHtml = (os: OrdemServicoSupabase) => {
+const getResultadoClass = (resultado?: string | null) => {
+  const normalized = normalizeAnswer(resultado);
+
+  if (normalized === "aprovado") return "result-ok";
+  if (normalized === "nao_aprovado") return "result-fail";
+  if (normalized === "aprovado_com_restricao") return "result-alert";
+  return "result-na";
+};
+
+const sectionTitle = (number: string, title: string) => `
+  <div class="section-title">
+    <strong>${number}- ${title}</strong>
+  </div>
+`;
+
+const field = (label: string, value?: string | number | null) => `
+  <div class="field">
+    <span>${label}</span>
+    <strong>${escapeHtml(value)}</strong>
+  </div>
+`;
+
+const serviceLine = (label: string, value?: string | null) => `
+  <div class="service-line">
+    <span>${label}</span>
+    <p>${escapeHtml(value)}</p>
+  </div>
+`;
+
+const buildAcessoriosHtml = (os: OrdemServicoSupabase, sectionNumber: string) => {
   const acessorios = os.acessorios || [];
 
-  if (!acessorios.length) {
-    return "";
-  }
+  if (!acessorios.length) return "";
 
   return `
-    <section class="section">
-      <div class="section-title">5 - Acessórios</div>
-
-      <div class="card">
-        <div class="accessory-list">
-      ${acessorios
-        .map((item) => {
-          const quantidade = Number(item.quantidade || 1);
-
-          return `
-            <div class="accessory-item">
-              <div>
-                <strong>${escapeHtml(item.descricao)}</strong>
-                ${
-                  item.observacoes
-                    ? `<p>${escapeHtml(item.observacoes)}</p>`
-                    : ""
-                }
-              </div>
-              <span>${quantidade}x</span>
-            </div>
-          `;
-        })
-        .join("")}
-        </div>
-      </div>
+    <section class="section compact-section">
+      ${sectionTitle(sectionNumber, "Acessorios")}
+      <table class="data-table simple-table">
+        <thead>
+          <tr>
+      <th>Descri&ccedil;&atilde;o</th>
+      <th>Quantidade</th>
+      <th>Observa&ccedil;&atilde;o</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${acessorios
+            .map(
+              (item) => `
+                <tr>
+                  <td>${escapeHtml(item.descricao)}</td>
+                  <td class="center">${escapeHtml(Number(item.quantidade || 1))}</td>
+                  <td>${escapeHtml(item.observacoes)}</td>
+                </tr>
+              `
+            )
+            .join("")}
+        </tbody>
+      </table>
     </section>
   `;
 };
@@ -200,75 +212,76 @@ const buildChecklistHtml = (os: OrdemServicoSupabase) => {
 
   const rows = itens.length
     ? itens
-        .map((item, index) => {
+        .map((item) => {
           const status = getChecklistStatus(item.resposta);
-          const observacao = item.observacao || "";
 
           return `
             <tr>
-              <td class="col-item">${index + 1}</td>
-              <td class="col-desc">${escapeHtml(item.descricao)}</td>
-              <td class="col-status ${status.statusClass}">
-                <span class="status-symbol">${status.icon}</span>
-                <span>${escapeHtml(status.label)}</span>
-              </td>
-              <td class="col-obs">${escapeHtml(observacao)}</td>
-            </tr>
-          `;
+              <td class="check-desc">${escapeHtml(item.descricao)}</td>
+      <td class="check-info">${escapeHtml(item.observacao)}</td>
+      <td class="check-result ${status.className}">
+        <span>${status.symbol}</span>
+      </td>
+    </tr>
+  `;
         })
         .join("")
-    : '<tr><td colspan="4" class="empty-state">Nenhum item informado.</td></tr>';
+    : '<tr><td colspan="3" class="empty-row">Nenhum item informado.</td></tr>';
 
   return `
-    <section class="section">
-      <div class="section-title">3.1 - Checklist técnico</div>
+    <section class="section checklist-section">
+      ${sectionTitle("3.1", "Checklists")}
 
-      <div class="card checklist-card">
-        <div class="checklist-header">
-          <div>
-            <div class="checklist-title">${escapeHtml(checklist.titulo_procedimento || "Checklist de preventiva")}</div>
-            <div class="checklist-subtitle">${escapeHtml(checklist.tipo_equipamento_nome || getTipoEquipamento(os))}</div>
-          </div>
+      <div class="checklist-meta">
+        <div>
+          <strong>${escapeHtml(checklist.titulo_procedimento || "Checklist tecnico")}</strong>
+          <span>${escapeHtml(checklist.tipo_equipamento_nome || getTipoEquipamento(os))}</span>
         </div>
-
-        <table class="check-table">
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th>Descrição</th>
-              <th>Resultado</th>
-              <th>Observação</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rows}
-          </tbody>
-        </table>
-
-        <div class="summary-line">
-          <div class="summary-cell summary-result">
-            <strong>Resultado Geral:</strong>
-            ${getResultadoBadge(checklist.resultado_geral)}
-          </div>
-          <div class="summary-cell">
-            <strong>Validade da Preventiva:</strong>
-            <span>${escapeHtml(formatDate(checklist.data_validade))}</span>
-          </div>
-          <div class="summary-cell">
-            <strong>Validade:</strong>
-            <span>${escapeHtml(checklist.validade_meses || 12)} meses</span>
-          </div>
+        <div class="legend">
+          <span>Conforme</span>
+          <span>Nao conforme</span>
+          <span>N/A</span>
         </div>
-
-        ${
-          checklist.observacoes
-            ? `<div class="checklist-observation">
-                <span>Observações do checklist</span>
-                <p>${escapeHtml(checklist.observacoes)}</p>
-              </div>`
-            : ""
-        }
       </div>
+
+      <table class="data-table check-table">
+        <thead>
+          <tr>
+            <th>Descri&ccedil;&atilde;o</th>
+            <th>Informa&ccedil;&atilde;o</th>
+            <th>Avalia&ccedil;&atilde;o</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+
+      <div class="check-summary">
+        <div>
+          <span>Resultado geral</span>
+          <strong class="${getResultadoClass(checklist.resultado_geral)}">
+            ${escapeHtml(getResultadoLabel(checklist.resultado_geral))}
+          </strong>
+        </div>
+        <div>
+          <span>Validade da preventiva</span>
+          <strong>${escapeHtml(formatDate(checklist.data_validade))}</strong>
+        </div>
+        <div>
+          <span>Validade</span>
+          <strong>${escapeHtml(checklist.validade_meses || 12)} meses</strong>
+        </div>
+      </div>
+
+      ${
+        checklist.observacoes
+          ? `
+            <div class="checklist-note">
+              <span>Observa&ccedil;&otilde;es do checklist</span>
+              <p>${escapeHtml(checklist.observacoes)}</p>
+            </div>
+          `
+          : ""
+      }
     </section>
   `;
 };
@@ -296,636 +309,571 @@ export const buildOrdemServicoHtml = (
     observacoes
   );
   const exibirObservacoes = Boolean(observacoes && !observacaoSomentePlanoECiclo);
+  const assinaturaTecnica = assinaturas.tecnico || assinaturas.responsavel;
+  const observacoesSectionNumber = checklistHtml ? "4" : "4";
+  const acessoriosSectionNumber = exibirObservacoes ? "5" : "4";
 
   return `
 <!doctype html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
-  <title>Ordem de Serviço ${escapeHtml(os.numero)}</title>
-
+  <title>Ordem de Servico ${escapeHtml(os.numero)}</title>
   <style>
+    ${PDF_DOCUMENT_BASE_CSS}
+
     @page {
       size: A4;
-      margin: 14mm;
+      margin: 10mm;
     }
 
     :root {
-      --primary: #C5161D;
-      --text: #111827;
-      --muted: #6B7280;
-      --section-bg: #F9FAFB;
-      --card-bg: #FFFFFF;
-      --border: #E5E7EB;
-      --success: #16A34A;
-      --danger: #DC2626;
-      --warning: #D97706;
+      --brand: #d71920;
+      --ink: #2f3337;
+      --value: #3f454b;
+      --muted: #5f666d;
+      --quiet: #7a828a;
+      --line: #cfd4da;
+      --light-line: #d7dce1;
+      --soft: #f3f5f7;
+      --soft-2: #fafbfc;
+      --ok: #177245;
+      --ok-soft: #edf8f1;
+      --fail: #b42318;
+      --fail-soft: #fff1f0;
+      --alert: #9a5b00;
+      --alert-soft: #fff7e8;
     }
 
     * {
       box-sizing: border-box;
     }
 
+    html,
     body {
       margin: 0;
-      font-family: Arial, Helvetica, sans-serif;
-      color: var(--text);
       background: #fff;
-      font-size: 7.9pt;
-      line-height: 1.28;
+      color: var(--ink);
+      font-family: Inter, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 10.8px;
+      line-height: 1.22;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-      text-rendering: optimizeLegibility;
+      text-rendering: geometricPrecision;
     }
 
     .document {
       width: 1123px;
       min-height: 1588px;
-      padding: 42px 42px 28px;
+      padding: 38px 56px 34px;
       background: #fff;
     }
 
-    .header {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 24px;
-      border-top: 6px solid var(--primary);
-      padding-top: 14px;
-      margin-bottom: 14px;
+    .os-header {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      gap: 22px;
+      align-items: start;
+      padding-bottom: 11px;
+      border-bottom: 1px solid var(--line);
     }
 
     .logo {
       width: 190px;
-      height: auto;
+      max-height: 58px;
       display: block;
+      object-fit: contain;
     }
 
-    .header-info {
+    .header-title {
       text-align: right;
     }
 
-    .header-info h1 {
-      margin: 0 0 8px;
-      font-size: 14.4pt;
-      line-height: 1.1;
-      font-weight: 700;
-      color: var(--text);
+    .header-title h1 {
+      margin: 0 0 5px;
+      color: var(--ink);
+      font-size: 19px;
+      line-height: 1.05;
+      font-weight: 750;
+      letter-spacing: -0.2px;
     }
 
-    .header-info .meta {
+    .header-title p {
+      margin: 0;
       color: var(--muted);
-      font-size: 7.4pt;
-      font-weight: 600;
-      line-height: 1.45;
+      font-size: 10.5px;
+      line-height: 1.25;
     }
 
     .section {
-      margin-top: 10px;
+      margin-top: 11px;
       break-inside: avoid;
       page-break-inside: avoid;
+    }
+
+    .compact-section {
+      margin-top: 9px;
     }
 
     .section-title {
-      margin: 0 0 6px;
+      margin-bottom: 7px;
       padding-bottom: 4px;
-      border-bottom: 1px solid var(--border);
-      font-size: 9.9pt;
-      font-weight: 700;
-      color: var(--text);
-      letter-spacing: 0;
-      line-height: 1.2;
+      border-bottom: 1px solid var(--light-line);
     }
 
-    .card {
-      background: #ffffff;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 8px 10px;
-      break-inside: avoid;
-      page-break-inside: avoid;
+    .section-title strong {
+      display: block;
+      color: var(--ink);
+      font-size: 14px;
+      line-height: 1;
+      font-weight: 750;
+      letter-spacing: -0.1px;
     }
 
-    .grid-2 {
+    .info-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 7px 16px;
+      gap: 4px 18px;
+      padding-left: 8px;
     }
 
-    .grid-3 {
+    .equipment-grid {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
-      gap: 7px 14px;
+      gap: 4px 16px;
+      padding-left: 8px;
     }
 
     .field {
-      min-width: 0;
-      break-inside: avoid;
-      page-break-inside: avoid;
-    }
-
-    .field-label {
-      display: block;
-      margin-bottom: 1px;
-      color: var(--muted);
-      font-size: 6.5pt;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.02em;
-    }
-
-    .field-value {
-      color: var(--text);
-      font-size: 7.9pt;
-      font-weight: 600;
-      word-break: break-word;
-    }
-
-    .service-description {
-      color: var(--text);
-      font-size: 7.9pt;
-      font-weight: 400;
-      word-break: break-word;
-    }
-
-    .service-description,
-    .observations {
-      white-space: pre-wrap;
-    }
-
-    .observations {
-      min-height: 34px;
-    }
-
-    .observations-empty {
-      min-height: 30px;
-      padding: 8px 10px;
-    }
-
-    .checklist-header {
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 8px;
+      gap: 5px;
+      align-items: baseline;
+      min-width: 0;
     }
 
-    .checklist-title {
-      font-size: 9pt;
-      font-weight: 700;
-      color: var(--text);
-    }
-
-    .checklist-subtitle {
-      margin-top: 1px;
-      font-size: 7.2pt;
-      font-weight: 600;
-      color: var(--muted);
-    }
-
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 999px;
-      padding: 3px 8px;
-      font-size: 6.8pt;
+    .field span,
+    .service-line span {
+      color: var(--ink);
       font-weight: 700;
       white-space: nowrap;
-      line-height: 1.2;
     }
 
-    .badge-success {
-      background: rgba(22, 163, 74, 0.12);
-      color: var(--success);
+    .field strong {
+      color: var(--value);
+      font-weight: 500;
+      overflow-wrap: anywhere;
     }
 
-    .badge-danger {
-      background: rgba(220, 38, 38, 0.12);
-      color: var(--danger);
+    .equipment-grid .field:nth-child(8) strong {
+      display: inline-block;
+      width: fit-content;
+      padding: 1px 7px;
+      border-radius: 999px;
+      background: #f0f2f4;
+      color: #3f454b;
+      font-size: 9.8px;
+      font-weight: 650;
     }
 
-    .badge-warning {
-      background: rgba(217, 119, 6, 0.13);
-      color: var(--warning);
+    .service-box {
+      display: grid;
+      gap: 4px;
+      padding: 6px 8px;
+      border: 1px solid var(--light-line);
+      border-radius: 5px;
+      background: var(--soft-2);
     }
 
-    .badge-muted {
-      background: #EEF2F7;
-      color: var(--muted);
+    .service-line {
+      display: flex;
+      gap: 7px;
+      align-items: start;
     }
 
-    .checklist-card {
+    .service-line p {
+      margin: 0;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      color: var(--value);
+    }
+
+    .checklist-section {
       break-inside: auto;
       page-break-inside: auto;
     }
 
-    .check-table {
-      width: 100%;
-      border-collapse: collapse;
-      background: #ffffff;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      overflow: hidden;
-      font-size: 7.4pt;
-      page-break-inside: auto;
-    }
-
-    .check-table thead {
-      display: table-header-group;
-    }
-
-    .check-table tr {
-      page-break-inside: avoid;
-      break-inside: avoid;
-    }
-
-    .check-table th {
-      background: #F3F4F6;
-      color: var(--text);
-      font-size: 6.7pt;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.02em;
-      padding: 5px 6px;
-      border-bottom: 1px solid var(--border);
-      text-align: left;
-    }
-
-    .check-table td {
-      padding: 5px 6px;
-      border-bottom: 1px solid var(--border);
-      vertical-align: middle;
-      color: var(--text);
-      font-weight: 500;
-    }
-
-    .check-table tbody tr:last-child td {
-      border-bottom: 0;
-    }
-
-    .col-item {
-      width: 32px;
-      text-align: center;
-      color: var(--muted);
-      font-weight: 700;
-    }
-
-    .col-desc {
-      width: auto;
-    }
-
-    .col-status {
-      width: 150px;
-      white-space: nowrap;
-      font-weight: 700;
-    }
-
-    .col-obs {
-      width: 170px;
-      color: var(--muted);
-      font-weight: 500;
-    }
-
-    .status-symbol {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 14px;
-      margin-right: 5px;
-      font-weight: 700;
-    }
-
-    .status-success {
-      color: var(--success);
-    }
-
-    .status-danger {
-      color: var(--danger);
-    }
-
-    .status-warning {
-      color: var(--warning);
-    }
-
-    .status-muted {
-      color: var(--muted);
-    }
-
-    .summary-line {
+    .checklist-meta {
+      width: 92%;
+      margin: 0 auto 5px;
       display: grid;
-      grid-template-columns: 1.2fr 1fr 0.7fr;
-      gap: 10px;
-      margin-top: 8px;
-      padding-top: 8px;
-      border-top: 1px solid var(--border);
-      font-size: 7.4pt;
-      color: var(--text);
-      align-items: center;
+      grid-template-columns: 1fr auto;
+      align-items: end;
+      gap: 12px;
     }
 
-    .summary-cell {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      min-width: 0;
+    .checklist-meta strong {
+      display: block;
+      font-size: 11.5px;
+      font-weight: 750;
     }
 
-    .summary-cell strong {
-      font-weight: 700;
-      white-space: nowrap;
-    }
-
-    .summary-cell span {
+    .checklist-meta span {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 9.5px;
       font-weight: 600;
     }
 
-    .summary-result {
-      justify-content: flex-start;
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 9px;
+      font-weight: 650;
     }
 
-    .summary-result .badge {
-      margin-left: 2px;
+    .legend span {
+      margin: 0;
+      color: var(--muted);
+      white-space: nowrap;
     }
 
-    .checklist-observation {
-      background: #fff;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 8px 10px;
-      margin-top: 12px;
+    .check-table,
+    .simple-table {
+      width: 92%;
+      margin: 0 auto;
+      border-collapse: collapse;
+      border: 1px solid var(--line);
+      font-size: 10.2px;
+      page-break-inside: auto;
     }
 
-    .checklist-observation span {
+    .check-table thead,
+    .simple-table thead {
+      display: table-header-group;
+    }
+
+    .check-table tr,
+    .simple-table tr {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    .check-table th,
+    .simple-table th {
+      padding: 4px 6px;
+      border: 1px solid var(--line);
+      background: var(--soft);
+      color: var(--ink);
+      font-size: 9px;
+      font-weight: 750;
+      text-align: center;
+      text-transform: uppercase;
+    }
+
+    .check-table th:first-child,
+    .simple-table th:first-child {
+      text-align: left;
+    }
+
+    .check-table td,
+    .simple-table td {
+      padding: 3px 6px;
+      border: 1px solid var(--light-line);
+      vertical-align: middle;
+      color: var(--value);
+    }
+
+    .check-table tbody tr:nth-child(even) td,
+    .simple-table tbody tr:nth-child(even) td {
+      background: #fbfcfd;
+    }
+
+    .check-desc {
+      width: 48%;
+      font-weight: 650;
+    }
+
+    .check-info {
+      width: 32%;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .check-result {
+      width: 20%;
+      text-align: center;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .check-result span {
+      display: inline-block;
+      min-width: 0;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 9.2px;
+      line-height: 1.05;
+      font-weight: 700;
+    }
+
+    .status-ok {
+      color: var(--ok);
+    }
+
+    .status-ok span {
+      background: var(--ok-soft);
+    }
+
+    .result-ok {
+      color: var(--ok);
+    }
+
+    .status-fail {
+      color: var(--fail);
+    }
+
+    .status-fail span {
+      background: var(--fail-soft);
+    }
+
+    .result-fail {
+      color: var(--fail);
+    }
+
+    .status-alert {
+      color: var(--alert);
+    }
+
+    .status-alert span {
+      background: var(--alert-soft);
+    }
+
+    .result-alert {
+      color: var(--alert);
+    }
+
+    .status-na {
+      color: var(--muted);
+    }
+
+    .status-na span {
+      background: #f0f2f4;
+    }
+
+    .result-na {
+      color: var(--muted);
+    }
+
+    .check-summary {
+      width: 92%;
+      margin: 5px auto 0;
+      display: grid;
+      grid-template-columns: 1fr 1fr 0.8fr;
+      border: 1px solid var(--light-line);
+      background: var(--soft-2);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .check-summary div {
+      padding: 4px 7px;
+      border-right: 1px solid var(--light-line);
+    }
+
+    .check-summary div:last-child {
+      border-right: 0;
+    }
+
+    .check-summary span {
+      display: block;
+      color: var(--muted);
+      font-size: 7.5px;
+      font-weight: 750;
+      text-transform: uppercase;
+    }
+
+    .check-summary strong {
+      display: block;
+      margin-top: 2px;
+      font-size: 10.5px;
+      font-weight: 750;
+    }
+
+    .checklist-note,
+    .observations {
+      width: 92%;
+      margin: 5px auto 0;
+      padding: 5px 8px;
+      border: 1px solid var(--light-line);
+      background: var(--soft-2);
+      border-radius: 5px;
+    }
+
+    .checklist-note span {
       display: block;
       margin-bottom: 3px;
       color: var(--muted);
-      font-size: 6.7pt;
-      font-weight: 700;
+      font-size: 7.5px;
+      font-weight: 750;
       text-transform: uppercase;
-      letter-spacing: 0.02em;
     }
 
-    .checklist-observation p {
+    .checklist-note p,
+    .observations p {
       margin: 0;
-      color: var(--text);
-      font-size: 9pt;
-      font-weight: 500;
       white-space: pre-wrap;
+      word-break: break-word;
     }
 
-    .accessory-list {
-      display: grid;
-      gap: 8px;
+    .simple-table .center {
+      text-align: center;
     }
 
-    .accessory-item {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 12px;
-      align-items: start;
-      padding: 10px;
-      border-radius: 6px;
-      background: #fff;
-      border: 1px solid var(--border);
-    }
-
-    .accessory-item strong {
-      display: block;
-      font-size: 8pt;
-      color: var(--text);
-    }
-
-    .accessory-item p {
-      margin: 2px 0 0;
+    .empty-row {
+      text-align: center;
       color: var(--muted);
-      font-size: 8.1pt;
-    }
-
-    .accessory-item span,
-    .accessory-empty,
-    .empty-state {
-      color: var(--muted);
-      font-size: 8.6pt;
       font-weight: 700;
     }
 
     .signatures {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      column-gap: 26px;
-      margin-top: 26px;
+      grid-template-columns: 1fr 1fr 150px;
+      gap: 24px;
       align-items: start;
+      margin-top: 16px;
       break-inside: avoid;
       page-break-inside: avoid;
     }
 
     .signature-block {
-      min-height: 92px;
-      display: flex;
-      flex-direction: column;
-      justify-content: flex-start;
+      min-height: 58px;
       text-align: center;
-      color: var(--muted);
-      font-size: 7.2pt;
-      font-weight: 600;
+      font-size: 9.8px;
+      color: var(--ink);
     }
 
     .signature-image {
-      height: 48px;
+      width: 100%;
+      height: 34px;
       display: flex;
       align-items: flex-end;
       justify-content: center;
-      margin-bottom: 2px;
+      margin-bottom: 4px;
     }
 
     .signature-image img {
-      display: block;
       max-width: 92%;
-      max-height: 46px;
+      max-height: 34px;
       object-fit: contain;
+      display: block;
     }
 
     .signature-line {
-      width: 100%;
-      border-top: 1px dashed #9CA3AF;
-      height: 1px;
-      margin: 0 0 7px;
+      border-top: 1px solid #7c838a;
+      margin-bottom: 4px;
     }
 
     .signature-label {
-      line-height: 1.25;
+      font-weight: 600;
+      color: #4d545b;
     }
 
     .signature-name {
       display: block;
-      margin-top: 2px;
-      color: var(--text);
+      margin-top: 1px;
       font-weight: 700;
-      line-height: 1.25;
+      color: var(--ink);
     }
 
-    .footer {
-      margin-top: 22px;
-      padding-top: 8px;
-      padding-bottom: 10px;
-      border-top: 1px solid var(--border);
-      color: #9CA3AF;
-      font-size: 7.2pt;
-      line-height: 1.35;
+    .date-block {
+      min-height: 58px;
       text-align: center;
-      break-inside: avoid;
-      page-break-inside: avoid;
+      font-size: 9.8px;
+      color: var(--ink);
     }
+
+    .date-line {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      height: 1px;
+      font-size: 10px;
+      white-space: nowrap;
+    }
+
+    .date-line span {
+      display: inline-block;
+      min-width: 42px;
+      height: 0;
+      border-bottom: 1px solid #7c838a;
+    }
+
   </style>
 </head>
 
 <body>
   <main class="document">
-    <header class="header">
-      <div>
-        <img class="logo" src="${logoSrc}" alt="ACI Equipamentos Hospitalares" />
-      </div>
+    <header class="document-header os-header">
+      <img class="logo" src="${logoSrc}" alt="ACI Equipamentos Hospitalares" />
 
-      <div class="header-info">
-        <h1>Ordem de Serviço Nº ${escapeHtml(os.numero)}</h1>
-        <div class="meta">
-          <div>Data de Abertura: ${escapeHtml(formatDateTime(os.data_abertura || os.created_at))}</div>
-          ${
-            os.data_fechamento
-              ? `<div>Data de Fechamento: ${escapeHtml(formatDateTime(os.data_fechamento))}</div>`
-              : ""
-          }
-        </div>
+      <div class="document-title header-title">
+        <h1>Ordem de Servi&ccedil;o N&ordm; ${escapeHtml(os.numero)}</h1>
+        <p class="document-meta">Data de Abertura: ${escapeHtml(formatDateTime(os.data_abertura || os.created_at))}</p>
+        ${
+          os.data_fechamento
+            ? `<p class="document-meta">Data de Fechamento: ${escapeHtml(formatDateTime(os.data_fechamento))}</p>`
+            : ""
+        }
       </div>
     </header>
 
     <section class="section">
-      <div class="section-title">1 - Dados do Solicitante</div>
-
-      <div class="card grid-2">
-        <div class="field">
-          <span class="field-label">Nome</span>
-          <div class="field-value">${escapeHtml(getEmpresaNome(os))}</div>
-        </div>
-
-        <div class="field">
-          <span class="field-label">Contato</span>
-          <div class="field-value">${escapeHtml(getContato(os.empresa))}</div>
-        </div>
-
-        <div class="field">
-          <span class="field-label">Endereço</span>
-          <div class="field-value">${escapeHtml(getEnderecoEmpresa(os.empresa))}</div>
-        </div>
-
-        <div class="field">
-          <span class="field-label">CPF/CNPJ</span>
-          <div class="field-value">${escapeHtml(os.empresa?.cpf_cnpj)}</div>
-        </div>
-
-        <div class="field">
-          <span class="field-label">E-mail</span>
-          <div class="field-value">${escapeHtml(os.empresa?.email)}</div>
-        </div>
-
-        <div class="field">
-          <span class="field-label">Nome Fantasia</span>
-          <div class="field-value">${escapeHtml(os.empresa?.nome_fantasia)}</div>
-        </div>
+      ${sectionTitle("1", "Dados do Solicitante")}
+      <div class="info-grid info-grid-2 client-identification">
+        ${field("Nome:", getEmpresaNome(os))}
+        ${field("Contato:", getContato(os.empresa))}
+        ${field("Endere&ccedil;o:", getEnderecoEmpresa(os.empresa))}
+        ${field("CPF/CNPJ:", os.empresa?.cpf_cnpj)}
+        ${field("E-mail:", os.empresa?.email)}
+        ${field("Fantasia:", os.empresa?.nome_fantasia)}
       </div>
     </section>
 
     <section class="section">
-      <div class="section-title">2 - Instrumento / Equipamento</div>
-
-      <div class="card grid-3">
-        <div class="field">
-          <span class="field-label">Tipo</span>
-          <div class="field-value">${escapeHtml(getTipoEquipamento(os))}</div>
-        </div>
-
-        <div class="field">
-          <span class="field-label">Modelo</span>
-          <div class="field-value">${escapeHtml(os.equipamento?.modelo)}</div>
-        </div>
-
-        <div class="field">
-          <span class="field-label">Fabricante</span>
-          <div class="field-value">${escapeHtml(os.equipamento?.fabricante)}</div>
-        </div>
-
-        <div class="field">
-          <span class="field-label">Número de Série</span>
-          <div class="field-value">${escapeHtml(os.equipamento?.numero_serie)}</div>
-        </div>
-
-        <div class="field">
-          <span class="field-label">Patrimônio</span>
-          <div class="field-value">${escapeHtml(os.equipamento?.patrimonio)}</div>
-        </div>
-
-        <div class="field">
-          <span class="field-label">TAG</span>
-          <div class="field-value">${escapeHtml(os.equipamento?.tag)}</div>
-        </div>
-
-        <div class="field">
-          <span class="field-label">Setor</span>
-          <div class="field-value">${escapeHtml(os.equipamento?.setor)}</div>
-        </div>
-
-        <div class="field">
-          <span class="field-label">Status</span>
-          <div class="field-value">${escapeHtml(os.equipamento?.status)}</div>
-        </div>
+      ${sectionTitle("2", "Instrumento/Equipamento")}
+      <div class="info-grid info-grid-3 equipment-grid">
+        ${field("Tipo:", getTipoEquipamento(os))}
+        ${field("Modelo:", os.equipamento?.modelo)}
+        ${field("Fabricante:", os.equipamento?.fabricante)}
+        ${field("N. S&eacute;rie:", os.equipamento?.numero_serie)}
+        ${field("Patrim&ocirc;nio:", os.equipamento?.patrimonio)}
+        ${field("TAG:", os.equipamento?.tag)}
+        ${field("Setor:", os.equipamento?.setor)}
+        ${field("Status:", os.equipamento?.status)}
       </div>
     </section>
 
     <section class="section">
-      <div class="section-title">3 - Serviço Prestado</div>
-
-      <div class="card">
+      ${sectionTitle("3", "Servi&ccedil;o Prestado")}
+      <div class="service-box">
         ${
           preventiva
-            ? `
-              <div class="field">
-                <span class="field-label">Descrição do Serviço</span>
-                <div class="service-description">${escapeHtml(
-                  os.descricao_servico ||
-                    "Manutenção preventiva realizada conforme checklist técnico."
-                )}</div>
-              </div>
-            `
+            ? serviceLine(
+                "Descri&ccedil;&atilde;o do Servi&ccedil;o:",
+                os.descricao_servico ||
+                  "Manutencao preventiva realizada conforme checklist tecnico."
+              )
             : `
-              <div class="grid-2">
-                <div class="field">
-                  <span class="field-label">Tipo de Serviço</span>
-                  <div class="field-value">${escapeHtml(os.tipo_os?.nome)}</div>
-                </div>
-
-                <div class="field">
-                  <span class="field-label">Responsável Técnico</span>
-                  <div class="field-value">${escapeHtml(os.responsavel_texto)}</div>
-                </div>
-
-                <div class="field">
-                  <span class="field-label">Problema Relatado</span>
-                  <div class="field-value">${escapeHtml(os.problema_relatado)}</div>
-                </div>
-
-                <div class="field">
-                  <span class="field-label">Origem do Problema</span>
-                  <div class="field-value">${escapeHtml(os.origem_problema)}</div>
-                </div>
-              </div>
-
-              <div class="field" style="margin-top: 12px;">
-                <span class="field-label">Descrição do Serviço</span>
-                <div class="service-description">${escapeHtml(os.descricao_servico)}</div>
-              </div>
+              ${serviceLine("Tipo de Servi&ccedil;o:", os.tipo_os?.nome)}
+              ${serviceLine("Descri&ccedil;&atilde;o do Servi&ccedil;o:", os.descricao_servico)}
+              ${serviceLine("Origem do Problema:", os.origem_problema)}
+              ${serviceLine("Problema Reclamado:", os.problema_relatado)}
+              ${serviceLine("T&eacute;cnico Executor:", os.responsavel_texto)}
             `
         }
       </div>
@@ -933,19 +881,23 @@ export const buildOrdemServicoHtml = (
 
     ${checklistHtml}
 
-    ${exibirObservacoes ? `
-      <section class="section">
-        <div class="section-title">4 - Observações</div>
-        <div class="card observations">${escapeHtml(observacoes)}</div>
-      </section>
-    ` : ""}
+    ${
+      exibirObservacoes
+        ? `
+          <section class="section compact-section">
+            ${sectionTitle(observacoesSectionNumber, "Observa&ccedil;&otilde;es")}
+            <div class="observations"><p>${escapeHtml(observacoes)}</p></div>
+          </section>
+        `
+        : ""
+    }
 
-    ${buildAcessoriosHtml(os)}
+    ${buildAcessoriosHtml(os, acessoriosSectionNumber)}
 
-    <section class="signatures">
+    <section class="signature-area signatures">
       <div class="signature-block">
         <div class="signature-image">
-          ${assinaturas.solicitante?.dataUrl ? `<img src="${assinaturas.solicitante.dataUrl}" alt="Assinatura do cliente">` : ""}
+          ${assinaturas.solicitante?.dataUrl ? `<img src="${assinaturas.solicitante.dataUrl}" alt="Assinatura do cliente" />` : ""}
         </div>
         <div class="signature-line"></div>
         <div class="signature-label">
@@ -956,24 +908,26 @@ export const buildOrdemServicoHtml = (
 
       <div class="signature-block">
         <div class="signature-image">
-          ${(assinaturas.tecnico || assinaturas.responsavel)?.dataUrl ? `<img src="${(assinaturas.tecnico || assinaturas.responsavel)?.dataUrl}" alt="Assinatura do responsavel tecnico">` : ""}
+          ${assinaturaTecnica?.dataUrl ? `<img src="${assinaturaTecnica.dataUrl}" alt="Assinatura do tecnico executor" />` : ""}
         </div>
         <div class="signature-line"></div>
         <div class="signature-label">
-          Responsável Técnico
+          T&eacute;cnico Executor
           ${
-            (assinaturas.tecnico || assinaturas.responsavel)?.nome || os.responsavel_texto
-              ? `<span class="signature-name">${escapeHtml((assinaturas.tecnico || assinaturas.responsavel)?.nome || os.responsavel_texto)}</span>`
+            assinaturaTecnica?.nome || os.responsavel_texto
+              ? `<span class="signature-name">${escapeHtml(assinaturaTecnica?.nome || os.responsavel_texto)}</span>`
               : ""
           }
         </div>
       </div>
 
+      <div class="date-block">
+        <div class="signature-image"></div>
+        <div class="date-line">
+          <span></span>de<span></span>de<span></span>
+        </div>
+      </div>
     </section>
-
-    <footer class="footer">
-      ${escapeHtml(FOOTER_TEXT)}
-    </footer>
   </main>
 </body>
 </html>

@@ -18,6 +18,7 @@ import ContratoDocumentosDialog from "@/components/ContratoDocumentosDialog";
 import ContratoFormDialog, {
   ContratoDialogMode,
 } from "@/components/ContratoFormDialog";
+import ListPagination from "@/components/ListPagination";
 import ListLimitSelect, {
   DEFAULT_LIST_LIMIT,
 } from "@/components/ListLimitSelect";
@@ -40,17 +41,22 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useContratos, useDesativarContrato } from "@/hooks/useContratos";
+import { usePaginatedList } from "@/hooks/usePaginatedList";
 import { toast } from "@/hooks/use-toast";
 import {
   ContratoStatusVencimento,
   ContratoSupabase,
   ContratoTipo,
+  CONTRATO_VENDEDORES,
   calcularDiasParaVencer,
+  calcularProximoMesFaturamentoContrato,
+  formatarMesContrato,
   getDiasContratoTexto,
   getEmpresaContratoNome,
   getStatusVencimentoContrato,
   getTermosAditivosRestantes,
   getTermosAditivosTexto,
+  isFaturamentoPrevistoNoMes,
 } from "@/services/contratosService";
 
 const ALL = "__all__";
@@ -68,6 +74,9 @@ type SortKey =
   | "restantes"
   | "visita"
   | "vendedor"
+  | "valor"
+  | "ultima_visita"
+  | "faturamento"
   | "documentos";
 
 type SortDirection = "asc" | "desc";
@@ -77,6 +86,22 @@ const formatDate = (value?: string | null) => {
   const date = new Date(`${value}T00:00:00`);
   if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleDateString("pt-BR");
+};
+
+const formatCurrency = (value?: number | null) =>
+  value === null || value === undefined
+    ? "-"
+    : new Intl.NumberFormat("pt-BR", {
+        style: "currency",
+        currency: "BRL",
+      }).format(Number(value || 0));
+
+const getFaturamentoTexto = (contrato: ContratoSupabase) => {
+  const proximoMes = calcularProximoMesFaturamentoContrato(contrato);
+
+  if (!proximoMes) return "-";
+  if (isFaturamentoPrevistoNoMes(contrato)) return "Previsto este mes";
+  return `Proximo: ${formatarMesContrato(`${proximoMes}-01`)}`;
 };
 
 const statusLabel: Record<ContratoStatusVencimento, string> = {
@@ -139,6 +164,12 @@ const getSortValue = (contrato: ContratoSupabase, key: SortKey) => {
       return contrato.periodicidade_visita || "";
     case "vendedor":
       return contrato.vendedor || "";
+    case "valor":
+      return contrato.valor_previsto || 0;
+    case "ultima_visita":
+      return contrato.mes_ultima_visita || "";
+    case "faturamento":
+      return isFaturamentoPrevistoNoMes(contrato) ? 0 : 1;
     case "documentos":
       return contrato.documentos?.length || 0;
     default:
@@ -204,13 +235,7 @@ const Contratos = () => {
     useContratos();
   const desativarContrato = useDesativarContrato();
 
-  const vendedores = useMemo(
-    () =>
-      Array.from(
-        new Set(contratos.map((contrato) => contrato.vendedor).filter(Boolean))
-      ).sort((a, b) => String(a).localeCompare(String(b), "pt-BR")) as string[],
-    [contratos]
-  );
+  const vendedores = CONTRATO_VENDEDORES;
 
   const periodicidades = useMemo(
     () =>
@@ -337,14 +362,20 @@ const Contratos = () => {
           "atencao"
       ).length,
       total: contratos.length,
+      faturamentoPrevisto: contratos
+        .filter((contrato) => isFaturamentoPrevistoNoMes(contrato))
+        .reduce(
+          (total, contrato) => total + Number(contrato.valor_previsto || 0),
+          0
+        ),
     }),
     [contratos]
   );
 
-  const visibleContratos = useMemo(
-    () => filtered.slice(0, listLimit),
-    [filtered, listLimit]
-  );
+  const {
+    paginatedItems: visibleContratos,
+    ...contratosPagination
+  } = usePaginatedList(filtered, listLimit);
 
   const activeFiltersCount = useMemo(() => {
     let count = 0;
@@ -487,7 +518,7 @@ const Contratos = () => {
         contrato={selected}
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-5">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-5">
         <div className="rounded-lg border bg-card p-4">
           <p className="text-xs text-muted-foreground">Vencidos</p>
           <p className="text-2xl font-semibold text-red-700">
@@ -509,6 +540,12 @@ const Contratos = () => {
         <div className="rounded-lg border bg-card p-4">
           <p className="text-xs text-muted-foreground">Total ativos</p>
           <p className="text-2xl font-semibold">{counters.total}</p>
+        </div>
+        <div className="rounded-lg border bg-card p-4">
+          <p className="text-xs text-muted-foreground">Previsto este mes</p>
+          <p className="text-2xl font-semibold text-green-700">
+            {formatCurrency(counters.faturamentoPrevisto)}
+          </p>
         </div>
       </div>
 
@@ -733,6 +770,9 @@ const Contratos = () => {
                     ["Restantes", "restantes"],
                     ["Visita", "visita"],
                     ["Vendedor", "vendedor"],
+                    ["Valor", "valor"],
+                    ["Ultima visita", "ultima_visita"],
+                    ["Faturamento", "faturamento"],
                     ["Documentos", "documentos"],
                   ].map(([label, key]) => (
                     <th
@@ -812,6 +852,24 @@ const Contratos = () => {
                       <td className="px-4 py-3 text-muted-foreground">
                         {contrato.vendedor || "-"}
                       </td>
+                      <td className="px-4 py-3 font-medium">
+                        {formatCurrency(contrato.valor_previsto)}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {formatarMesContrato(contrato.mes_ultima_visita)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge
+                          variant="outline"
+                          className={
+                            isFaturamentoPrevistoNoMes(contrato)
+                              ? "bg-green-50 text-green-700 border-green-200"
+                              : "bg-muted text-muted-foreground"
+                          }
+                        >
+                          {getFaturamentoTexto(contrato)}
+                        </Badge>
+                      </td>
                       <td className="px-4 py-3">
                         <button
                           type="button"
@@ -878,6 +936,10 @@ const Contratos = () => {
                 )}
               </tbody>
             </table>
+            <ListPagination
+              {...contratosPagination}
+              onPageChange={contratosPagination.setPage}
+            />
           </div>
         )}
       </div>

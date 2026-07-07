@@ -49,6 +49,11 @@ export type RelatorioVisitaExternaDados = {
   equipamentos: EquipamentoSupabase[];
 };
 
+export type RelatorioEquipamentoOpcao = Pick<
+  EquipamentoSupabase,
+  "id" | "empresa_id" | "tipo_texto" | "setor" | "status" | "ativo" | "tipo_equipamento"
+>;
+
 export type RelatorioControlePatrimonialInput = {
   titulo: string;
   filtros: RelatorioControlePatrimonialFiltros;
@@ -125,6 +130,25 @@ const selectEquipamentosRelatorio = `
     nome
   )
 `;
+
+const selectEquipamentosOpcoes = `
+  id,
+  empresa_id,
+  tipo_texto,
+  setor,
+  status,
+  ativo,
+  empresa:empresas!inner (
+    id,
+    ativo
+  ),
+  tipo_equipamento:tipos_equipamento (
+    id,
+    nome
+  )
+`;
+
+const EQUIPAMENTOS_RELATORIO_PAGE_SIZE = 1000;
 
 export const FILTROS_CONTROLE_PATRIMONIAL_PADRAO: RelatorioControlePatrimonialFiltros =
   {
@@ -208,6 +232,62 @@ const assertInput = (
   }
 };
 
+const carregarEquipamentosRelatorio = async (
+  empresaIds: string[] = []
+): Promise<EquipamentoSupabase[]> => {
+  const equipamentos: EquipamentoSupabase[] = [];
+
+  for (let from = 0; ; from += EQUIPAMENTOS_RELATORIO_PAGE_SIZE) {
+    let query = supabase
+      .from("equipamentos")
+      .select(selectEquipamentosRelatorio)
+      .eq("empresa.ativo", true)
+      .order("created_at", { ascending: false })
+      .range(from, from + EQUIPAMENTOS_RELATORIO_PAGE_SIZE - 1);
+
+    if (empresaIds.length) {
+      query = query.in("empresa_id", empresaIds);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw new Error(error.message);
+
+    const pagina = (data || []) as unknown as EquipamentoSupabase[];
+    equipamentos.push(...pagina);
+
+    if (pagina.length < EQUIPAMENTOS_RELATORIO_PAGE_SIZE) break;
+  }
+
+  return equipamentos;
+};
+
+const carregarOpcoesEquipamentosRelatorio =
+  async (empresaIds: string[] = []): Promise<RelatorioEquipamentoOpcao[]> => {
+    if (!empresaIds.length) return [];
+
+    const equipamentos: RelatorioEquipamentoOpcao[] = [];
+
+    for (let from = 0; ; from += EQUIPAMENTOS_RELATORIO_PAGE_SIZE) {
+      const { data, error } = await supabase
+        .from("equipamentos")
+        .select(selectEquipamentosOpcoes)
+        .eq("empresa.ativo", true)
+        .in("empresa_id", empresaIds)
+        .order("tipo_texto", { ascending: true, nullsFirst: false })
+        .range(from, from + EQUIPAMENTOS_RELATORIO_PAGE_SIZE - 1);
+
+      if (error) throw new Error(error.message);
+
+      const pagina = (data || []) as unknown as RelatorioEquipamentoOpcao[];
+      equipamentos.push(...pagina);
+
+      if (pagina.length < EQUIPAMENTOS_RELATORIO_PAGE_SIZE) break;
+    }
+
+    return equipamentos;
+  };
+
 export const relatoriosService = {
   async listar() {
     const { data, error } = await supabase
@@ -221,6 +301,12 @@ export const relatoriosService = {
     return ((data || []) as unknown as RelatorioRegistro[]).map(
       normalizarRelatorio
     );
+  },
+
+  async listarOpcoesEquipamentos(
+    empresaIds: string[] = []
+  ): Promise<RelatorioEquipamentoOpcao[]> {
+    return carregarOpcoesEquipamentosRelatorio(empresaIds);
   },
 
   async criarVisitaExterna(input: RelatorioVisitaExternaInput) {
@@ -326,20 +412,7 @@ export const relatoriosService = {
     relatorio: RelatorioRegistro
   ): Promise<RelatorioControlePatrimonialDados> {
     const filtros = normalizarFiltrosControlePatrimonial(relatorio.filtros);
-
-    let query = supabase
-      .from("equipamentos")
-      .select(selectEquipamentosRelatorio)
-      .eq("empresa.ativo", true)
-      .order("created_at", { ascending: false });
-
-    if (filtros.empresaIds.length) {
-      query = query.in("empresa_id", filtros.empresaIds);
-    }
-
-    const { data, error } = await query;
-
-    if (error) throw new Error(error.message);
+    const data = await carregarEquipamentosRelatorio(filtros.empresaIds);
 
     const tipoSet = new Set(filtros.tipoEquipamentoLabels);
     const statusSet = new Set(filtros.status);
@@ -378,20 +451,7 @@ export const relatoriosService = {
     const filtros = normalizarFiltrosVisitaExterna(
       relatorio.filtros as RelatorioVisitaExternaFiltros
     );
-
-    let query = supabase
-      .from("equipamentos")
-      .select(selectEquipamentosRelatorio)
-      .eq("empresa.ativo", true)
-      .order("created_at", { ascending: false });
-
-    if (filtros.empresaIds.length) {
-      query = query.in("empresa_id", filtros.empresaIds);
-    }
-
-    const { data, error } = await query;
-
-    if (error) throw new Error(error.message);
+    const data = await carregarEquipamentosRelatorio(filtros.empresaIds);
 
     const tipoSet = new Set(filtros.tipoEquipamentoLabels);
     const setorSet = new Set(filtros.setorLabels);

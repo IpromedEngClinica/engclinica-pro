@@ -13,6 +13,7 @@ import PageHeader from "@/components/PageHeader";
 import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
 import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import ProtocoloDetalhesDialog from "@/components/ProtocoloDetalhesDialog";
+import ListPagination from "@/components/ListPagination";
 import ListLimitSelect, {
   DEFAULT_LIST_LIMIT,
 } from "@/components/ListLimitSelect";
@@ -26,6 +27,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { useProtocolos } from "@/hooks/useProtocolos";
+import { usePaginatedList } from "@/hooks/usePaginatedList";
 import {
   ProtocoloOSSupabase,
   protocolosService,
@@ -131,16 +133,19 @@ const Protocolos = () => {
     });
   }, [protocolos, search]);
 
-  const sortGetters: Record<string, (item: ProtocoloOSSupabase) => unknown> = {
-    numero: (p) => p.numero,
-    tipo: (p) => p.tipo,
-    data: getDataPrincipal,
-    cliente: getEmpresaNome,
-    equipamento: (p) => getEquipamentoLabel(p.equipamento),
-    os: (p) => p.ordem_servico?.numero,
-    responsavel: (p) => p.responsavel_nome,
-    status: (p) => p.status,
-  };
+  const sortGetters = useMemo<Record<string, (item: ProtocoloOSSupabase) => unknown>>(
+    () => ({
+      numero: (p) => p.numero,
+      tipo: (p) => p.tipo,
+      data: getDataPrincipal,
+      cliente: getEmpresaNome,
+      equipamento: (p) => getEquipamentoLabel(p.equipamento),
+      os: (p) => p.ordem_servico?.numero,
+      responsavel: (p) => p.responsavel_nome,
+      status: (p) => p.status,
+    }),
+    []
+  );
 
   const sortedFiltered = useMemo(
     () =>
@@ -149,13 +154,13 @@ const Protocolos = () => {
         sortGetters[sortKey] || sortGetters.data,
         sortDirection
       ),
-    [filtered, sortDirection, sortKey]
+    [filtered, sortDirection, sortGetters, sortKey]
   );
 
-  const visibleProtocolos = useMemo(
-    () => sortedFiltered.slice(0, listLimit),
-    [listLimit, sortedFiltered]
-  );
+  const {
+    paginatedItems: visibleProtocolos,
+    ...protocolosPagination
+  } = usePaginatedList(sortedFiltered, listLimit);
 
   const handleSort = (key: string) => {
     if (sortKey === key) {
@@ -484,6 +489,10 @@ const Protocolos = () => {
                 )}
               </tbody>
             </table>
+            <ListPagination
+              {...protocolosPagination}
+              onPageChange={protocolosPagination.setPage}
+            />
           </div>
         )}
       </div>

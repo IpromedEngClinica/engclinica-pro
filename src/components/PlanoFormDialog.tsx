@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import SearchableSelect from "@/components/SearchableSelect";
 import { useEmpresas } from "@/hooks/useEmpresas";
 import { useAtualizarPlano, useCriarPlano, usePlanoUsuarios } from "@/hooks/usePlanos";
 import { toast } from "@/hooks/use-toast";
@@ -37,6 +38,17 @@ const PlanoFormDialog = ({ open, onOpenChange, plano = null, onSaved }: Props) =
   const criar = useCriarPlano();
   const atualizar = useAtualizarPlano();
   const saving = criar.isPending || atualizar.isPending;
+  const empresaSelecionada = empresas.find((empresa) => empresa.id === form.empresaId);
+  const getEmpresaOptionLabel = (empresa: (typeof empresas)[number]) =>
+    [
+      empresa.nome_fantasia || empresa.nome,
+      empresa.cidade,
+      empresa.estado,
+      empresa.cpf_cnpj,
+    ]
+      .filter(Boolean)
+      .join(" | ");
+  const empresasOptions = empresas.map(getEmpresaOptionLabel);
 
   useEffect(() => {
     if (!open) return;
@@ -90,16 +102,18 @@ const PlanoFormDialog = ({ open, onOpenChange, plano = null, onSaved }: Props) =
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Cliente*</Label>
-              <Select value={form.empresaId} onValueChange={(empresaId) => setForm({ ...form, empresaId })}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>
-                  {empresas.map((empresa) => (
-                    <SelectItem key={empresa.id} value={empresa.id}>
-                      {empresa.nome_fantasia || empresa.nome}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={empresaSelecionada ? getEmpresaOptionLabel(empresaSelecionada) : ""}
+                onValueChange={(value) => {
+                  const empresa = empresas.find(
+                    (item) => getEmpresaOptionLabel(item) === value
+                  );
+                  setForm({ ...form, empresaId: empresa?.id || "" });
+                }}
+                options={empresasOptions}
+                placeholder="Selecione ou busque o cliente"
+                emptyText="Nenhum cliente encontrado."
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Responsavel</Label>

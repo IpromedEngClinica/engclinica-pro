@@ -14,12 +14,14 @@ import {
   FileText,
   FileWarning,
   Gauge,
+  History,
   LayoutDashboard,
   List,
   LogOut,
   Settings2,
   ShieldCheck,
   Users,
+  Wrench,
   type LucideIcon,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -108,6 +110,12 @@ const menuItemsAfterCalibracao: SidebarItem[] = [
     path: "/usuarios-permissoes",
   },
   {
+    icon: History,
+    label: "Auditoria",
+    path: "/auditoria",
+    permission: "auditoria.visualizar",
+  },
+  {
     icon: CalendarCheck,
     label: "Procedimentos Preventivos",
     path: "/procedimentos",
@@ -167,6 +175,39 @@ const camposGerenciais: SidebarItem[] = [
     path: "/campos-gerenciais/pecas",
     permission: "campos_gerenciais.gerenciar",
   },
+  {
+    icon: List,
+    label: "Organizar Setores",
+    path: "/campos-gerenciais/setores",
+    permission: "campos_gerenciais.gerenciar",
+  },
+];
+
+const utilitariosItems: SidebarItem[] = [
+  {
+    icon: List,
+    label: "Locação / Empréstimo",
+    path: "/utilitarios/termos-locacao",
+    permission: "utilitarios.visualizar",
+  },
+  {
+    icon: List,
+    label: "Cadastro Visita",
+    path: "/utilitarios/cadastro-visita",
+    permission: "utilitarios.visualizar",
+  },
+  {
+    icon: List,
+    label: "Gerador de Recibos",
+    path: "/utilitarios/recibos",
+    permission: "utilitarios.visualizar",
+  },
+  {
+    icon: List,
+    label: "Vencimentos",
+    path: "/utilitarios/vencimentos",
+    permission: "utilitarios.visualizar",
+  },
 ];
 
 const AppSidebar = () => {
@@ -178,6 +219,9 @@ const AppSidebar = () => {
   );
   const [calibracaoOpen, setCalibracaoOpen] = useState(
     location.pathname.startsWith("/calibracao")
+  );
+  const [utilitariosOpen, setUtilitariosOpen] = useState(
+    location.pathname.startsWith("/utilitarios")
   );
   const visibleMenuItems = useMemo(
     () => menuItems.filter((item) => !item.permission || hasPermission(item.permission)),
@@ -192,6 +236,10 @@ const AppSidebar = () => {
       menuItemsAfterCalibracao.filter(
         (item) => !item.permission || hasPermission(item.permission)
       ),
+    [hasPermission]
+  );
+  const visibleUtilitariosItems = useMemo(
+    () => utilitariosItems.filter((item) => hasPermission(item.permission)),
     [hasPermission]
   );
   const visibleCamposGerenciais = useMemo(
@@ -229,7 +277,7 @@ const AppSidebar = () => {
     <aside
       className={`flex flex-col bg-sidebar text-sidebar-foreground transition-all duration-300 ${
         collapsed ? "w-16" : "w-64"
-      } min-h-screen`}
+      } h-screen shrink-0`}
     >
       <div className="flex items-center gap-3 px-4 py-6 border-b border-sidebar-border">
         <div className="w-9 h-9 rounded-lg bg-sidebar-primary flex items-center justify-center shrink-0">
@@ -247,7 +295,7 @@ const AppSidebar = () => {
         )}
       </div>
 
-      <nav className="flex-1 py-4 px-2 space-y-1">
+      <nav className="min-h-0 flex-1 overflow-y-auto py-4 px-2 space-y-1">
         {visibleMenuItems.map((item) => renderLink(item))}
 
         {visibleCalibracaoItems.length > 0 && (
@@ -278,6 +326,33 @@ const AppSidebar = () => {
         )}
 
         {visibleAfterCalibracaoItems.map((item) => renderLink(item))}
+
+        {visibleUtilitariosItems.length > 0 && (
+          <div className="pt-2">
+            <button
+              onClick={() => setUtilitariosOpen(!utilitariosOpen)}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              title={collapsed ? "Utilitarios" : undefined}
+            >
+              <Wrench className="h-5 w-5 shrink-0" />
+              {!collapsed && (
+                <>
+                  <span className="flex-1 text-left">Utilitarios</span>
+                  <ChevronDown
+                    className={`h-4 w-4 transition-transform ${
+                      utilitariosOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </>
+              )}
+            </button>
+            {utilitariosOpen && !collapsed && (
+              <div className="ml-4 mt-1 space-y-1">
+                {visibleUtilitariosItems.map((item) => renderLink(item, true))}
+              </div>
+            )}
+          </div>
+        )}
 
         {visibleCamposGerenciais.length > 0 && (
           <div className="pt-2">

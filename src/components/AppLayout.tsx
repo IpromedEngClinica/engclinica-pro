@@ -1,11 +1,90 @@
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { Outlet } from "react-router-dom";
 import AppSidebar from "./AppSidebar";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  ORDENS_SERVICO_DEFAULT_PAGINADO_FILTROS,
+  ORDENS_SERVICO_GC_TIME,
+  ORDENS_SERVICO_QUERY_KEY,
+  ORDENS_SERVICO_STALE_TIME,
+} from "@/hooks/useOrdensServico";
+import { ordensServicoService } from "@/services/ordensServicoService";
+import {
+  EQUIPAMENTOS_DEFAULT_PAGINADO_FILTROS,
+  EQUIPAMENTOS_GC_TIME,
+  EQUIPAMENTOS_QUERY_KEY,
+  EQUIPAMENTOS_STALE_TIME,
+} from "@/hooks/useEquipamentos";
+import { equipamentosService } from "@/services/equipamentosService";
+import {
+  UTILITARIOS_GC_TIME,
+  UTILITARIOS_STALE_TIME,
+  VENCIMENTOS_QUERY_KEY,
+} from "@/hooks/useUtilitarios";
+import { utilitariosService } from "@/services/utilitariosService";
 
 const AppLayout = () => {
+  const queryClient = useQueryClient();
+  const { hasPermission } = useAuth();
+
+  useEffect(() => {
+    if (!hasPermission("os.visualizar")) return;
+
+    queryClient.prefetchQuery({
+      queryKey: [
+        ...ORDENS_SERVICO_QUERY_KEY,
+        "paginado",
+        ORDENS_SERVICO_DEFAULT_PAGINADO_FILTROS,
+      ],
+      queryFn: () =>
+        ordensServicoService.listarPaginado(
+          ORDENS_SERVICO_DEFAULT_PAGINADO_FILTROS
+        ),
+      staleTime: ORDENS_SERVICO_STALE_TIME,
+      gcTime: ORDENS_SERVICO_GC_TIME,
+    });
+  }, [hasPermission, queryClient]);
+
+  useEffect(() => {
+    if (!hasPermission("equipamentos.visualizar")) return;
+
+    queryClient.prefetchQuery({
+      queryKey: [
+        ...EQUIPAMENTOS_QUERY_KEY,
+        "paginado",
+        EQUIPAMENTOS_DEFAULT_PAGINADO_FILTROS,
+      ],
+      queryFn: () =>
+        equipamentosService.listarPaginado(
+          EQUIPAMENTOS_DEFAULT_PAGINADO_FILTROS
+        ),
+      staleTime: EQUIPAMENTOS_STALE_TIME,
+      gcTime: EQUIPAMENTOS_GC_TIME,
+    });
+  }, [hasPermission, queryClient]);
+
+  useEffect(() => {
+    if (!hasPermission("utilitarios.visualizar")) return;
+
+    const filtro = {
+      ano: new Date().getFullYear(),
+      incluirCalibracao: true,
+      incluirPreventiva: true,
+    };
+
+    queryClient.prefetchQuery({
+      queryKey: [...VENCIMENTOS_QUERY_KEY, filtro],
+      queryFn: () => utilitariosService.gerarRelatorioVencimentos(filtro),
+      staleTime: UTILITARIOS_STALE_TIME,
+      gcTime: UTILITARIOS_GC_TIME,
+    });
+  }, [hasPermission, queryClient]);
+
   return (
-    <div className="flex min-h-screen">
+    <div className="flex h-screen overflow-hidden">
       <AppSidebar />
-      <main className="flex-1 overflow-auto">
+      <main className="min-w-0 flex-1 overflow-auto">
         <Outlet />
       </main>
     </div>

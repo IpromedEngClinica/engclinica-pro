@@ -28,5 +28,6 @@ export const gerarPdfControlePatrimonial = async (
     save,
     orientation: "l",
     marginMm: 5,
+    fontScale: 1.25,
   });
 };

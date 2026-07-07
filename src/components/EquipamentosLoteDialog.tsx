@@ -57,7 +57,7 @@ const campos: Array<{
 }> = [
   { key: "empresa", label: "Proprietário *", width: "min-w-[250px]" },
   { key: "tipo", label: "Tipo *", width: "min-w-[210px]" },
-  { key: "fabricante", label: "Fabricante *", width: "min-w-[180px]" },
+  { key: "fabricante", label: "Fabricante", width: "min-w-[180px]" },
   { key: "modelo", label: "Modelo", width: "min-w-[170px]" },
   { key: "tag", label: "TAG", width: "min-w-[150px]" },
   { key: "numeroSerie", label: "Nº de série", width: "min-w-[170px]" },
@@ -93,6 +93,7 @@ const statusOptions = ["Ativo", "Em manutenção", "Desativado"];
 
 const emptyForm = (): EquipamentoFormInput => ({
   empresaId: "",
+  empresaSetorId: "",
   tipoEquipamentoId: "",
   tipoTexto: "",
   fabricante: "",
@@ -122,6 +123,9 @@ const getEmpresaLabel = (empresa: EmpresaSupabase) =>
 const getSetoresEmpresa = (empresa?: EmpresaSupabase | null) =>
   [...new Set((empresa?.setores || []).map((setor) => setor.nome).filter(Boolean))]
     .sort((a, b) => a.localeCompare(b, "pt-BR"));
+
+const getSetorEmpresaId = (empresa: EmpresaSupabase | null, setorNome?: string) =>
+  empresa?.setores?.find((setor) => setor.nome === setorNome)?.id || "";
 
 const trimInput = (input: EquipamentoFormInput): EquipamentoFormInput => ({
   ...input,
@@ -213,6 +217,8 @@ const EquipamentosLoteDialog = ({
       setComum((current) => ({
         ...current,
         empresaId: empresa?.id || "",
+        empresaSetorId:
+          setores.length === 1 ? getSetorEmpresaId(empresa || null, setores[0]) : "",
         setor:
           setores.length === 1
             ? setores[0]
@@ -229,6 +235,10 @@ const EquipamentosLoteDialog = ({
           ? {
               ...linha,
               empresaId: empresa?.id || "",
+              empresaSetorId:
+                setores.length === 1
+                  ? getSetorEmpresaId(empresa || null, setores[0])
+                  : "",
               setor:
                 setores.length === 1
                   ? setores[0]
@@ -268,6 +278,7 @@ const EquipamentosLoteDialog = ({
             return {
               ...linha,
               empresaId: comum.empresaId,
+              empresaSetorId: comum.empresaSetorId,
               setor: camposComuns.has("setor") ? comum.setor : linha.setor,
             };
           }
@@ -321,7 +332,10 @@ const EquipamentosLoteDialog = ({
     delete payload.rowId;
 
     camposComuns.forEach((campo) => {
-      if (campo === "empresa") payload.empresaId = comum.empresaId;
+      if (campo === "empresa") {
+        payload.empresaId = comum.empresaId;
+        payload.empresaSetorId = comum.empresaSetorId;
+      }
       else if (campo === "tipo") {
         payload.tipoEquipamentoId = comum.tipoEquipamentoId;
         payload.tipoTexto = comum.tipoTexto;
@@ -330,6 +344,9 @@ const EquipamentosLoteDialog = ({
         payload[key] = comum[key] as never;
       }
     });
+
+    const empresa = empresaPorId(payload.empresaId);
+    payload.empresaSetorId = getSetorEmpresaId(empresa, payload.setor);
 
     return trimInput(payload);
   };
@@ -379,13 +396,6 @@ const EquipamentosLoteDialog = ({
         return;
       }
 
-      if (!equipamento.fabricante?.trim()) {
-        toast({
-          title: `Informe o fabricante na linha ${linha}.`,
-          variant: "destructive",
-        });
-        return;
-      }
     }
 
     const duplicado =
@@ -454,12 +464,17 @@ const EquipamentosLoteDialog = ({
       const empresaId = camposComuns.has("empresa")
         ? comum.empresaId
         : form.empresaId;
-      const setores = getSetoresEmpresa(empresaPorId(empresaId));
+      const empresa = empresaPorId(empresaId);
+      const setores = getSetoresEmpresa(empresa);
+      const setSetor = (value: string) => {
+        setValue("setor", value);
+        setValue("empresaSetorId", getSetorEmpresaId(empresa, value));
+      };
 
       return setores.length ? (
         <SearchableSelect
           value={form.setor || ""}
-          onValueChange={(value) => setValue("setor", value)}
+          onValueChange={setSetor}
           options={setores}
           placeholder="Selecione o setor"
           emptyText="Nenhum setor encontrado."

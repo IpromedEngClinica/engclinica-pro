@@ -13,7 +13,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ClipboardPaste, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   EmpresaFormInput,
@@ -139,6 +139,99 @@ const formatPhone = (value: string) => {
     .replace(/(\d{5})(\d)/, "$1-$2");
 };
 
+const normalizeCadastroRapidoText = (value: string) =>
+  value
+    .replace(/[\u200e\u200f\u202a-\u202e]/g, "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+
+const getCadastroRapidoValue = (texto: string, labels: string[]) => {
+  const lines = texto
+    .split(/\r?\n/)
+    .map((line) => line.replace(/[\u200e\u200f\u202a-\u202e]/g, "").trim())
+    .filter(Boolean);
+
+  for (const line of lines) {
+    const separatorIndex = line.indexOf(":");
+    if (separatorIndex < 0) continue;
+
+    const rawLabel = line.slice(0, separatorIndex);
+    const normalizedLabel = normalizeCadastroRapidoText(rawLabel);
+
+    if (labels.some((label) => normalizedLabel.includes(label))) {
+      return line.slice(separatorIndex + 1).trim();
+    }
+  }
+
+  return "";
+};
+
+const parseCadastroRapidoEndereco = (endereco: string) => {
+  const cleaned = endereco.trim();
+  if (!cleaned) {
+    return { rua: "", numero: "", complemento: "" };
+  }
+
+  const numeroMatch = cleaned.match(
+    /^(.*?)(?:,\s*)?(?:n(?:umero|º|o)?\.?\s*)?(\d+[a-zA-Z]?)(?:\s*[-–—]\s*(.*))?$/i
+  );
+
+  if (!numeroMatch) {
+    return { rua: cleaned, numero: "", complemento: "" };
+  }
+
+  return {
+    rua: numeroMatch[1]?.replace(/[,\s]+$/g, "").trim() || cleaned,
+    numero: numeroMatch[2]?.trim() || "",
+    complemento: numeroMatch[3]?.trim() || "",
+  };
+};
+
+const parseCadastroRapidoEmpresa = (texto: string): Partial<EmpresaFormInput> => {
+  const razaoSocial = getCadastroRapidoValue(texto, ["razao social"]);
+  const cpfCnpj = getCadastroRapidoValue(texto, [
+    "cnpj ou cpf",
+    "cpf ou cnpj",
+    "cnpj",
+    "cpf",
+  ]);
+  const telefone = getCadastroRapidoValue(texto, ["telefone", "celular"]);
+  const endereco = getCadastroRapidoValue(texto, ["endereco"]);
+  const bairro = getCadastroRapidoValue(texto, ["bairro"]);
+  const cidade = getCadastroRapidoValue(texto, ["cidade"]);
+  const estado = getCadastroRapidoValue(texto, ["estado", "uf"]);
+  const cep = getCadastroRapidoValue(texto, ["cep"]);
+  const email = getCadastroRapidoValue(texto, ["e-mail", "email"]);
+  const enderecoParsed = parseCadastroRapidoEndereco(endereco);
+  const telefoneDigits = onlyDigits(telefone);
+  const documentoDigits = onlyDigits(cpfCnpj);
+
+  return {
+    nome: razaoSocial,
+    cpfCnpj: cpfCnpj ? formatCpfCnpj(cpfCnpj) : "",
+    tipoCliente:
+      documentoDigits.length === 14
+        ? "Pessoa JurÃ­dica"
+        : documentoDigits.length === 11
+          ? "Particular"
+          : "",
+    telefone:
+      telefone && telefoneDigits.length <= 10 ? formatPhone(telefone) : "",
+    celular:
+      telefone && telefoneDigits.length > 10 ? formatPhone(telefone) : "",
+    rua: enderecoParsed.rua,
+    numero: enderecoParsed.numero,
+    complemento: enderecoParsed.complemento,
+    bairro,
+    cidade,
+    estado: estado.toUpperCase().slice(0, 2),
+    cep: cep ? formatCep(cep) : "",
+    email,
+  };
+};
+
 const emptySetor = (): EmpresaSetorFormInput => ({
   nome: "",
   cep: "",
@@ -216,6 +309,9 @@ const EmpresaFormDialog = ({
   );
   const [ultimoCepConsultado, setUltimoCepConsultado] = useState("");
   const [draftReady, setDraftReady] = useState(false);
+  const [cadastroRapidoOpen, setCadastroRapidoOpen] = useState(false);
+  const [cadastroRapidoTexto, setCadastroRapidoTexto] = useState("");
+  const [setoresOpen, setSetoresOpen] = useState(false);
 
   const readOnly = mode === "view";
   const saving = criarEmpresa.isPending || atualizarEmpresa.isPending;
@@ -232,6 +328,7 @@ const EmpresaFormDialog = ({
     if (empresa && (mode === "edit" || mode === "view")) {
       setForm(empresaToForm(empresa));
       setUltimoCepConsultado(onlyDigits(empresa.cep ?? ""));
+      setSetoresOpen(false);
       setDraftReady(false);
     } else {
       let nextForm: EmpresaFormInput = { ...emptyForm, setores: [] };
@@ -253,6 +350,7 @@ const EmpresaFormDialog = ({
 
       setForm(nextForm);
       setUltimoCepConsultado("");
+      setSetoresOpen(false);
 
       const timer = window.setTimeout(() => setDraftReady(true), 0);
       return () => window.clearTimeout(timer);
@@ -275,9 +373,56 @@ const EmpresaFormDialog = ({
     }
   };
 
+  const aplicarCadastroRapido = () => {
+    if (readOnly) return;
+
+    const parsed = parseCadastroRapidoEmpresa(cadastroRapidoTexto);
+    const hasAnyValue = Object.values(parsed).some((value) =>
+      typeof value === "string" ? Boolean(value.trim()) : Boolean(value)
+    );
+
+    if (!hasAnyValue) {
+      toast.error("Nao foi possivel identificar campos na ficha colada.");
+      return;
+    }
+
+    setForm((prev) => {
+      const next: EmpresaFormInput = {
+        ...prev,
+        nome: parsed.nome || prev.nome,
+        tipoCliente: parsed.tipoCliente || prev.tipoCliente,
+        cpfCnpj: parsed.cpfCnpj || prev.cpfCnpj,
+        cep: parsed.cep || prev.cep,
+        rua: parsed.rua || prev.rua,
+        numero: parsed.numero || prev.numero,
+        complemento: parsed.complemento || prev.complemento,
+        bairro: parsed.bairro || prev.bairro,
+        cidade: parsed.cidade || prev.cidade,
+        estado: parsed.estado || prev.estado,
+        telefone: parsed.telefone || prev.telefone,
+        celular: parsed.celular || prev.celular,
+        email: parsed.email || prev.email,
+      };
+
+      return sincronizarSetoresComEnderecoCliente(next);
+    });
+
+    if (parsed.cep) {
+      setUltimoCepConsultado(onlyDigits(parsed.cep));
+    }
+
+    setCadastroRapidoOpen(false);
+    setCadastroRapidoTexto("");
+    toast.success("Ficha interpretada. Confira os dados antes de salvar.");
+  };
+
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen && saving) return;
-    if (!nextOpen) clearCreateDraft();
+    if (!nextOpen) {
+      clearCreateDraft();
+      setCadastroRapidoOpen(false);
+      setCadastroRapidoTexto("");
+    }
     onOpenChange(nextOpen);
   };
 
@@ -436,6 +581,7 @@ const EmpresaFormDialog = ({
 
   const adicionarSetor = () => {
     if (readOnly) return;
+    setSetoresOpen(true);
     setForm((prev) => ({
       ...prev,
       setores: [...(prev.setores || []), emptySetor()],
@@ -550,6 +696,7 @@ const EmpresaFormDialog = ({
         : "Nova Empresa / Cliente";
 
   return (
+    <>
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -751,14 +898,25 @@ const EmpresaFormDialog = ({
 
         <div className="rounded-lg border p-4 space-y-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
+            <button
+              type="button"
+              className="flex flex-1 items-start gap-2 text-left"
+              onClick={() => setSetoresOpen((current) => !current)}
+            >
+              <ChevronDown
+                className={`mt-0.5 h-4 w-4 shrink-0 transition-transform ${
+                  setoresOpen ? "rotate-180" : ""
+                }`}
+              />
+              <div>
               <h3 className="text-sm font-semibold text-foreground">
                 Setores / Unidades do Cliente
               </h3>
               <p className="text-xs text-muted-foreground">
-                Cadastre unidades fixas para padronizar o setor no equipamento.
+                {(form.setores || []).length} setor(es) cadastrado(s). Clique para exibir ou recolher.
               </p>
-            </div>
+              </div>
+            </button>
 
             {!readOnly && (
               <Button
@@ -774,12 +932,14 @@ const EmpresaFormDialog = ({
             )}
           </div>
 
-          {(form.setores || []).length === 0 ? (
+          {setoresOpen && (form.setores || []).length === 0 ? (
             <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
               Nenhum setor fixo cadastrado. Equipamentos deste cliente continuarão
               usando setor em campo livre.
             </p>
-          ) : (
+          ) : null}
+
+          {setoresOpen && (form.setores || []).length > 0 ? (
             <div className="space-y-4">
               {(form.setores || []).map((setor, index) => (
                 <div
@@ -949,7 +1109,7 @@ const EmpresaFormDialog = ({
                 </div>
               ))}
             </div>
-          )}
+          ) : null}
         </div>
 
         <div className="rounded-lg border p-4 space-y-4">
@@ -1038,19 +1198,76 @@ const EmpresaFormDialog = ({
           </div>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={saving}>
-            {readOnly ? "Fechar" : "Cancelar"}
-          </Button>
+        <DialogFooter className="gap-2 sm:justify-between">
+          <div>
+            {!readOnly && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCadastroRapidoOpen(true)}
+                disabled={saving}
+              >
+                <ClipboardPaste className="mr-2 h-4 w-4" />
+                Cadastro rapido
+              </Button>
+            )}
+          </div>
 
-          {!readOnly && (
-            <Button onClick={handleSubmit} disabled={saving}>
-              {saving ? "Salvando..." : "Salvar"}
+          <div className="flex flex-col-reverse gap-2 sm:flex-row">
+            <Button
+              variant="outline"
+              onClick={() => handleOpenChange(false)}
+              disabled={saving}
+            >
+              {readOnly ? "Fechar" : "Cancelar"}
             </Button>
-          )}
+
+            {!readOnly && (
+              <Button onClick={handleSubmit} disabled={saving}>
+                {saving ? "Salvando..." : "Salvar"}
+              </Button>
+            )}
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <Dialog open={cadastroRapidoOpen} onOpenChange={setCadastroRapidoOpen}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Cadastro rapido</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Cole a ficha padrao de cadastro. O sistema vai identificar os campos
+            e preencher o formulario principal para conferencia antes de salvar.
+          </p>
+          <Textarea
+            value={cadastroRapidoTexto}
+            onChange={(event) => setCadastroRapidoTexto(event.target.value)}
+            rows={12}
+            disabled={saving}
+          />
+        </div>
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => setCadastroRapidoOpen(false)}
+            disabled={saving}
+          >
+            Cancelar
+          </Button>
+          <Button
+            onClick={aplicarCadastroRapido}
+            disabled={saving || !cadastroRapidoTexto.trim()}
+          >
+            Preencher cadastro
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 };
 

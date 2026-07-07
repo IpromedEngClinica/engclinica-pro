@@ -23,10 +23,12 @@ describe("calibracaoCertificadoPdfTemplate", () => {
       procedimento_versao_snapshot: 1,
       tecnico_executor_nome: "Tecnico Executor",
       tecnico_executor_registro: "REGISTRO-NAO-EXIBIR",
+      responsavel_solicitante: "Solicitante Teste",
       tabelas: [
         {
           id: "tabela",
           nome_snapshot: "Temperatura",
+          grandeza_snapshot: "Temperatura",
           unidade_snapshot: "°C",
           padrao_id: "padrao",
           padrao_validade_snapshot: "2027-01-30",
@@ -45,6 +47,13 @@ describe("calibracaoCertificadoPdfTemplate", () => {
               incerteza_expandida_reportada: 0.2,
               casas_decimais_incerteza: 1,
               fator_abrangencia_k: 2,
+              leituras: [
+                {
+                  valor_medido: 10,
+                  valor_medido_texto: "10,00",
+                  casas_decimais: 2,
+                },
+              ],
             },
           ],
         },
@@ -58,11 +67,20 @@ describe("calibracaoCertificadoPdfTemplate", () => {
     expect(html).toContain("50 ± 5 %");
     expect(html).toContain("Ícaro Heitor Piris Rezende");
     expect(html).toContain("CREA: 142085302-3");
-    expect(html).toContain("30 - 01 - 2027");
-    expect(html).toContain("Valor de uma divisao: 0,10");
-    expect(html).toContain("<td>10,00</td><td>10,00</td><td>0,04</td>");
-    expect(html).toContain("<td>0,2</td>");
-    expect(html).not.toContain("REGISTRO-NAO-EXIBIR");
+    expect(html).toContain("Solicitante Teste");
+    expect(html).toContain("Técnico Executor");
+    expect(html).toContain("Responsável Técnico / Signatário Autorizado");
+    expect(html).toContain("Solicitante");
+    expect(html).toContain("30/01/2027");
+    expect(html).toContain("Valor de uma divisão:");
+    expect(html).toContain("<strong>0,10 °C</strong>");
+    expect(html).not.toContain("Resolução / divisão:");
+    expect(html).toContain("<th class=\"center\">VM(1)</th>");
+    expect(html).toContain("<td>10,00</td>");
+    expect(html).toContain('<td class="center">10,00</td>');
+    expect(html).toContain('<td class="center">0,0</td>');
+    expect(html).toContain('<td class="center">0,2</td>');
+    expect(html).toContain("REGISTRO-NAO-EXIBIR");
     expect(html).not.toContain("0,183746");
   });
 
@@ -78,8 +96,9 @@ describe("calibracaoCertificadoPdfTemplate", () => {
       "logo"
     );
 
-    expect(html).toContain("Revisao: 2");
-    expect(html).toContain("<small>Revisao</small><strong>2</strong>");
+    expect(html).toContain("Revisão: 2");
+    expect(html).toContain('<span class="field-label">Revisão:</span>');
+    expect(html).toContain('<span class="field-value">2</span>');
     expect(
       formatNomeArquivoCertificadoCalibracao({
         numero_certificado: 12,

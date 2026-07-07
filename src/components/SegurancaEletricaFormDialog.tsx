@@ -22,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useCalibracaoPadroes } from "@/hooks/useCalibracaoPadroes";
 import { useEmpresas } from "@/hooks/useEmpresas";
 import { useEquipamentos } from "@/hooks/useEquipamentos";
+import type { CalibracaoPadrao } from "@/services/calibracaoPadroesService";
 import {
   useAtualizarSegurancaEletrica,
   useCriarSegurancaEletrica,
@@ -69,6 +70,11 @@ type FormState = {
 
 const RESPONSAVEL_PADRAO = "Ícaro Heitor Piris Rezende";
 
+const LOCAL_ENSAIO_OPTIONS = [
+  "Dependências da Contratada",
+  "Dependências da Contratante",
+];
+
 const today = () => new Date().toISOString().slice(0, 10);
 
 const addOneYear = (date: string) => {
@@ -88,7 +94,7 @@ const emptyForm = (tecnicoExecutorNome = ""): FormState => {
     tipoParteAplicada: "Tipo BF",
     temperaturaAmbienteTexto: "21 a 25",
     umidadeRelativaTexto: "45 a 75",
-    localEnsaio: "",
+    localEnsaio: LOCAL_ENSAIO_OPTIONS[0],
     dataTeste: data,
     dataEmissao: data,
     dataValidade: addOneYear(data),
@@ -102,20 +108,61 @@ const emptyForm = (tecnicoExecutorNome = ""): FormState => {
 const getEmpresaLabel = (empresa?: { nome?: string; nome_fantasia?: string | null }) =>
   empresa?.nome_fantasia || empresa?.nome || "";
 
-const getPadraoLabel = (padrao?: {
-  nome_padrao?: string;
-  numero_certificado?: string;
-  numero_serie?: string | null;
+const getEmpresaSearchText = (empresa: {
+  nome?: string | null;
+  nome_fantasia?: string | null;
+  cpf_cnpj?: string | null;
+  cidade?: string | null;
+  estado?: string | null;
+  contato?: string | null;
+  email?: string | null;
+  celular?: string | null;
+  telefone?: string | null;
 }) =>
-  padrao
-    ? [
-        padrao.nome_padrao,
-        padrao.numero_serie ? `NS ${padrao.numero_serie}` : "",
-        padrao.numero_certificado ? `Cert. ${padrao.numero_certificado}` : "",
-      ]
+  [
+    empresa.nome,
+    empresa.nome_fantasia,
+    empresa.cpf_cnpj,
+    empresa.cidade,
+    empresa.estado,
+    empresa.contato,
+    empresa.email,
+    empresa.celular,
+    empresa.telefone,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+const normalizeSearchText = (value?: string | null) =>
+  (value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+
+const findAnalisadorSegurancaEletrica = (padroes: CalibracaoPadrao[]) =>
+  padroes.find((padrao) => {
+    const searchText = normalizeSearchText(
+      [padrao.nome_padrao, padrao.descricao, padrao.fabricante, padrao.modelo]
         .filter(Boolean)
-        .join(" - ")
-    : "";
+        .join(" ")
+    );
+
+    return (
+      searchText.includes("analisador") &&
+      searchText.includes("seguranca") &&
+      searchText.includes("eletrica")
+    );
+  }) || null;
+
+const normalizeLocalEnsaio = (value?: string | null) => {
+  const normalizedValue = normalizeSearchText(value);
+  return (
+    LOCAL_ENSAIO_OPTIONS.find(
+      (option) => normalizeSearchText(option) === normalizedValue
+    ) || LOCAL_ENSAIO_OPTIONS[0]
+  );
+};
 
 const groupResults = (resultados: SegurancaEletricaResultadoInput[]) =>
   resultados.reduce<Record<string, SegurancaEletricaResultadoInput[]>>(
@@ -135,7 +182,6 @@ const SegurancaEletricaFormDialog = ({
 }: Props) => {
   const { usuario } = useAuth();
   const { data: empresas = [] } = useEmpresas();
-  const { data: equipamentos = [] } = useEquipamentos();
   const { data: padroes = [] } = useCalibracaoPadroes();
   const criar = useCriarSegurancaEletrica();
   const atualizar = useAtualizarSegurancaEletrica();
@@ -144,19 +190,31 @@ const SegurancaEletricaFormDialog = ({
   const [resultados, setResultados] = useState<SegurancaEletricaResultadoInput[]>(
     criarResultadosSegurancaEletricaVazios()
   );
+  const {
+    data: equipamentos = [],
+    isFetching: isFetchingEquipamentos,
+  } = useEquipamentos(
+    { empresaId: form.empresaId, statusFiltro: "ativos" },
+    { enabled: open && Boolean(form.empresaId) }
+  );
 
   const isSubmitting = criar.isPending || atualizar.isPending;
-  const empresaSelecionada = empresas.find((empresa) => empresa.id === form.empresaId);
   const equipamentoSelecionado = equipamentos.find(
     (equipamento) => equipamento.id === form.equipamentoId
   );
-  const padraoSelecionado = padroes.find((padrao) => padrao.id === form.padraoId);
+  const analisadorSegurancaEletrica = useMemo(
+    () => findAnalisadorSegurancaEletrica(padroes),
+    [padroes]
+  );
 
-  const empresasOptions = empresas.map(getEmpresaLabel);
-  const equipamentosOptions = equipamentos
-    .filter((equipamento) => !form.empresaId || equipamento.empresa_id === form.empresaId)
-    .map((equipamento) => getEquipamentoLabel(equipamento));
-  const padroesOptions = padroes.map(getPadraoLabel);
+  const empresasOptions = empresas.map((empresa) => ({
+    value: empresa.id,
+    label: getEmpresaLabel(empresa),
+    searchText: getEmpresaSearchText(empresa),
+  }));
+  const equipamentosOptions = equipamentos.map((equipamento) =>
+    getEquipamentoLabel(equipamento)
+  );
 
   const grouped = useMemo(() => groupResults(resultados), [resultados]);
 
@@ -172,7 +230,7 @@ const SegurancaEletricaFormDialog = ({
         tipoParteAplicada: execucao.tipo_parte_aplicada || "Tipo BF",
         temperaturaAmbienteTexto: execucao.temperatura_ambiente_texto || "21 a 25",
         umidadeRelativaTexto: execucao.umidade_relativa_texto || "45 a 75",
-        localEnsaio: execucao.local_ensaio || "",
+        localEnsaio: normalizeLocalEnsaio(execucao.local_ensaio),
         dataTeste: execucao.data_teste,
         dataEmissao: execucao.data_emissao,
         dataValidade: execucao.data_validade || addOneYear(execucao.data_teste),
@@ -204,6 +262,15 @@ const SegurancaEletricaFormDialog = ({
     setResultados(criarResultadosSegurancaEletricaVazios());
   }, [execucao, mode, open, usuario?.nome]);
 
+  useEffect(() => {
+    if (!open || form.padraoId || !analisadorSegurancaEletrica?.id) return;
+
+    setForm((current) => ({
+      ...current,
+      padraoId: current.padraoId || analisadorSegurancaEletrica.id,
+    }));
+  }, [analisadorSegurancaEletrica?.id, form.padraoId, open]);
+
   const updateResultado = (index: number, valor: string) => {
     setResultados((current) =>
       current.map((item, itemIndex) => {
@@ -229,7 +296,7 @@ const SegurancaEletricaFormDialog = ({
   const buildPayload = (): SegurancaEletricaFormInput => ({
     empresaId: form.empresaId,
     equipamentoId: form.equipamentoId,
-    padraoId: form.padraoId || null,
+    padraoId: form.padraoId || analisadorSegurancaEletrica?.id || null,
     classeEquipamento: form.classeEquipamento,
     tipoParteAplicada: form.tipoParteAplicada,
     temperaturaAmbienteTexto: form.temperaturaAmbienteTexto,
@@ -277,21 +344,21 @@ const SegurancaEletricaFormDialog = ({
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
           <section className="rounded-lg border border-l-4 border-l-primary/70 p-5 space-y-4">
             <h3 className="text-base font-bold">Identificação</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Cliente *</Label>
                 <SearchableSelect
-                  value={getEmpresaLabel(empresaSelecionada)}
+                  value={form.empresaId}
                   onValueChange={(value) => {
-                    const empresa = empresas.find((item) => getEmpresaLabel(item) === value);
                     setForm((current) => ({
                       ...current,
-                      empresaId: empresa?.id || "",
+                      empresaId: value,
                       equipamentoId: "",
                     }));
                   }}
                   options={empresasOptions}
                   placeholder="Selecione o cliente"
+                  emptyText="Nenhum cliente encontrado."
                 />
               </div>
               <div className="space-y-2">
@@ -309,21 +376,22 @@ const SegurancaEletricaFormDialog = ({
                     }));
                   }}
                   options={equipamentosOptions}
-                  placeholder="Selecione o equipamento"
-                  emptyText="Nenhum equipamento encontrado."
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Padrão utilizado</Label>
-                <SearchableSelect
-                  value={getPadraoLabel(padraoSelecionado)}
-                  onValueChange={(value) => {
-                    const padrao = padroes.find((item) => getPadraoLabel(item) === value);
-                    setForm((current) => ({ ...current, padraoId: padrao?.id || "" }));
-                  }}
-                  options={padroesOptions}
-                  placeholder="Selecione o padrão"
-                  emptyText="Nenhum padrão cadastrado."
+                  placeholder={
+                    form.empresaId
+                      ? isFetchingEquipamentos && equipamentos.length === 0
+                        ? "Carregando equipamentos..."
+                        : "Selecione o equipamento"
+                      : "Selecione um cliente primeiro"
+                  }
+                  emptyText={
+                    form.empresaId
+                      ? "Nenhum equipamento encontrado."
+                      : "Selecione um cliente primeiro."
+                  }
+                  disabled={
+                    !form.empresaId ||
+                    (isFetchingEquipamentos && equipamentos.length === 0)
+                  }
                 />
               </div>
             </div>
@@ -430,12 +498,21 @@ const SegurancaEletricaFormDialog = ({
               </div>
               <div className="space-y-2">
                 <Label>Local do ensaio</Label>
-                <Input
+                <Select
                   value={form.localEnsaio}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, localEnsaio: event.target.value }))
+                  onValueChange={(value) =>
+                    setForm((current) => ({ ...current, localEnsaio: value }))
                   }
-                />
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {LOCAL_ENSAIO_OPTIONS.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </section>

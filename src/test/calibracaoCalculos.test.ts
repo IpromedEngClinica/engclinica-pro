@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   avaliarConformidade,
+  arredondarParaAlgarismosSignificativos,
   arredondarParaCasas,
   calcularResultadoGeralCalibracao,
   calcularDesvioPadraoAmostral,
@@ -10,7 +11,10 @@ import {
   calcularPontoCalibracao,
   converterIncertezaExpandida,
   encontrarPontoPadraoExato,
+  encontrarPontoPadraoMaisProximo,
+  obterCasasDecimaisAlgarismosSignificativos,
   obterCasasDecimaisIncerteza,
+  selecionarPontoPadraoReferencia,
 } from "@/utils/calibracaoCalculos";
 import { calcularFatorStudentT95 } from "@/utils/studentT";
 
@@ -97,11 +101,26 @@ describe("calibracaoCalculos", () => {
     expect(encontrarPontoPadraoExato(24, pontos)).toBeUndefined();
   });
 
+  it("usa o ponto mais proximo do padrao quando nao existe nominal exato", () => {
+    const pontos = [{ valorNominal: 50 }, { valorNominal: 100 }];
+    expect(encontrarPontoPadraoMaisProximo(70, pontos)?.valorNominal).toBe(50);
+    expect(selecionarPontoPadraoReferencia(70, pontos)?.valorNominal).toBe(50);
+    expect(selecionarPontoPadraoReferencia(100, pontos)?.valorNominal).toBe(100);
+  });
+
   it("reporta incerteza com as casas decimais textuais do padrao", () => {
     expect(obterCasasDecimaisIncerteza("0,20", 0.2)).toBe(2);
     expect(obterCasasDecimaisIncerteza("1", 1)).toBe(0);
     expect(arredondarParaCasas(0.183746, 1)).toBe(0.2);
     expect(arredondarParaCasas(0.04731, 2)).toBe(0.05);
+  });
+
+  it("reporta incerteza expandida com no maximo dois algarismos significativos", () => {
+    expect(arredondarParaAlgarismosSignificativos(0.183746, 2)).toBe(0.18);
+    expect(arredondarParaAlgarismosSignificativos(0.04731, 2)).toBe(0.047);
+    expect(arredondarParaAlgarismosSignificativos(12.374, 2)).toBe(12);
+    expect(obterCasasDecimaisAlgarismosSignificativos(0.047, 2)).toBe(3);
+    expect(obterCasasDecimaisAlgarismosSignificativos(0.18, 2)).toBe(2);
 
     const resultado = calcularPontoCalibracao({
       valorNominal: 10,

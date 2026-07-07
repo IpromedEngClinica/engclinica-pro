@@ -8,10 +8,22 @@ import {
 
 export const ORCAMENTOS_QUERY_KEY = ["orcamentos"];
 
-export const useOrcamentos = () => {
+type UseOrcamentosOptions = {
+  enabled?: boolean;
+  staleTime?: number;
+  gcTime?: number;
+};
+
+export const ORCAMENTOS_STALE_TIME = 5 * 60 * 1000;
+export const ORCAMENTOS_GC_TIME = 20 * 60 * 1000;
+
+export const useOrcamentos = (options?: UseOrcamentosOptions) => {
   return useQuery<OrcamentoSupabase[]>({
     queryKey: ORCAMENTOS_QUERY_KEY,
     queryFn: orcamentosService.listar,
+    enabled: options?.enabled ?? true,
+    staleTime: options?.staleTime ?? ORCAMENTOS_STALE_TIME,
+    gcTime: options?.gcTime ?? ORCAMENTOS_GC_TIME,
   });
 };
 

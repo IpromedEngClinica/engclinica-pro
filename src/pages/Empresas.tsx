@@ -10,15 +10,18 @@ import {
   Loader2,
   SlidersHorizontal,
   ChevronDown,
+  Trash2,
 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -27,33 +30,61 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import SearchableSelect from "@/components/SearchableSelect";
+import SortableTableHeader from "@/components/SortableTableHeader";
 import ListLimitSelect, {
   DEFAULT_LIST_LIMIT,
 } from "@/components/ListLimitSelect";
 import PageHeader from "@/components/PageHeader";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import EmpresaFormDialog, { DialogMode } from "@/components/EmpresaFormDialog";
 import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
 import EquipamentoFormDialog from "@/components/EquipamentoFormDialog";
-import { useMemo, useState } from "react";
-import { useEmpresas } from "@/hooks/useEmpresas";
+import { useEffect, useMemo, useState } from "react";
+import { useEmpresas, useExcluirEmpresa } from "@/hooks/useEmpresas";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   EmpresaSupabase,
   empresasService,
   StatusEmpresaFiltro,
 } from "@/services/empresasService";
+import { onlyDigits } from "@/utils/brasil";
+import { sortByValue, type SortDirection } from "@/utils/sortUtils";
+import { toast } from "@/hooks/use-toast";
 
 const ALL = "__all__";
 
-const formatListIndex = (index: number) => String(index + 1).padStart(3, "0");
+const formatNumeroCadastro = (numero?: number | null) =>
+  String(numero || 0).padStart(3, "0");
+
+const normalizarTexto = (value?: string | null) =>
+  (value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+
+const getTipoEmpresa = (empresa: EmpresaSupabase) =>
+  empresa.tipo_cliente || empresa.tipo_relacao || "";
 
 const Empresas = () => {
   const [search, setSearch] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [statusFiltro, setStatusFiltro] =
     useState<StatusEmpresaFiltro>("ativas");
+  const [tipoFiltro, setTipoFiltro] = useState(ALL);
   const [cidadeFiltro, setCidadeFiltro] = useState(ALL);
   const [ufFiltro, setUfFiltro] = useState(ALL);
+  const [contatoFiltro, setContatoFiltro] = useState("");
+  const [cpfCnpjFiltro, setCpfCnpjFiltro] = useState("");
   const [documentoFiltro, setDocumentoFiltro] = useState<
     "todos" | "cnpj" | "cpf" | "sem_documento"
   >("todos");
@@ -64,16 +95,28 @@ const Empresas = () => {
     "todos" | "com_telefone" | "sem_telefone"
   >("todos");
   const [listLimit, setListLimit] = useState(DEFAULT_LIST_LIMIT);
+  const [page, setPage] = useState(1);
+  const [sortKey, setSortKey] = useState("numero_cadastro");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [equipamentoFormOpen, setEquipamentoFormOpen] = useState(false);
   const [mode, setMode] = useState<DialogMode>("create");
   const [selected, setSelected] = useState<EmpresaSupabase | null>(null);
+  const [empresaExclusao, setEmpresaExclusao] =
+    useState<EmpresaSupabase | null>(null);
+  const [equipamentosEmpresaExclusao, setEquipamentosEmpresaExclusao] =
+    useState(0);
+  const [excluirEquipamentosVinculados, setExcluirEquipamentosVinculados] =
+    useState(false);
   const [empresaParaNovoEquipamento, setEmpresaParaNovoEquipamento] =
     useState<EmpresaSupabase | null>(null);
-  const { hasPermission } = useAuth();
+  const { hasPermission, usuario } = useAuth();
+  const excluirEmpresa = useExcluirEmpresa();
   const canManageEmpresas = hasPermission("empresas.gerenciar");
   const canManageEquipamentos = hasPermission("equipamentos.gerenciar");
+  const canDeleteEmpresas =
+    canManageEmpresas && ["admin", "gestor"].includes(usuario?.perfil || "");
 
   const { data: empresas = [], isLoading, isError, error, refetch } =
     useEmpresas({ statusFiltro });
@@ -85,6 +128,7 @@ const Empresas = () => {
 
   const opts = useMemo(
     () => ({
+      tipos: uniq(empresas.map((empresa) => getTipoEmpresa(empresa))),
       cidades: uniq(empresas.map((empresa) => empresa.cidade || "")),
       ufs: uniq(empresas.map((empresa) => empresa.estado || "")),
     }),
@@ -98,17 +142,37 @@ const Empresas = () => {
   };
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = normalizarTexto(search);
+    const qDigits = onlyDigits(search);
+    const contatoQ = normalizarTexto(contatoFiltro);
+    const documentoQ = normalizarTexto(cpfCnpjFiltro);
+    const documentoQDigits = onlyDigits(cpfCnpjFiltro);
 
     return empresas.filter((e) => {
+      const documento = e.cpf_cnpj || "";
+      const documentoDigits = onlyDigits(documento);
+      const tipoEmpresa = getTipoEmpresa(e);
       const matchSearch =
         !q ||
-        e.nome.toLowerCase().includes(q) ||
-        (e.nome_fantasia || "").toLowerCase().includes(q) ||
-        (e.cpf_cnpj || "").toLowerCase().includes(q) ||
-        (e.cidade || "").toLowerCase().includes(q) ||
-        (e.estado || "").toLowerCase().includes(q) ||
-        (e.email || "").toLowerCase().includes(q);
+        normalizarTexto(e.nome).includes(q) ||
+        normalizarTexto(e.nome_fantasia).includes(q) ||
+        normalizarTexto(documento).includes(q) ||
+        normalizarTexto(e.cidade).includes(q) ||
+        normalizarTexto(e.estado).includes(q) ||
+        normalizarTexto(e.email).includes(q) ||
+        normalizarTexto(e.contato).includes(q) ||
+        normalizarTexto(tipoEmpresa).includes(q) ||
+        (qDigits ? documentoDigits.includes(qDigits) : false);
+
+      const matchContato =
+        !contatoQ || normalizarTexto(e.contato).includes(contatoQ);
+
+      const matchCpfCnpj =
+        !documentoQ ||
+        normalizarTexto(documento).includes(documentoQ) ||
+        (documentoQDigits
+          ? documentoDigits.includes(documentoQDigits)
+          : false);
 
       const tipoDocumento = getTipoDocumento(e.cpf_cnpj);
       const temEmail = Boolean(e.email?.trim());
@@ -116,6 +180,9 @@ const Empresas = () => {
 
       return (
         matchSearch &&
+        matchContato &&
+        matchCpfCnpj &&
+        (tipoFiltro === ALL || tipoEmpresa === tipoFiltro) &&
         (cidadeFiltro === ALL || e.cidade === cidadeFiltro) &&
         (ufFiltro === ALL || e.estado === ufFiltro) &&
         (documentoFiltro === "todos" || tipoDocumento === documentoFiltro) &&
@@ -127,42 +194,119 @@ const Empresas = () => {
     });
   }, [
     cidadeFiltro,
+    contatoFiltro,
+    cpfCnpjFiltro,
     documentoFiltro,
     emailFiltro,
     empresas,
     search,
     telefoneFiltro,
+    tipoFiltro,
     ufFiltro,
   ]);
 
   const activeFiltersCount = useMemo(() => {
     let count = 0;
     if (statusFiltro !== "ativas") count++;
+    if (tipoFiltro !== ALL) count++;
     if (cidadeFiltro !== ALL) count++;
     if (ufFiltro !== ALL) count++;
+    if (contatoFiltro.trim()) count++;
+    if (cpfCnpjFiltro.trim()) count++;
     if (documentoFiltro !== "todos") count++;
     if (emailFiltro !== "todos") count++;
     if (telefoneFiltro !== "todos") count++;
     return count;
   }, [
     cidadeFiltro,
+    contatoFiltro,
+    cpfCnpjFiltro,
     documentoFiltro,
     emailFiltro,
     statusFiltro,
     telefoneFiltro,
+    tipoFiltro,
     ufFiltro,
   ]);
 
-  const visibleEmpresas = useMemo(
-    () => filtered.slice(0, listLimit),
-    [filtered, listLimit]
+  const sortGetters = useMemo<
+    Record<string, (item: EmpresaSupabase) => unknown>
+  >(
+    () => ({
+      numero_cadastro: (empresa) => empresa.numero_cadastro,
+      nome: (empresa) => empresa.nome,
+      tipo: getTipoEmpresa,
+      cidade: (empresa) => empresa.cidade,
+      estado: (empresa) => empresa.estado,
+      telefone: (empresa) => empresa.telefone || empresa.celular,
+      email: (empresa) => empresa.email,
+      contato: (empresa) => empresa.contato,
+      cpf_cnpj: (empresa) => onlyDigits(empresa.cpf_cnpj || ""),
+    }),
+    []
   );
+
+  const sortedFiltered = useMemo(
+    () =>
+      sortByValue(
+        filtered,
+        sortGetters[sortKey] || sortGetters.numero_cadastro,
+        sortDirection
+      ),
+    [filtered, sortDirection, sortGetters, sortKey]
+  );
+
+  const visibleEmpresas = useMemo(
+    () => sortedFiltered.slice((page - 1) * listLimit, page * listLimit),
+    [listLimit, page, sortedFiltered]
+  );
+
+  const totalPages = Math.max(1, Math.ceil(sortedFiltered.length / listLimit));
+  const firstVisibleIndex = sortedFiltered.length
+    ? (page - 1) * listLimit + 1
+    : 0;
+  const lastVisibleIndex = Math.min(page * listLimit, sortedFiltered.length);
+
+  const handleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortKey(key);
+    setSortDirection("asc");
+  };
+
+  useEffect(() => {
+    setPage(1);
+  }, [
+    cidadeFiltro,
+    contatoFiltro,
+    cpfCnpjFiltro,
+    documentoFiltro,
+    emailFiltro,
+    listLimit,
+    search,
+    statusFiltro,
+    telefoneFiltro,
+    tipoFiltro,
+    ufFiltro,
+  ]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
 
   const limparFiltros = () => {
     setSearch("");
     setStatusFiltro("ativas");
+    setTipoFiltro(ALL);
     setCidadeFiltro(ALL);
     setUfFiltro(ALL);
+    setContatoFiltro("");
+    setCpfCnpjFiltro("");
     setDocumentoFiltro("todos");
     setEmailFiltro("todos");
     setTelefoneFiltro("todos");
@@ -192,6 +336,48 @@ const Empresas = () => {
     setDialogOpen(true);
   };
 
+  const openExcluir = async (empresa: EmpresaSupabase) => {
+    try {
+      const totalEquipamentos = await empresasService.contarEquipamentos(
+        empresa.id
+      );
+      setEmpresaExclusao(empresa);
+      setEquipamentosEmpresaExclusao(totalEquipamentos);
+      setExcluirEquipamentosVinculados(false);
+    } catch (error) {
+      toast({
+        title: "Erro ao verificar equipamentos",
+        description:
+          error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleExcluirEmpresa = async () => {
+    if (!empresaExclusao) return;
+
+    try {
+      await excluirEmpresa.mutateAsync({
+        id: empresaExclusao.id,
+        input: {
+          excluirEquipamentos: excluirEquipamentosVinculados,
+        },
+      });
+      toast({ title: "Cliente excluído com sucesso." });
+      setEmpresaExclusao(null);
+      setEquipamentosEmpresaExclusao(0);
+      setExcluirEquipamentosVinculados(false);
+    } catch (error) {
+      toast({
+        title: "Não foi possível excluir o cliente",
+        description:
+          error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const openCreateEquipamento = (empresa: EmpresaSupabase) => {
     setEmpresaParaNovoEquipamento(empresa);
     setEquipamentoFormOpen(true);
@@ -216,6 +402,67 @@ const Empresas = () => {
         mode={mode}
         empresa={selected}
       />
+
+      <AlertDialog
+        open={Boolean(empresaExclusao)}
+        onOpenChange={(open) => {
+          if (!open && !excluirEmpresa.isPending) {
+            setEmpresaExclusao(null);
+            setEquipamentosEmpresaExclusao(0);
+            setExcluirEquipamentosVinculados(false);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir cliente definitivamente?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm text-muted-foreground">
+                <p>
+                  {empresaExclusao?.nome || "Este cliente"} possui{" "}
+                  <strong>{equipamentosEmpresaExclusao}</strong>{" "}
+                  equipamento(s) cadastrado(s).
+                </p>
+                <p>
+                  A exclusão será definitiva e será bloqueada caso existam OS,
+                  certificados, protocolos, orçamentos ou outros registros
+                  vinculados.
+                </p>
+                {equipamentosEmpresaExclusao > 0 && (
+                  <label className="flex items-start gap-2 rounded-md border p-3 text-foreground">
+                    <Checkbox
+                      checked={excluirEquipamentosVinculados}
+                      onCheckedChange={(value) =>
+                        setExcluirEquipamentosVinculados(Boolean(value))
+                      }
+                      disabled={excluirEmpresa.isPending}
+                    />
+                    <span>
+                      Excluir também os {equipamentosEmpresaExclusao}{" "}
+                      equipamento(s) deste cliente.
+                    </span>
+                  </label>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={excluirEmpresa.isPending}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={excluirEmpresa.isPending}
+              onClick={(event) => {
+                event.preventDefault();
+                void handleExcluirEmpresa();
+              }}
+            >
+              {excluirEmpresa.isPending ? "Excluindo..." : "Excluir cliente"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <EmpresaDetalhesDialog
         open={detailsOpen}
@@ -286,6 +533,26 @@ const Empresas = () => {
                   <SelectItem value="inativas">Somente inativas</SelectItem>
                 </SelectContent>
               </Select>
+
+              <SearchableSelect
+                value={tipoFiltro === ALL ? "" : tipoFiltro}
+                onValueChange={(value) => setTipoFiltro(value || ALL)}
+                options={opts.tipos}
+                placeholder="Tipo (todos)"
+                emptyText="Nenhum tipo encontrado."
+              />
+
+              <Input
+                value={contatoFiltro}
+                onChange={(event) => setContatoFiltro(event.target.value)}
+                placeholder="Contato"
+              />
+
+              <Input
+                value={cpfCnpjFiltro}
+                onChange={(event) => setCpfCnpjFiltro(event.target.value)}
+                placeholder="CPF/CNPJ"
+              />
 
               <SearchableSelect
                 value={cidadeFiltro === ALL ? "" : cidadeFiltro}
@@ -419,31 +686,85 @@ const Empresas = () => {
               <thead>
                 <tr className="border-b bg-muted/50">
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Nº
+                    <SortableTableHeader
+                      label="Nº"
+                      sortField="numero_cadastro"
+                      sortKey={sortKey}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Nome
+                    <SortableTableHeader
+                      label="Nome"
+                      sortField="nome"
+                      sortKey={sortKey}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Tipo
+                    <SortableTableHeader
+                      label="Tipo"
+                      sortField="tipo"
+                      sortKey={sortKey}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Cidade
+                    <SortableTableHeader
+                      label="Cidade"
+                      sortField="cidade"
+                      sortKey={sortKey}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Estado
+                    <SortableTableHeader
+                      label="Estado"
+                      sortField="estado"
+                      sortKey={sortKey}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Telefone
+                    <SortableTableHeader
+                      label="Telefone"
+                      sortField="telefone"
+                      sortKey={sortKey}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    E-mail
+                    <SortableTableHeader
+                      label="E-mail"
+                      sortField="email"
+                      sortKey={sortKey}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    Contato
+                    <SortableTableHeader
+                      label="Contato"
+                      sortField="contato"
+                      sortKey={sortKey}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    CPF/CNPJ
+                    <SortableTableHeader
+                      label="CPF/CNPJ"
+                      sortField="cpf_cnpj"
+                      sortKey={sortKey}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                    />
                   </th>
                   <th className="text-right px-5 py-3 font-medium text-muted-foreground">
                     Ações
@@ -452,13 +773,13 @@ const Empresas = () => {
               </thead>
 
               <tbody>
-                {visibleEmpresas.map((e, index) => (
+                {visibleEmpresas.map((e) => (
                   <tr
                     key={e.id}
                     className="border-b last:border-0 hover:bg-muted/30 transition-colors"
                   >
                     <td className="px-5 py-3 font-mono text-xs text-muted-foreground">
-                      {formatListIndex(index)}
+                      {formatNumeroCadastro(e.numero_cadastro)}
                     </td>
 
                     <td className="px-5 py-3 font-medium text-foreground">
@@ -523,6 +844,17 @@ const Empresas = () => {
                                 <Wrench className="w-4 h-4 mr-2" /> Cadastrar Equipamento
                               </DropdownMenuItem>
                             )}
+                            {canDeleteEmpresas && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={() => void openExcluir(e)}
+                                >
+                                  <Trash2 className="w-4 h-4 mr-2" /> Excluir
+                                </DropdownMenuItem>
+                              </>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
@@ -542,6 +874,38 @@ const Empresas = () => {
                 )}
               </tbody>
             </table>
+
+            {sortedFiltered.length > 0 && (
+              <div className="flex flex-col gap-3 border-t px-5 py-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                <span>
+                  Mostrando {firstVisibleIndex}-{lastVisibleIndex} de{" "}
+                  {sortedFiltered.length}
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page <= 1}
+                    onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  >
+                    Anterior
+                  </Button>
+                  <span>
+                    Página {page} de {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page >= totalPages}
+                    onClick={() =>
+                      setPage((current) => Math.min(totalPages, current + 1))
+                    }
+                  >
+                    Próxima
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

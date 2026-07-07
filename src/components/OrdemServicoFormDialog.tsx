@@ -24,6 +24,7 @@ import {
 import { useEmpresas } from "@/hooks/useEmpresas";
 import { useEquipamentos } from "@/hooks/useEquipamentos";
 import { useEstadosOS, useTiposOS } from "@/hooks/useCamposOS";
+import { usePlanoUsuarios } from "@/hooks/usePlanos";
 import PreventivaChecklistDialog from "@/components/PreventivaChecklistDialog";
 import { ordenarNomesEstadosOS } from "@/utils/ordemEstadosOS";
 
@@ -87,6 +88,17 @@ const getEquipamentoLabel = (equipamento: {
     .join(" - ");
 };
 
+const PERFIS_TECNICO_EXECUTOR = new Set(["admin", "gestor", "tecnico"]);
+
+const getUsuarioLabel = (usuario: { nome: string }) => usuario.nome;
+
+const normalizeText = (value?: string | null) =>
+  (value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+
 const normalizarChaveAcessorio = (descricao: string) =>
   descricao.trim().toLowerCase().replace(/\s+/g, " ");
 
@@ -134,15 +146,22 @@ const OrdemServicoFormDialog = ({
   const criarOS = useCriarOrdemServico();
   const atualizarOS = useAtualizarOrdemServico();
 
-  const { data: empresas = [] } = useEmpresas("ativas");
-  const { data: equipamentos = [] } = useEquipamentos();
+  const { data: empresas = [] } = useEmpresas({ statusFiltro: "ativas" });
   const { data: tiposOS = [] } = useTiposOS();
   const { data: estadosOS = [] } = useEstadosOS();
+  const { data: usuarios = [] } = usePlanoUsuarios();
 
   const [form, setForm] = useState<OrdemServicoFormInput>(emptyForm);
   const [acessorios, setAcessorios] = useState<AcessorioFormItem[]>([]);
   const [novoAcessorio, setNovoAcessorio] = useState("");
   const [checklistEditOpen, setChecklistEditOpen] = useState(false);
+  const {
+    data: equipamentos = [],
+    isFetching: isFetchingEquipamentos,
+  } = useEquipamentos(
+    { empresaId: form.empresaId, statusFiltro: "ativos" },
+    { enabled: open && Boolean(form.empresaId) }
+  );
 
   const readOnly = mode === "view";
   const saving = criarOS.isPending || atualizarOS.isPending;
@@ -169,14 +188,9 @@ const OrdemServicoFormDialog = ({
     return empresa ? getEmpresaLabel(empresa) : "";
   }, [empresas, form.empresaId]);
 
-  const equipamentosFiltrados = useMemo(() => {
-    if (!form.empresaId) return [];
-    return equipamentos.filter((equipamento) => equipamento.empresa_id === form.empresaId);
-  }, [equipamentos, form.empresaId]);
-
   const equipamentoOptions = useMemo(
-    () => equipamentosFiltrados.map((equipamento) => getEquipamentoLabel(equipamento)),
-    [equipamentosFiltrados]
+    () => equipamentos.map((equipamento) => getEquipamentoLabel(equipamento)),
+    [equipamentos]
   );
 
   const selectedEquipamentoLabel = useMemo(() => {
@@ -190,6 +204,37 @@ const OrdemServicoFormDialog = ({
     () => ordenarNomesEstadosOS(estadosOS.map((estado) => estado.nome)),
     [estadosOS]
   );
+
+  const usuariosTecnicoExecutor = useMemo(
+    () =>
+      usuarios.filter(
+        (usuario) =>
+          usuario.ativo && PERFIS_TECNICO_EXECUTOR.has(usuario.perfil)
+      ),
+    [usuarios]
+  );
+
+  const tecnicoExecutorOptions = useMemo(
+    () => usuariosTecnicoExecutor.map((usuario) => getUsuarioLabel(usuario)),
+    [usuariosTecnicoExecutor]
+  );
+
+  const selectedTecnicoExecutor = useMemo(
+    () =>
+      usuariosTecnicoExecutor.find(
+        (usuario) => usuario.id === form.tecnicoResponsavelId
+      ) ||
+      usuariosTecnicoExecutor.find(
+        (usuario) =>
+          normalizeText(usuario.nome) === normalizeText(form.responsavelTexto)
+      ) ||
+      null,
+    [form.responsavelTexto, form.tecnicoResponsavelId, usuariosTecnicoExecutor]
+  );
+
+  const selectedTecnicoExecutorLabel = selectedTecnicoExecutor
+    ? getUsuarioLabel(selectedTecnicoExecutor)
+    : "";
 
   const selectedTipoLabel = useMemo(() => {
     const tipo = tiposOS.find((item) => item.id === form.tipoOsId);
@@ -242,17 +287,10 @@ const OrdemServicoFormDialog = ({
       ? tiposOS.find((tipo) => tipo.nome === initialTipoServico)
       : null;
 
-    const equipamentoInicial = fromEquipamentoId
-      ? equipamentos.find((equipamento) => equipamento.id === fromEquipamentoId)
-      : null;
-
     setForm({
       ...emptyForm,
-      empresaId:
-        equipamentoInicial?.empresa_id ||
-        fromEquipamentoEmpresaId ||
-        "",
-      equipamentoId: equipamentoInicial?.id || fromEquipamentoId || "",
+      empresaId: fromEquipamentoEmpresaId || "",
+      equipamentoId: fromEquipamentoId || "",
       tipoOsId: tipoInicial?.id || "",
       estadoOsId: estadoAberta?.id || "",
       solicitanteTexto: "",
@@ -267,7 +305,6 @@ const OrdemServicoFormDialog = ({
     mode,
     estadosOS,
     tiposOS,
-    equipamentos,
     fromEquipamentoEmpresaId,
     fromEquipamentoId,
     initialTipoServico,
@@ -289,7 +326,7 @@ const OrdemServicoFormDialog = ({
   };
 
   const handleEquipamentoChange = (label: string) => {
-    const equipamento = equipamentosFiltrados.find(
+    const equipamento = equipamentos.find(
       (item) => getEquipamentoLabel(item) === label
     );
 
@@ -305,6 +342,28 @@ const OrdemServicoFormDialog = ({
     const estado = estadosOS.find((item) => item.nome === label);
     update("estadoOsId", estado?.id || "");
   };
+
+  const handleTecnicoExecutorChange = (label: string) => {
+    const tecnico = usuariosTecnicoExecutor.find(
+      (item) => getUsuarioLabel(item) === label
+    );
+
+    setForm((prev) => ({
+      ...prev,
+      tecnicoResponsavelId: tecnico?.id || "",
+      responsavelTexto: tecnico?.nome || "",
+    }));
+  };
+
+  useEffect(() => {
+    if (!open || form.tecnicoResponsavelId || !selectedTecnicoExecutor) return;
+
+    setForm((prev) => ({
+      ...prev,
+      tecnicoResponsavelId: selectedTecnicoExecutor.id,
+      responsavelTexto: selectedTecnicoExecutor.nome,
+    }));
+  }, [form.tecnicoResponsavelId, open, selectedTecnicoExecutor]);
 
   const handleAddAcessorio = () => {
     const v = novoAcessorio.trim();
@@ -367,16 +426,24 @@ const OrdemServicoFormDialog = ({
       return;
     }
 
+    if (!selectedTecnicoExecutor) {
+      toast({
+        title: "Selecione o técnico executor.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       const payload: OrdemServicoFormInput = {
         ...form,
-        responsavelTexto: form.responsavelTexto?.trim(),
+        tecnicoResponsavelId: selectedTecnicoExecutor.id,
+        responsavelTexto: selectedTecnicoExecutor.nome,
         solicitanteTexto: selectedEmpresaLabel,
         problemaRelatado: form.problemaRelatado?.trim(),
         origemProblema: form.origemProblema?.trim(),
         descricaoServico: form.descricaoServico?.trim(),
         observacoes: form.observacoes?.trim(),
-        statusSistema: "aberta",
         acessorios: dedupeAcessoriosForm(acessorios),
       };
 
@@ -463,13 +530,21 @@ const OrdemServicoFormDialog = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="space-y-2">
-                <Label className="text-sm">Responsável Técnico</Label>
-                <Input
-                  value={form.responsavelTexto}
-                  onChange={(e) => update("responsavelTexto", e.target.value)}
-                  disabled={readOnly || saving}
-                  placeholder="Nome do técnico executor"
-                />
+                <Label className="text-sm">Técnico Executor</Label>
+                {readOnly ? (
+                  <Input
+                    value={selectedTecnicoExecutorLabel || form.responsavelTexto || ""}
+                    disabled
+                  />
+                ) : (
+                  <SearchableSelect
+                    value={selectedTecnicoExecutorLabel}
+                    onValueChange={handleTecnicoExecutorChange}
+                    options={tecnicoExecutorOptions}
+                    placeholder="Selecione o técnico executor"
+                    emptyText="Nenhum técnico executor cadastrado."
+                  />
+                )}
               </div>
 
               <div className="space-y-2">
@@ -498,13 +573,19 @@ const OrdemServicoFormDialog = ({
                     options={equipamentoOptions}
                     placeholder={
                       form.empresaId
-                        ? "Selecione o equipamento do cliente"
+                        ? isFetchingEquipamentos && equipamentos.length === 0
+                          ? "Carregando equipamentos..."
+                          : "Selecione o equipamento do cliente"
                         : "Selecione um solicitante primeiro"
                     }
                     emptyText={
                       form.empresaId
                         ? "Nenhum equipamento cadastrado para este cliente."
                         : "Selecione um solicitante primeiro."
+                    }
+                    disabled={
+                      !form.empresaId ||
+                      (isFetchingEquipamentos && equipamentos.length === 0)
                     }
                   />
                 )}
