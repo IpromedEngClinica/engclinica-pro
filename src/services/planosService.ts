@@ -59,6 +59,7 @@ export type PlanoEquipamento = {
 export type PlanoCicloResumo = {
   id: string;
   titulo: string;
+  titulo_controle?: string | null;
   data_prevista: string;
   data_abertura: string;
   data_fechamento_prevista: string;
@@ -66,6 +67,9 @@ export type PlanoCicloResumo = {
   relatorio_emitido_em?: string | null;
   relatorio_validade_ate?: string | null;
   relatorio_validade_meses?: number;
+  cronograma_mes_inicio?: string | null;
+  cronograma_meses_realizados?: string[] | null;
+  cronograma_meses_previstos?: string[] | null;
   status: PlanoStatusCiclo;
   itens?: PlanoCicloItem[];
 };
@@ -183,6 +187,13 @@ export type PlanoCicloInput = {
   dataRealizacaoCalibracao?: string | null;
   dataEmissaoCalibracao?: string | null;
   observacoes?: string | null;
+  setoresSelecionados?: string[];
+};
+
+export type PlanoCicloCronogramaInput = {
+  mesInicio: string;
+  mesesRealizados: string[];
+  mesesPrevistos: string[];
 };
 
 export type AbrirPreventivaItemResultado = {
@@ -226,6 +237,21 @@ export type ResultadoNaoLocalizados = {
   totalAtualizados: number;
   totalIgnorados: number;
   atualizados: Array<{
+    equipamentoId: string;
+    equipamentoDescricao: string;
+  }>;
+  ignorados: Array<{
+    equipamentoId: string;
+    equipamentoDescricao: string;
+    motivo: string;
+  }>;
+};
+
+export type ResultadoCancelamentoItensCiclo = {
+  totalSelecionados: number;
+  totalCancelados: number;
+  totalIgnorados: number;
+  cancelados: Array<{
     equipamentoId: string;
     equipamentoDescricao: string;
   }>;
@@ -355,7 +381,8 @@ const selectPlanoEquipamento = `
   setor:plano_setores (id, organizacao_id, plano_id, nome, unidade, ordem, ativo, created_at, updated_at),
   equipamento:equipamentos (
     id, organizacao_id, empresa_id, tipo_equipamento_id, tipo_texto, fabricante,
-    modelo, numero_serie, patrimonio, tag, setor, status, ativo, created_at, updated_at,
+    modelo, numero_serie, patrimonio, tag, setor, empresa_setor_id, local_instalacao,
+    status, ativo, created_at, updated_at,
     tipo_equipamento:tipos_equipamento (id, nome)
   )
 `;
@@ -368,9 +395,10 @@ const selectPlano = `
   setores:plano_setores (id, organizacao_id, plano_id, nome, unidade, ordem, ativo, created_at, updated_at),
   equipamentos:plano_equipamentos (${selectPlanoEquipamento}),
   ciclos:plano_ciclos (
-    id, titulo, data_prevista, data_abertura, data_fechamento_prevista,
+    id, titulo, titulo_controle, data_prevista, data_abertura, data_fechamento_prevista,
     data_fechamento_real, relatorio_emitido_em, relatorio_validade_ate,
-    relatorio_validade_meses, status,
+    relatorio_validade_meses, cronograma_mes_inicio, cronograma_meses_realizados,
+    cronograma_meses_previstos, status,
     itens:plano_ciclo_itens (id, status)
   )
 `;
@@ -387,16 +415,18 @@ const selectPlanoCicloItem = `
   setor:plano_ciclo_setores (${selectPlanoCicloSetor}),
   equipamento:equipamentos (
     id, organizacao_id, empresa_id, tipo_equipamento_id, tipo_texto, fabricante,
-    modelo, numero_serie, patrimonio, tag, setor, status, ativo, created_at, updated_at,
+    modelo, numero_serie, patrimonio, tag, setor, empresa_setor_id, local_instalacao,
+    status, ativo, created_at, updated_at,
     tipo_equipamento:tipos_equipamento (id, nome)
   )
 `;
 
 const selectPlanoCiclo = `
   id, organizacao_id, plano_id, titulo, data_prevista, data_abertura,
-  data_fechamento_prevista, data_fechamento_real, data_realizacao_calibracao,
+  titulo_controle, data_fechamento_prevista, data_fechamento_real, data_realizacao_calibracao,
   data_emissao_calibracao, relatorio_emitido_em, relatorio_validade_ate,
-  relatorio_validade_meses, observacoes, status, created_at, updated_at,
+  relatorio_validade_meses, cronograma_mes_inicio, cronograma_meses_realizados,
+  cronograma_meses_previstos, observacoes, status, created_at, updated_at,
   setores:plano_ciclo_setores (${selectPlanoCicloSetor}),
   itens:plano_ciclo_itens (${selectPlanoCicloItem})
 `;
@@ -480,12 +510,80 @@ const cicloPayload = (input: PlanoCicloInput) => ({
   status: "aberto",
 });
 
+const normalizarMesCronograma = (value: string) => {
+  const normalizado = value.trim().slice(0, 7);
+  if (!/^\d{4}-\d{2}$/.test(normalizado)) {
+    throw new Error("Informe um mes inicial valido para o cronograma.");
+  }
+  return normalizado;
+};
+
+const normalizarMesesCronograma = (values: string[]) =>
+  Array.from(
+    new Set(
+      values
+        .map((value) => value.trim().slice(0, 7))
+        .filter((value) => /^\d{4}-\d{2}$/.test(value))
+    )
+  ).sort();
+
 const tiposServicoPlanoEquipamento = (equipamento: PlanoEquipamento): PlanoTipoServico[] => {
   const tipos: PlanoTipoServico[] = [];
   if (equipamento.executar_preventiva) tipos.push("preventiva");
   if (equipamento.executar_calibracao) tipos.push("calibracao");
   if (equipamento.executar_seguranca_eletrica) tipos.push("seguranca_eletrica");
   return tipos;
+};
+
+export const PLANO_SETOR_SEM_SETOR_KEY = "__sem_setor__";
+
+export type PlanoSetorDerivado = {
+  key: string;
+  nome: string;
+  ordem: number;
+  quantidade: number;
+  semSetor: boolean;
+};
+
+const normalizarChaveSetorPlano = (value: string) =>
+  value
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+export const getSetorNomePlanoEquipamento = (item: PlanoEquipamento) => {
+  const setorAtualEquipamento = item.equipamento?.setor?.trim();
+  if (setorAtualEquipamento) return setorAtualEquipamento;
+  const setorLegadoPlano = item.setor?.nome?.trim();
+  return setorLegadoPlano || "Sem setor";
+};
+
+export const getSetorKeyPlanoEquipamento = (item: PlanoEquipamento) => {
+  const nome = getSetorNomePlanoEquipamento(item);
+  return nome === "Sem setor" ? PLANO_SETOR_SEM_SETOR_KEY : `setor:${normalizarChaveSetorPlano(nome)}`;
+};
+
+export const listarSetoresDerivadosPlano = (equipamentos: PlanoEquipamento[]): PlanoSetorDerivado[] => {
+  const map = new Map<string, PlanoSetorDerivado>();
+
+  equipamentos.forEach((item) => {
+    const key = getSetorKeyPlanoEquipamento(item);
+    const nome = getSetorNomePlanoEquipamento(item);
+    const atual = map.get(key);
+    map.set(key, {
+      key,
+      nome,
+      ordem: atual?.ordem ?? map.size + 1,
+      quantidade: (atual?.quantidade || 0) + 1,
+      semSetor: key === PLANO_SETOR_SEM_SETOR_KEY,
+    });
+  });
+
+  return Array.from(map.values()).sort((a, b) => {
+    if (a.semSetor !== b.semSetor) return a.semSetor ? -1 : 1;
+    return a.nome.localeCompare(b.nome, "pt-BR");
+  }).map((item, index) => ({ ...item, ordem: index + 1 }));
 };
 
 const buscarTipoOSPreventiva = async () => {
@@ -758,14 +856,23 @@ export const planosService = {
     }
 
     const plano = await this.buscarPlanoPorId(planoId);
-    const setoresAtivos = plano.setores || [];
     const equipamentosAtivos = plano.equipamentos || [];
 
     if (!equipamentosAtivos.length) {
       throw new Error("Adicione equipamentos ao plano antes de abrir um ciclo.");
     }
 
-    if (!equipamentosAtivos.some((equipamento) => tiposServicoPlanoEquipamento(equipamento).length > 0)) {
+    const recebeuFiltroSetores = Array.isArray(input.setoresSelecionados);
+    const setoresSelecionados = new Set((input.setoresSelecionados || []).filter(Boolean));
+    const equipamentosDoCiclo = recebeuFiltroSetores
+      ? equipamentosAtivos.filter((equipamento) => setoresSelecionados.has(getSetorKeyPlanoEquipamento(equipamento)))
+      : equipamentosAtivos;
+
+    if (!equipamentosDoCiclo.length) {
+      throw new Error("Nenhum equipamento encontrado para os setores selecionados.");
+    }
+
+    if (!equipamentosDoCiclo.some((equipamento) => tiposServicoPlanoEquipamento(equipamento).length > 0)) {
       throw new Error("O plano nao possui servicos P/C/E configurados para gerar itens do ciclo.");
     }
 
@@ -780,36 +887,40 @@ export const planosService = {
       .single();
     if (cicloError) throw new Error(cicloError.message);
 
-    const setorSnapshotPorOrigem = new Map<string, string>();
-    if (setoresAtivos.length) {
+    const setoresDoCiclo = listarSetoresDerivadosPlano(equipamentosDoCiclo).filter((setor) => !setor.semSetor);
+    const setorSnapshotPorChave = new Map<string, string>();
+    if (setoresDoCiclo.length) {
       const { data: setoresCriados, error: setoresError } = await supabase
         .from("plano_ciclo_setores")
-        .insert(setoresAtivos.map((setor) => ({
+        .insert(setoresDoCiclo.map((setor) => ({
           organizacao_id: organizacaoId,
           ciclo_id: ciclo.id,
-          setor_origem_id: setor.id,
+          setor_origem_id: null,
           nome_snapshot: setor.nome,
-          unidade_snapshot: setor.unidade,
+          unidade_snapshot: null,
           ordem: setor.ordem,
         })))
         .select(selectPlanoCicloSetor);
       if (setoresError) throw new Error(setoresError.message);
       (setoresCriados || []).forEach((setor) => {
-        if (setor.setor_origem_id) setorSnapshotPorOrigem.set(setor.setor_origem_id, setor.id);
+        setorSnapshotPorChave.set(`setor:${normalizarChaveSetorPlano(setor.nome_snapshot)}`, setor.id);
       });
     }
 
-    const itens = equipamentosAtivos.flatMap((equipamentoPlano) =>
-      tiposServicoPlanoEquipamento(equipamentoPlano).map((tipoServico) => ({
-        organizacao_id: organizacaoId,
-        ciclo_id: ciclo.id,
-        ciclo_setor_id: equipamentoPlano.setor_id ? setorSnapshotPorOrigem.get(equipamentoPlano.setor_id) || null : null,
-        plano_equipamento_id: equipamentoPlano.id,
-        equipamento_id: equipamentoPlano.equipamento_id,
-        tipo_servico: tipoServico,
-        status: "pendente",
-      }))
-    );
+    const itens = equipamentosDoCiclo.flatMap((equipamentoPlano) => {
+      const setorKey = getSetorKeyPlanoEquipamento(equipamentoPlano);
+      return tiposServicoPlanoEquipamento(equipamentoPlano).map((tipoServico) => ({
+          organizacao_id: organizacaoId,
+          ciclo_id: ciclo.id,
+          ciclo_setor_id: setorKey === PLANO_SETOR_SEM_SETOR_KEY
+            ? null
+            : setorSnapshotPorChave.get(setorKey) || null,
+          plano_equipamento_id: equipamentoPlano.id,
+          equipamento_id: equipamentoPlano.equipamento_id,
+          tipo_servico: tipoServico,
+          status: "pendente",
+        }));
+    });
 
     const { error: itensError } = await supabase.from("plano_ciclo_itens").insert(itens);
     if (itensError) throw new Error(itensError.message);
@@ -849,6 +960,126 @@ export const planosService = {
     if (fechamentoError) throw new Error(fechamentoError.message);
 
     return this.buscarCicloPlano(cicloId);
+  },
+
+  async atualizarTituloControleCicloPlano(cicloId: string, titulo: string) {
+    const tituloNormalizado = titulo.trim();
+    if (!tituloNormalizado) throw new Error("Informe o nome do ciclo.");
+
+    const { error } = await supabase
+      .from("plano_ciclos")
+      .update({ titulo_controle: tituloNormalizado })
+      .eq("id", cicloId);
+    if (error) throw new Error(error.message);
+
+    return this.buscarCicloPlano(cicloId);
+  },
+
+  async atualizarCronogramaCicloPlano(
+    cicloId: string,
+    input: PlanoCicloCronogramaInput
+  ) {
+    const { data, error } = await supabase
+      .from("plano_ciclos")
+      .update({
+        cronograma_mes_inicio: normalizarMesCronograma(input.mesInicio),
+        cronograma_meses_realizados: normalizarMesesCronograma(input.mesesRealizados),
+        cronograma_meses_previstos: normalizarMesesCronograma(input.mesesPrevistos),
+      })
+      .eq("id", cicloId)
+      .select(selectPlanoCiclo)
+      .single();
+    if (error) throw new Error(error.message);
+
+    return ordenarCiclo(data as unknown as PlanoCiclo);
+  },
+
+  async adicionarEquipamentosCicloPlano(cicloId: string, planoEquipamentoIds: string[]) {
+    const ids = Array.from(new Set(planoEquipamentoIds.filter(Boolean)));
+    if (!ids.length) throw new Error("Selecione ao menos um equipamento.");
+
+    const organizacaoId = await buscarOrganizacaoAtual();
+    const ciclo = await this.buscarCicloPlano(cicloId);
+    const plano = await this.buscarPlanoPorId(ciclo.plano_id);
+    const equipamentosSelecionados = (plano.equipamentos || []).filter((item) =>
+      item.ativo && ids.includes(item.id)
+    );
+
+    if (!equipamentosSelecionados.length) {
+      throw new Error("Nenhum equipamento valido foi encontrado no plano.");
+    }
+
+    const setorSnapshotPorChave = new Map<string, string>();
+    (ciclo.setores || []).forEach((setor) => {
+      setorSnapshotPorChave.set(`setor:${normalizarChaveSetorPlano(setor.nome_snapshot)}`, setor.id);
+    });
+
+    const setoresParaCriar = listarSetoresDerivadosPlano(equipamentosSelecionados)
+      .filter((setor) => !setor.semSetor && !setorSnapshotPorChave.has(setor.key));
+
+    if (setoresParaCriar.length) {
+      const proximaOrdem =
+        Math.max(0, ...(ciclo.setores || []).map((setor) => setor.ordem || 0)) + 1;
+      const { data: setoresCriados, error: setoresError } = await supabase
+        .from("plano_ciclo_setores")
+        .insert(setoresParaCriar.map((setor, index) => ({
+          organizacao_id: organizacaoId,
+          ciclo_id: ciclo.id,
+          setor_origem_id: null,
+          nome_snapshot: setor.nome,
+          unidade_snapshot: null,
+          ordem: proximaOrdem + index,
+        })))
+        .select(selectPlanoCicloSetor);
+      if (setoresError) throw new Error(setoresError.message);
+      (setoresCriados || []).forEach((setor) => {
+        setorSnapshotPorChave.set(`setor:${normalizarChaveSetorPlano(setor.nome_snapshot)}`, setor.id);
+      });
+    }
+
+    const itemJaExiste = (equipamentoPlano: PlanoEquipamento, tipoServico: PlanoTipoServico) =>
+      (ciclo.itens || []).some((item) =>
+        item.tipo_servico === tipoServico &&
+        (
+          item.plano_equipamento_id === equipamentoPlano.id ||
+          item.equipamento_id === equipamentoPlano.equipamento_id
+        )
+      );
+
+    const itens = equipamentosSelecionados.flatMap((equipamentoPlano) => {
+      const setorKey = getSetorKeyPlanoEquipamento(equipamentoPlano);
+      return tiposServicoPlanoEquipamento(equipamentoPlano)
+        .filter((tipoServico) => !itemJaExiste(equipamentoPlano, tipoServico))
+        .map((tipoServico) => ({
+          organizacao_id: organizacaoId,
+          ciclo_id: ciclo.id,
+          ciclo_setor_id: setorKey === PLANO_SETOR_SEM_SETOR_KEY
+            ? null
+            : setorSnapshotPorChave.get(setorKey) || null,
+          plano_equipamento_id: equipamentoPlano.id,
+          equipamento_id: equipamentoPlano.equipamento_id,
+          tipo_servico: tipoServico,
+          status: "pendente",
+        }));
+    });
+
+    if (!itens.length) {
+      throw new Error("Os equipamentos selecionados ja possuem itens neste ciclo.");
+    }
+
+    const { error: itensError } = await supabase.from("plano_ciclo_itens").insert(itens);
+    if (itensError) throw new Error(itensError.message);
+
+    const { error: cicloError } = await supabase
+      .from("plano_ciclos")
+      .update({
+        status: "aberto",
+        data_fechamento_real: null,
+      })
+      .eq("id", ciclo.id);
+    if (cicloError) throw new Error(cicloError.message);
+
+    return this.buscarCicloPlano(ciclo.id);
   },
 
   async listarCiclosPlano(planoId: string) {
@@ -970,10 +1201,12 @@ export const planosService = {
   async finalizarPreventivasConformesEmLote({
     itemIds,
     dataFechamento,
+    dataReferenciaValidade,
     onProgress,
   }: {
     itemIds: string[];
     dataFechamento?: string | null;
+    dataReferenciaValidade?: string | null;
     onProgress?: (progresso: ProgressoFinalizacaoPreventivasLote) => void;
   }) {
     const resultado: ResultadoFinalizacaoPreventivasLote = {
@@ -1024,6 +1257,7 @@ export const planosService = {
           resultadoGeral: "aprovado",
           observacoes: "Manutencao preventiva realizada conforme checklist.",
           dataFechamento,
+          dataReferenciaValidade,
           planoCicloItemId: itemComOs.id,
         });
 
@@ -1171,6 +1405,112 @@ export const planosService = {
         equipamentoDescricao: descricao,
       });
       resultado.totalAtualizados += 1;
+    }
+
+    return resultado;
+  },
+
+  async cancelarEquipamentosNoCiclo({
+    cicloId,
+    equipamentoIds,
+  }: {
+    cicloId: string;
+    equipamentoIds: string[];
+  }) {
+    const idsUnicos = Array.from(new Set(equipamentoIds.filter(Boolean)));
+    const resultado: ResultadoCancelamentoItensCiclo = {
+      totalSelecionados: idsUnicos.length,
+      totalCancelados: 0,
+      totalIgnorados: 0,
+      cancelados: [],
+      ignorados: [],
+    };
+
+    if (!idsUnicos.length) return resultado;
+
+    const { data, error } = await supabase
+      .from("plano_ciclo_itens")
+      .select(selectPlanoCicloItem)
+      .eq("ciclo_id", cicloId)
+      .in("equipamento_id", idsUnicos);
+
+    if (error) throw new Error(error.message);
+
+    const itens = (data || []) as unknown as PlanoCicloItem[];
+
+    for (const equipamentoId of idsUnicos) {
+      const itensEquipamento = itens.filter((item) => item.equipamento_id === equipamentoId);
+      const itemReferencia = itensEquipamento[0];
+      const descricao = itemReferencia
+        ? equipamentoDescricao(itemReferencia)
+        : equipamentoId;
+
+      if (!itensEquipamento.length) {
+        resultado.ignorados.push({
+          equipamentoId,
+          equipamentoDescricao: descricao,
+          motivo: "Equipamento nao encontrado no ciclo.",
+        });
+        resultado.totalIgnorados += 1;
+        continue;
+      }
+
+      const bloqueado = itensEquipamento.find((item) =>
+        item.os_id ||
+        item.calibracao_execucao_id ||
+        item.status === "aberto" ||
+        item.status === "concluido"
+      );
+
+      if (bloqueado) {
+        resultado.ignorados.push({
+          equipamentoId,
+          equipamentoDescricao: descricao,
+          motivo: "O equipamento possui servico ja iniciado, OS ou certificado vinculado.",
+        });
+        resultado.totalIgnorados += 1;
+        continue;
+      }
+
+      const pendentes = itensEquipamento.filter((item) => item.status === "pendente");
+      if (!pendentes.length) {
+        resultado.ignorados.push({
+          equipamentoId,
+          equipamentoDescricao: descricao,
+          motivo: "Nao ha itens pendentes para cancelar neste ciclo.",
+        });
+        resultado.totalIgnorados += 1;
+        continue;
+      }
+
+      const { error: updateError } = await supabase
+        .from("plano_ciclo_itens")
+        .update({
+          status: "cancelado",
+          motivo_cancelamento: "Execucao cancelada pelo usuario.",
+          cancelado_em: new Date().toISOString(),
+        })
+        .eq("ciclo_id", cicloId)
+        .eq("equipamento_id", equipamentoId)
+        .eq("status", "pendente")
+        .is("os_id", null)
+        .is("calibracao_execucao_id", null);
+
+      if (updateError) {
+        resultado.ignorados.push({
+          equipamentoId,
+          equipamentoDescricao: descricao,
+          motivo: updateError.message,
+        });
+        resultado.totalIgnorados += 1;
+        continue;
+      }
+
+      resultado.cancelados.push({
+        equipamentoId,
+        equipamentoDescricao: descricao,
+      });
+      resultado.totalCancelados += 1;
     }
 
     return resultado;
@@ -1348,9 +1688,9 @@ export const planosService = {
       plano,
       setores,
       itens,
-      preventivas: itens.filter((item) => item.tipo_servico === "preventiva"),
-      calibracoes: itens.filter((item) => item.tipo_servico === "calibracao"),
-      segurancasEletricas: itens.filter((item) => item.tipo_servico === "seguranca_eletrica"),
+      preventivas: itens.filter((item) => item.tipo_servico === "preventiva" && item.status !== "cancelado"),
+      calibracoes: itens.filter((item) => item.tipo_servico === "calibracao" && item.status !== "cancelado"),
+      segurancasEletricas: itens.filter((item) => item.tipo_servico === "seguranca_eletrica" && item.status !== "cancelado"),
       naoLocalizados: itens.filter((item) => item.status === "nao_localizado"),
       ordensServico,
       certificadosCalibracao,
@@ -1476,7 +1816,9 @@ export const planosService = {
     const detalhesCiclos = await Promise.all(ciclos.map((ciclo) => this.buscarDetalhesCicloPlano(ciclo.id)));
     const equipamentosDosCiclos = cicloId
       ? new Set(detalhesCiclos.flatMap((detalhes) =>
-          (detalhes.ciclo.itens || []).map((item) => item.equipamento_id)
+          (detalhes.ciclo.itens || [])
+            .filter((item) => item.status !== "cancelado")
+            .map((item) => item.equipamento_id)
         ))
       : null;
     const servicoAtivo = (equipamento: PlanoEquipamento) =>
@@ -1496,7 +1838,7 @@ export const planosService = {
       detalhesCiclos,
       equipamentos,
       datasPrevistas: gerarDatasPrevistasNoPeriodo({
-        dataInicial: plano.data_inicial,
+        dataInicial: dataInicio,
         frequencia: plano.frequencia,
         inicioPeriodo: dataInicio,
         fimPeriodo: dataFim,

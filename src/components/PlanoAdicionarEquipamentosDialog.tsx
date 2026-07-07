@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEquipamentos } from "@/hooks/useEquipamentos";
 import { useAdicionarEquipamentosPlano } from "@/hooks/usePlanos";
@@ -19,7 +18,6 @@ type Props = {
 };
 
 const ALL = "__all__";
-const NONE = "__none__";
 
 const nomeEquipamento = (equipamento: EquipamentoSupabase) =>
   [
@@ -40,7 +38,6 @@ const PlanoAdicionarEquipamentosDialog = ({ open, onOpenChange, plano }: Props) 
   const [serie, setSerie] = useState("");
   const [patrimonio, setPatrimonio] = useState("");
   const [tag, setTag] = useState("");
-  const [setorPlano, setSetorPlano] = useState(NONE);
   const [selecionados, setSelecionados] = useState<Record<string, EquipamentoSelecionadoPlano>>({});
 
   const incluidos = useMemo(() => new Set((plano.equipamentos || []).map((item) => item.equipamento_id)), [plano.equipamentos]);
@@ -77,7 +74,7 @@ const PlanoAdicionarEquipamentosDialog = ({ open, onOpenChange, plano }: Props) 
   const selecionadosIds = useMemo(() => new Set(selecionadosArray.map((item) => item.equipamentoId)), [selecionadosArray]);
   const criarSelecao = (equipamentoId: string): EquipamentoSelecionadoPlano => ({
     equipamentoId,
-    setorPlanoId: setorPlano === NONE ? null : setorPlano,
+    setorPlanoId: null,
     preventiva: true,
     calibracao: false,
     segurancaEletrica: false,
@@ -105,18 +102,6 @@ const PlanoAdicionarEquipamentosDialog = ({ open, onOpenChange, plano }: Props) 
       return { ...current, [equipamentoId]: current[equipamentoId] || criarSelecao(equipamentoId) };
     });
   };
-  const atualizarItem = (equipamentoId: string, patch: Partial<EquipamentoSelecionadoPlano>) => {
-    setSelecionados((current) => ({
-      ...current,
-      [equipamentoId]: {
-        ...(current[equipamentoId] || criarSelecao(equipamentoId)),
-        ...patch,
-        equipamentoId,
-      },
-    }));
-  };
-  const itemSelecionado = (equipamentoId: string) => selecionados[equipamentoId] || criarSelecao(equipamentoId);
-
   const salvar = async () => {
     try {
       await adicionar.mutateAsync({
@@ -165,25 +150,12 @@ const PlanoAdicionarEquipamentosDialog = ({ open, onOpenChange, plano }: Props) 
           <Input placeholder="Patrimonio" value={patrimonio} onChange={(event) => setPatrimonio(event.target.value)} />
           <Input placeholder="TAG" value={tag} onChange={(event) => setTag(event.target.value)} />
         </div>
-        <div className="grid gap-3 rounded-lg border p-3">
-          <div className="space-y-1.5">
-            <Label>Setor padrao ao selecionar</Label>
-            <Select value={setorPlano} onValueChange={setSetorPlano}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NONE}>Sem setor</SelectItem>
-                {(plano.setores || []).map((setor) => <SelectItem key={setor.id} value={setor.id}>{setor.nome}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-muted/40">
                 <Th><Checkbox checked={todosSelecionados} onCheckedChange={(value) => toggleTodos(Boolean(value))} /></Th>
                 <Th>Equipamento</Th>
-                <Th>Setor plano</Th>
                 <Th>Setor cadastro</Th>
                 <Th>Fabricante</Th>
                 <Th>Modelo</Th>
@@ -198,19 +170,6 @@ const PlanoAdicionarEquipamentosDialog = ({ open, onOpenChange, plano }: Props) 
                 <tr key={item.id} className="border-t">
                   <Td><Checkbox checked={selecionadosIds.has(item.id)} onCheckedChange={(value) => toggleItem(item.id, Boolean(value))} /></Td>
                   <Td>{nomeEquipamento(item)}</Td>
-                  <Td>
-                    <Select
-                      value={itemSelecionado(item.id).setorPlanoId || NONE}
-                      disabled={!selecionadosIds.has(item.id)}
-                      onValueChange={(value) => atualizarItem(item.id, { setorPlanoId: value === NONE ? null : value })}
-                    >
-                      <SelectTrigger className="h-8 min-w-36"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={NONE}>Sem setor</SelectItem>
-                        {(plano.setores || []).map((setor) => <SelectItem key={setor.id} value={setor.id}>{setor.nome}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </Td>
                   <Td>{item.setor || "-"}</Td>
                   <Td>{item.fabricante || "-"}</Td>
                   <Td>{item.modelo || "-"}</Td>

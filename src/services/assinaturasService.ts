@@ -92,6 +92,30 @@ export const assinaturasService = {
     };
   },
 
+  async buscarMinhaAssinaturaDocumento(): Promise<AssinaturaDocumento | null> {
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError) throw new Error(authError.message);
+    if (!authData.user) throw new Error("Usuario nao autenticado.");
+
+    const { data, error } = await supabase
+      .from("usuarios")
+      .select("id, nome, assinatura_storage_path")
+      .eq("id", authData.user.id)
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    const storagePath = data.assinatura_storage_path as string | null;
+    if (!storagePath) return null;
+
+    return {
+      usuarioId: data.id as string,
+      nome: data.nome as string,
+      storagePath,
+      dataUrl: await baixarDataUrl(storagePath),
+    };
+  },
+
   async salvarMinhaAssinatura(arquivo: Blob) {
     const [{ data: authData, error: authError }, { data: organizacaoId, error: organizacaoError }] =
       await Promise.all([

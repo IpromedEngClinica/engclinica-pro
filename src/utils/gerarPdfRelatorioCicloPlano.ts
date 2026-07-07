@@ -8,7 +8,7 @@ import type { OrdemServicoSupabase } from "@/services/ordensServicoService";
 import { assinaturasService } from "@/services/assinaturasService";
 import { imageToDataUrl } from "@/utils/pdfImageUtils";
 import { renderHtmlToPdf } from "@/utils/pdfHtmlRenderer";
-import { calcularValidadeFimDoMes } from "@/utils/planoDatas";
+import { calcularValidadeRelatorioCiclo } from "@/utils/planoDatas";
 import { getPlanoFrequenciaLabel } from "@/utils/planoFrequencia";
 
 const PLANO_RELATORIO_FOOTER =
@@ -190,7 +190,7 @@ export const gerarPdfRelatorioCicloPlano = async (
   opcoes?: Partial<PlanoRelatorioCicloOpcoes> & { save?: boolean }
 ) => {
   const { plano, ciclo, ordensPreventivas, ordensCorretivas, calibracoes } = detalhes;
-  const [logo, assinaturas] = await Promise.all([
+  const [logo, assinaturas, minhaAssinatura] = await Promise.all([
     imageToDataUrl(aciLogo),
     assinaturasService.resolverDocumento({
       tecnicoUsuarioId: plano.responsavel_id,
@@ -198,9 +198,11 @@ export const gerarPdfRelatorioCicloPlano = async (
       responsavelNome: plano.responsavel?.nome,
       empresaId: plano.empresa_id,
     }),
+    assinaturasService.buscarMinhaAssinaturaDocumento().catch(() => null),
   ]);
-  const assinaturaResponsavel = assinaturas.responsavel || assinaturas.tecnico;
-  const itens = ciclo.itens || [];
+  const assinaturaResponsavel =
+    assinaturas.responsavel || assinaturas.tecnico || minhaAssinatura;
+  const itens = (ciclo.itens || []).filter((item) => item.status !== "cancelado");
   const osPorId = new Map(ordensPreventivas.map((os) => [os.id, os]));
   const calibracoesPorId = new Map(calibracoes.map((execucao) => [execucao.id, execucao]));
   const preventivas = itens
@@ -231,7 +233,11 @@ export const gerarPdfRelatorioCicloPlano = async (
   const setores = Array.from(new Set(itens.map(setorNome))).sort((a, b) => a.localeCompare(b, "pt-BR"));
   const emitidoEmDate = opcoes?.emitidoEm || new Date().toISOString().slice(0, 10);
   const validadeMeses = Number(opcoes?.validadeMeses || ciclo.relatorio_validade_meses || 12);
-  const validadeAte = calcularValidadeFimDoMes(ciclo.data_abertura, validadeMeses);
+  const validadeAte =
+    opcoes?.validadeAte ||
+    (ciclo.cronograma_mes_inicio
+      ? calcularValidadeRelatorioCiclo(ciclo, validadeMeses)
+      : ciclo.relatorio_validade_ate || calcularValidadeRelatorioCiclo(ciclo, validadeMeses));
   const frequenciaPlanoLabel = frequenciaLabel(plano.frequencia);
   const naoConformesTotal = naoConformes.length + corretivasNaoConformes.length;
 
@@ -387,6 +393,7 @@ export const gerarPdfRelatorioCicloPlano = async (
         th { text-align: left; background: #f3f4f6; color: #374151; padding: 7px; border-bottom: 1px solid #d1d5db; }
         td { vertical-align: top; padding: 7px; border-bottom: 1px solid #e5e7eb; color: #2f2f2f; }
         .empty { color: #6b7280; text-align: center; padding: 12px; }
+        .final-block { break-inside: avoid; page-break-inside: avoid; margin-top: 18px; }
         .signature { width: 340px; margin: 34px auto 0; text-align: center; page-break-inside: avoid; }
         .signature-image { height: 72px; display: flex; align-items: flex-end; justify-content: center; }
         .signature-image img { max-width: 300px; max-height: 68px; object-fit: contain; }
@@ -424,19 +431,21 @@ export const gerarPdfRelatorioCicloPlano = async (
 
       ${secoes}
 
-      <h2>${numeroProximaVisita}. Proxima visita</h2>
-      <section class="meta">
-        <div><span class="label">Proxima visita prevista</span><span class="value">${formatDate(proximaVisita(ciclo.data_prevista, plano.frequencia))}</span></div>
-        <div><span class="label">Frequencia do plano</span><span class="value">${escapeHtml(frequenciaPlanoLabel)}</span></div>
-        <div class="validity"><span class="label">Validade do relatorio</span><span class="value">${formatDate(validadeAte)}</span></div>
-      </section>
+      <section class="final-block">
+        <h2>${numeroProximaVisita}. Proxima visita</h2>
+        <section class="meta">
+          <div><span class="label">Proxima visita prevista</span><span class="value">${formatDate(proximaVisita(ciclo.data_prevista, plano.frequencia))}</span></div>
+          <div><span class="label">Frequencia do plano</span><span class="value">${escapeHtml(frequenciaPlanoLabel)}</span></div>
+          <div class="validity"><span class="label">Validade do relatorio</span><span class="value">${formatDate(validadeAte)}</span></div>
+        </section>
 
-      <section class="signature">
-        <div class="signature-image">${assinaturaResponsavel?.dataUrl ? `<img src="${assinaturaResponsavel.dataUrl}" alt="Assinatura do responsavel tecnico">` : ""}</div>
-        <div class="signature-line">
-          <strong>${escapeHtml(assinaturaResponsavel?.nome || plano.responsavel?.nome)}</strong>
-          Responsavel tecnico
-        </div>
+        <section class="signature">
+          <div class="signature-image">${assinaturaResponsavel?.dataUrl ? `<img src="${assinaturaResponsavel.dataUrl}" alt="Assinatura do responsavel tecnico">` : ""}</div>
+          <div class="signature-line">
+            <strong>${escapeHtml(assinaturaResponsavel?.nome || plano.responsavel?.nome)}</strong>
+            Responsavel tecnico
+          </div>
+        </section>
       </section>
 
     </div>

@@ -8,6 +8,7 @@ import type {
   ProcedimentoPreventivaTipoResposta,
 } from "@/services/procedimentosPreventivaService";
 import type { EquipamentoSupabase } from "@/services/equipamentosService";
+import { calcularValidadeFimDoMes } from "@/utils/planoDatas";
 
 export type PreventivaRespostaInput = {
   procedimentoItemId?: string | null;
@@ -60,6 +61,7 @@ export type SalvarChecklistPreventivaOsInput = {
 
 export type ConcluirChecklistPreventivaInput = SalvarChecklistPreventivaOsInput & {
   dataFechamento?: string | null;
+  dataReferenciaValidade?: string | null;
   planoCicloItemId?: string | null;
 };
 
@@ -188,13 +190,17 @@ const buscarEstadoFechado = async () => {
   return data as { id: string; nome: string };
 };
 
-const addMonths = (date: Date, months: number) => {
-  const copy = new Date(date);
-  copy.setMonth(copy.getMonth() + months);
-  return copy;
-};
+const toDateOnly = (date: Date) => [
+  date.getFullYear(),
+  String(date.getMonth() + 1).padStart(2, "0"),
+  String(date.getDate()).padStart(2, "0"),
+].join("-");
 
-const toDateOnly = (date: Date) => date.toISOString().slice(0, 10);
+const parseDataReferencia = (value?: string | null) =>
+  value ? new Date(value.includes("T") ? value : `${value}T00:00:00`) : new Date();
+
+const calcularDataValidadePreventiva = (dataReferencia: string, validadeMeses: number) =>
+  calcularValidadeFimDoMes(dataReferencia, validadeMeses);
 
 const resultadoGeral = (respostas: PreventivaRespostaInput[]) => {
   const aprovacao = respostas.find(
@@ -248,6 +254,9 @@ const garantirChecklistPreventiva = async (osId: string) => {
   if (!procedimento) {
     throw new Error("Nenhum procedimento preventivo cadastrado para este tipo de equipamento.");
   }
+  const validadeMeses = Number(procedimento.validade_meses || 12);
+  const dataReferenciaValidade = os.data_abertura || new Date().toISOString();
+  const dataValidade = calcularDataValidadePreventiva(dataReferenciaValidade, validadeMeses);
 
   const { data: checklist, error } = await supabase
     .from("os_checklists_preventiva")
@@ -260,8 +269,8 @@ const garantirChecklistPreventiva = async (osId: string) => {
         os.equipamento.tipo_equipamento?.nome ||
         os.equipamento.tipo_texto ||
         null,
-      validade_meses: Number(procedimento.validade_meses || 12),
-      data_validade: toDateOnly(addMonths(new Date(), Number(procedimento.validade_meses || 12))),
+      validade_meses: validadeMeses,
+      data_validade: dataValidade,
       resultado_geral: "aprovado",
       observacoes: null,
     })
@@ -282,8 +291,8 @@ const garantirChecklistPreventiva = async (osId: string) => {
         os.equipamento.tipo_equipamento?.nome ||
         os.equipamento.tipo_texto ||
         null,
-      validade_meses: Number(procedimento.validade_meses || 12),
-      data_validade: toDateOnly(addMonths(new Date(), Number(procedimento.validade_meses || 12))),
+      validade_meses: validadeMeses,
+      data_validade: dataValidade,
       resultado_geral: "aprovado" as const,
       observacoes: null,
       created_at: new Date().toISOString(),
@@ -437,15 +446,29 @@ export const preventivasService = {
       observacao: "Manutencao preventiva concluida pelo checklist.",
     });
 
+    const checklist = getChecklistPreventiva(osAtualizada);
+    const validadeMeses = Number(checklist?.validade_meses || 12);
+    const dataReferenciaValidade =
+      input.dataReferenciaValidade ||
+      osAtualizada.data_abertura ||
+      dataFechamento;
+    const dataReferenciaPreventiva = parseDataReferencia(dataReferenciaValidade);
+    const dataValidade = calcularDataValidadePreventiva(dataReferenciaValidade, validadeMeses);
+
+    if (checklist?.id) {
+      const { error: checklistValidadeError } = await supabase
+        .from("os_checklists_preventiva")
+        .update({ data_validade: dataValidade })
+        .eq("id", checklist.id);
+      if (checklistValidadeError) throw new Error(checklistValidadeError.message);
+    }
+
     if (osAtualizada.equipamento_id) {
-      const checklist = getChecklistPreventiva(osAtualizada);
-      const data = new Date(dataFechamento);
-      const validadeMeses = Number(checklist?.validade_meses || 12);
       await supabase
         .from("equipamentos")
         .update({
-          data_ultima_preventiva: toDateOnly(data),
-          data_proxima_preventiva: toDateOnly(addMonths(data, validadeMeses)),
+          data_ultima_preventiva: toDateOnly(dataReferenciaPreventiva),
+          data_proxima_preventiva: dataValidade,
         })
         .eq("id", osAtualizada.equipamento_id);
     }
@@ -553,7 +576,7 @@ export const preventivasService = {
     const estadoFechado = await buscarEstadoFechado();
     const dataFechamento = new Date();
     const validadeMeses = Number(procedimento.validade_meses || 12);
-    const dataValidade = addMonths(dataFechamento, validadeMeses);
+    const dataValidade = calcularDataValidadePreventiva(dataFechamento.toISOString(), validadeMeses);
 
     const { data: osCriada, error: osError } = await supabase
       .from("ordens_servico")
@@ -597,7 +620,7 @@ export const preventivasService = {
           equipamentoData.tipo_texto ||
           null,
         validade_meses: validadeMeses,
-        data_validade: toDateOnly(dataValidade),
+        data_validade: dataValidade,
         resultado_geral: resultadoGeral(input.respostas),
         observacoes: input.observacoes?.trim() || null,
       })
@@ -643,7 +666,7 @@ export const preventivasService = {
       .from("equipamentos")
       .update({
         data_ultima_preventiva: toDateOnly(dataFechamento),
-        data_proxima_preventiva: toDateOnly(dataValidade),
+        data_proxima_preventiva: dataValidade,
       })
       .eq("id", equipamentoData.id);
 

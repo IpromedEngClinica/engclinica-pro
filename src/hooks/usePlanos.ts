@@ -19,7 +19,7 @@ import {
 } from "@/utils/gerarPdfRelatorioCicloPlano";
 import { baixarPdfMesclado, mesclarPdfsPlano, type PdfAnexoPlano } from "@/utils/mesclarPdfsPlano";
 import { gerarPdfRelatorioAnualPlano, type GerarRelatorioAnualPlanoOptions } from "@/utils/gerarPdfRelatorioAnualPlano";
-import { calcularValidadeFimDoMes } from "@/utils/planoDatas";
+import { calcularValidadeFimDoMes, calcularValidadeRelatorioCiclo } from "@/utils/planoDatas";
 
 export const PLANOS_QUERY_KEY = ["planos"];
 export const PLANO_USUARIOS_QUERY_KEY = ["plano-usuarios"];
@@ -268,12 +268,14 @@ export const useFinalizarPreventivasConformesEmLote = () => {
       cicloId,
       planoId,
       dataFechamento,
+      dataReferenciaValidade,
       onProgress,
     }: {
       itemIds: string[];
       cicloId?: string;
       planoId?: string;
       dataFechamento?: string | null;
+      dataReferenciaValidade?: string | null;
       onProgress?: Parameters<
         typeof planosService.finalizarPreventivasConformesEmLote
       >[0]["onProgress"];
@@ -281,6 +283,7 @@ export const useFinalizarPreventivasConformesEmLote = () => {
       planosService.finalizarPreventivasConformesEmLote({
         itemIds,
         dataFechamento,
+        dataReferenciaValidade,
         onProgress,
       }),
     onSuccess: (_, variables) => invalidateCicloOperacional(queryClient, variables.cicloId, variables.planoId),
@@ -301,6 +304,22 @@ export const useMarcarEquipamentosNaoLocalizados = () => {
       equipamentoIds: string[];
       observacao?: string | null;
     }) => planosService.marcarEquipamentosNaoLocalizados({ cicloId, equipamentoIds, observacao }),
+    onSuccess: (_, variables) => invalidateCicloOperacional(queryClient, variables.cicloId, variables.planoId),
+  });
+};
+
+export const useCancelarEquipamentosNoCiclo = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      cicloId,
+      planoId,
+      equipamentoIds,
+    }: {
+      cicloId: string;
+      planoId?: string;
+      equipamentoIds: string[];
+    }) => planosService.cancelarEquipamentosNoCiclo({ cicloId, equipamentoIds }),
     onSuccess: (_, variables) => invalidateCicloOperacional(queryClient, variables.cicloId, variables.planoId),
   });
 };
@@ -368,6 +387,52 @@ export const useAtualizarCicloPlano = () => {
   });
 };
 
+export const useAtualizarTituloControleCicloPlano = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      cicloId,
+      planoId,
+      titulo,
+    }: {
+      cicloId: string;
+      planoId: string;
+      titulo: string;
+    }) => planosService.atualizarTituloControleCicloPlano(cicloId, titulo),
+    onSuccess: (ciclo, variables) => {
+      invalidatePlanos(queryClient);
+      queryClient.invalidateQueries({ queryKey: [...PLANO_CICLOS_QUERY_KEY, variables.planoId] });
+      queryClient.invalidateQueries({ queryKey: [...PLANO_HISTORICO_QUERY_KEY, variables.planoId] });
+      queryClient.invalidateQueries({ queryKey: [...PLANO_CICLO_QUERY_KEY, ciclo.id] });
+      queryClient.invalidateQueries({ queryKey: [...PLANO_CICLO_DETALHES_QUERY_KEY, ciclo.id] });
+    },
+  });
+};
+
+export const useAdicionarEquipamentosCicloPlano = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      cicloId,
+      planoId,
+      planoEquipamentoIds,
+    }: {
+      cicloId: string;
+      planoId: string;
+      planoEquipamentoIds: string[];
+    }) => planosService.adicionarEquipamentosCicloPlano(cicloId, planoEquipamentoIds),
+    onSuccess: (ciclo, variables) => {
+      invalidatePlanos(queryClient);
+      queryClient.invalidateQueries({ queryKey: [...PLANO_CICLOS_QUERY_KEY, variables.planoId] });
+      queryClient.invalidateQueries({ queryKey: [...PLANO_HISTORICO_QUERY_KEY, variables.planoId] });
+      queryClient.invalidateQueries({ queryKey: [...PLANO_CICLO_ATUAL_QUERY_KEY, variables.planoId] });
+      queryClient.invalidateQueries({ queryKey: [...PLANO_CICLO_QUERY_KEY, ciclo.id] });
+      queryClient.invalidateQueries({ queryKey: [...PLANO_CICLO_ITENS_QUERY_KEY, ciclo.id] });
+      queryClient.invalidateQueries({ queryKey: [...PLANO_CICLO_DETALHES_QUERY_KEY, ciclo.id] });
+    },
+  });
+};
+
 const normalizarOsParaRelatorioPlano = (
   os: OrdemServicoSupabase,
   plano: Pick<Plano, "titulo" | "responsavel_id" | "responsavel">
@@ -395,10 +460,12 @@ export const useGerarRelatorioCompletoCiclo = () => {
       completo: boolean;
     }) => {
       const detalhes = await planosService.buscarDadosRelatorioCiclo(cicloId);
-      const validadeAte = calcularValidadeFimDoMes(
-        detalhes.ciclo.data_abertura,
-        opcoes.validadeMeses
-      );
+      const validadeAte =
+        opcoes.validadeAte ||
+        (detalhes.ciclo.cronograma_mes_inicio
+          ? calcularValidadeRelatorioCiclo(detalhes.ciclo, opcoes.validadeMeses)
+          : detalhes.ciclo.relatorio_validade_ate ||
+            calcularValidadeRelatorioCiclo(detalhes.ciclo, opcoes.validadeMeses));
       await planosService.salvarValidadeRelatorioCiclo({
         cicloId,
         meses: opcoes.validadeMeses,
@@ -523,6 +590,20 @@ export const useGerarRelatorioAnualPlano = () => {
       input: PlanoRelatorioAnualInput;
       opcoesPdf: GerarRelatorioAnualPlanoOptions;
     }) => {
+      if (input.cicloId && opcoesPdf.cronogramaMesInicio) {
+        await planosService.atualizarCronogramaCicloPlano(input.cicloId, {
+          mesInicio: opcoesPdf.cronogramaMesInicio,
+          mesesRealizados: opcoesPdf.mesesVisitadosPreventiva || [],
+          mesesPrevistos: opcoesPdf.mesesPrevistosCronograma || [],
+        });
+        await planosService.salvarValidadeRelatorioCiclo({
+          cicloId: input.cicloId,
+          meses: input.validadeMeses,
+          emitidoEm: input.emitidoEm,
+          validadeAte: input.validadeAte,
+        });
+      }
+
       const registro = await planosService.salvarRegistroRelatorioAnual(input);
       const dados = await planosService.buscarDadosRelatorioAnualPlano({
         planoId: input.planoId,
@@ -612,16 +693,25 @@ export const useGerarRelatorioAnualPlano = () => {
         osCorretivas: anexos("corretiva"),
         certificadosCalibracao: anexos("calibracao"),
       });
+      const cicloFileSuffix = input.cicloId && detalhesCiclos[0]?.ciclo?.titulo
+        ? `_${normalizeRelatorioPlanoFileName(detalhesCiclos[0].ciclo.titulo)}`
+        : "";
 
       baixarPdfMesclado(
         pdfFinal,
-        `cronograma_anual_completo_${normalizeRelatorioPlanoFileName(dados.plano.titulo)}_${input.dataInicio}_${input.dataFim}.pdf`
+        `cronograma_anual_completo_${normalizeRelatorioPlanoFileName(dados.plano.titulo)}_${input.dataInicio}_${input.dataFim}${cicloFileSuffix}.pdf`
       );
 
       return { registro, ressalvas };
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: [...PLANO_RELATORIOS_ANUAIS_QUERY_KEY, variables.input.planoId] });
+      if (variables.input.cicloId) {
+        queryClient.invalidateQueries({ queryKey: [...PLANO_CICLO_QUERY_KEY, variables.input.cicloId] });
+        queryClient.invalidateQueries({ queryKey: [...PLANO_CICLO_DETALHES_QUERY_KEY, variables.input.cicloId] });
+        queryClient.invalidateQueries({ queryKey: [...PLANO_CICLOS_QUERY_KEY, variables.input.planoId] });
+        queryClient.invalidateQueries({ queryKey: [...PLANO_HISTORICO_QUERY_KEY, variables.input.planoId] });
+      }
     },
   });
 };

@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ArrowDown,
+  ArrowUp,
   CheckCircle2,
   Loader2,
   MapPin,
@@ -12,6 +14,7 @@ import {
   Unlink,
 } from "lucide-react";
 import { toast } from "sonner";
+import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import PageHeader from "@/components/PageHeader";
 import SearchableSelect from "@/components/SearchableSelect";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +33,10 @@ import {
 } from "@/components/ui/table";
 import { useEmpresas } from "@/hooks/useEmpresas";
 import {
+  equipamentosService,
+  type EquipamentoSupabase,
+} from "@/services/equipamentosService";
+import {
   setoresOrganizacaoService,
   type EquipamentoSetorResumo,
 } from "@/services/setoresOrganizacaoService";
@@ -37,6 +44,8 @@ import {
 const TODOS = "__todos__";
 const SEM_SETOR = "__sem_setor__";
 const PENDENTES = "__pendentes__";
+type SortColumn = "numero" | "equipamento" | "identificacao" | "setor" | "status";
+type SortDirection = "asc" | "desc";
 
 const normalizarBusca = (value: string) =>
   value
@@ -67,6 +76,38 @@ const montarTextoEquipamento = (equipamento: EquipamentoSetorResumo) =>
     .filter(Boolean)
     .join(" ");
 
+const compararTexto = (a: string | null | undefined, b: string | null | undefined) =>
+  (a || "").localeCompare(b || "", "pt-BR", { numeric: true, sensitivity: "base" });
+
+const compararEquipamentos = (
+  a: EquipamentoSetorResumo,
+  b: EquipamentoSetorResumo,
+  column: SortColumn
+) => {
+  if (column === "numero") return (a.numero_cadastro || 0) - (b.numero_cadastro || 0);
+  if (column === "equipamento") {
+    return compararTexto(
+      setoresOrganizacaoService.montarDescricaoEquipamento(a),
+      setoresOrganizacaoService.montarDescricaoEquipamento(b)
+    );
+  }
+  if (column === "identificacao") {
+    return compararTexto(
+      [a.numero_serie, a.patrimonio, a.tag].filter(Boolean).join(" "),
+      [b.numero_serie, b.patrimonio, b.tag].filter(Boolean).join(" ")
+    );
+  }
+  if (column === "setor") {
+    const setorCompare = compararTexto(a.setor || a.local_instalacao, b.setor || b.local_instalacao);
+    if (setorCompare !== 0) return setorCompare;
+    return compararTexto(a.local_instalacao, b.local_instalacao);
+  }
+  return compararTexto(
+    a.ativo ? a.status || "Ativo" : "Desativado",
+    b.ativo ? b.status || "Ativo" : "Desativado"
+  );
+};
+
 const OrganizarSetores = () => {
   const queryClient = useQueryClient();
   const { data: empresas = [], isLoading: loadingEmpresas } = useEmpresas({
@@ -80,6 +121,11 @@ const OrganizarSetores = () => {
   const [equipamentosSelecionados, setEquipamentosSelecionados] = useState<string[]>([]);
   const [setorDestinoNome, setSetorDestinoNome] = useState("");
   const [localDestino, setLocalDestino] = useState("");
+  const [sortColumn, setSortColumn] = useState<SortColumn>("setor");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [equipamentoDetalhes, setEquipamentoDetalhes] =
+    useState<EquipamentoSupabase | null>(null);
+  const [equipamentoDetalhesOpen, setEquipamentoDetalhesOpen] = useState(false);
 
   const empresasOptions = useMemo(
     () => empresas.map((empresa) => formatEmpresaLabel(empresa.numero_cadastro, empresa.nome)),
@@ -186,13 +232,22 @@ const OrganizarSetores = () => {
         return normalizarBusca(montarTextoEquipamento(equipamento)).includes(termo);
       })
       .sort((a, b) => {
-        const setorA = a.setor || "";
-        const setorB = b.setor || "";
-        const setorCompare = setorA.localeCompare(setorB, "pt-BR");
-        if (setorCompare !== 0) return setorCompare;
+        const compare = compararEquipamentos(a, b, sortColumn);
+        if (compare !== 0) return sortDirection === "asc" ? compare : -compare;
         return (b.numero_cadastro || 0) - (a.numero_cadastro || 0);
       });
-  }, [buscaEquipamento, equipamentos, setorSelecionadoId, setoresPorId]);
+  }, [buscaEquipamento, equipamentos, setorSelecionadoId, setoresPorId, sortColumn, sortDirection]);
+
+  const ordenarPor = (column: SortColumn) => {
+    setSortColumn((currentColumn) => {
+      if (currentColumn === column) {
+        setSortDirection((currentDirection) => currentDirection === "asc" ? "desc" : "asc");
+        return currentColumn;
+      }
+      setSortDirection(column === "numero" ? "desc" : "asc");
+      return column;
+    });
+  };
 
   const equipamentosVisiveisIds = useMemo(
     () => equipamentosFiltrados.map((equipamento) => equipamento.id),
@@ -232,6 +287,7 @@ const OrganizarSetores = () => {
       setNovoSetor("");
       queryClient.invalidateQueries({ queryKey: setoresQueryKey });
       queryClient.invalidateQueries({ queryKey: ["empresas"] });
+      queryClient.invalidateQueries({ queryKey: ["planos"] });
       toast.success("Setor criado.");
     },
     onError: (error) => toast.error(getErrorMessage(error)),
@@ -270,6 +326,7 @@ const OrganizarSetores = () => {
     onSuccess: (quantidade) => {
       queryClient.invalidateQueries({ queryKey: setoresQueryKey });
       queryClient.invalidateQueries({ queryKey: ["equipamentos"] });
+      queryClient.invalidateQueries({ queryKey: ["planos"] });
       setEquipamentosSelecionados([]);
       setLocalDestino("");
       toast.success(`${quantidade} equipamento(s) atualizado(s).`);
@@ -283,6 +340,7 @@ const OrganizarSetores = () => {
     onSuccess: (resultado) => {
       queryClient.invalidateQueries({ queryKey: setoresQueryKey });
       queryClient.invalidateQueries({ queryKey: ["empresas"] });
+      queryClient.invalidateQueries({ queryKey: ["planos"] });
 
       if (resultado.quantidade === 0) {
         toast.info("Nenhum setor vazio encontrado.");
@@ -354,6 +412,16 @@ const OrganizarSetores = () => {
     setEquipamentosSelecionados([]);
   };
 
+  const abrirEquipamento = async (equipamento: EquipamentoSetorResumo) => {
+    try {
+      const equipamentoCompleto = await equipamentosService.buscarPorId(equipamento.id);
+      setEquipamentoDetalhes(equipamentoCompleto);
+      setEquipamentoDetalhesOpen(true);
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    }
+  };
+
   const renderSetorButton = (
     id: string,
     label: string,
@@ -380,7 +448,15 @@ const OrganizarSetores = () => {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6 lg:p-8">
+      <EquipamentoDetalhesDialog
+        open={equipamentoDetalhesOpen}
+        onOpenChange={(open) => {
+          setEquipamentoDetalhesOpen(open);
+          if (!open) setEquipamentoDetalhes(null);
+        }}
+        equipamento={equipamentoDetalhes}
+      />
       <PageHeader
         title="Organizar Setores"
         description="Revise os setores do cliente, confira os equipamentos vinculados e mova itens entre setores."
@@ -623,11 +699,47 @@ const OrganizarSetores = () => {
                           aria-label="Selecionar equipamentos visiveis"
                         />
                       </TableHead>
-                      <TableHead className="w-[80px]">N</TableHead>
-                      <TableHead>Equipamento</TableHead>
-                      <TableHead>Identificacao</TableHead>
-                      <TableHead>Setor atual</TableHead>
-                      <TableHead>Status</TableHead>
+                      <SortableHead
+                        column="numero"
+                        currentColumn={sortColumn}
+                        direction={sortDirection}
+                        onSort={ordenarPor}
+                        className="w-[80px]"
+                      >
+                        N
+                      </SortableHead>
+                      <SortableHead
+                        column="equipamento"
+                        currentColumn={sortColumn}
+                        direction={sortDirection}
+                        onSort={ordenarPor}
+                      >
+                        Equipamento
+                      </SortableHead>
+                      <SortableHead
+                        column="identificacao"
+                        currentColumn={sortColumn}
+                        direction={sortDirection}
+                        onSort={ordenarPor}
+                      >
+                        Identificacao
+                      </SortableHead>
+                      <SortableHead
+                        column="setor"
+                        currentColumn={sortColumn}
+                        direction={sortDirection}
+                        onSort={ordenarPor}
+                      >
+                        Setor atual
+                      </SortableHead>
+                      <SortableHead
+                        column="status"
+                        currentColumn={sortColumn}
+                        direction={sortDirection}
+                        onSort={ordenarPor}
+                      >
+                        Status
+                      </SortableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -661,11 +773,15 @@ const OrganizarSetores = () => {
                             </TableCell>
                             <TableCell>
                               <div className="space-y-1">
-                                <p className="font-medium">
+                                <button
+                                  type="button"
+                                  className="text-left font-medium text-primary hover:underline"
+                                  onClick={() => void abrirEquipamento(equipamento)}
+                                >
                                   {setoresOrganizacaoService.montarDescricaoEquipamento(
                                     equipamento
                                   )}
-                                </p>
+                                </button>
                                 <p className="text-xs text-muted-foreground">
                                   {[equipamento.fabricante, equipamento.modelo]
                                     .filter(Boolean)
@@ -726,6 +842,45 @@ const OrganizarSetores = () => {
         </div>
       )}
     </div>
+  );
+};
+
+const SortableHead = ({
+  column,
+  currentColumn,
+  direction,
+  onSort,
+  children,
+  className,
+}: {
+  column: SortColumn;
+  currentColumn: SortColumn;
+  direction: SortDirection;
+  onSort: (column: SortColumn) => void;
+  children: ReactNode;
+  className?: string;
+}) => {
+  const active = column === currentColumn;
+
+  return (
+    <TableHead className={className}>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="-ml-3 h-8 px-3 text-xs font-medium"
+        onClick={() => onSort(column)}
+      >
+        {children}
+        {active ? (
+          direction === "asc" ? (
+            <ArrowUp className="ml-1 h-3.5 w-3.5" />
+          ) : (
+            <ArrowDown className="ml-1 h-3.5 w-3.5" />
+          )
+        ) : null}
+      </Button>
+    </TableHead>
   );
 };
 

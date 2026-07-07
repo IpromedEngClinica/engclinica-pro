@@ -12,26 +12,47 @@ import {
 export const TERMOS_LOCACAO_QUERY_KEY = ["utilitarios", "termos-locacao"];
 export const RECIBOS_QUERY_KEY = ["utilitarios", "recibos"];
 export const VENCIMENTOS_QUERY_KEY = ["utilitarios", "vencimentos"];
+export const UTILITARIOS_STALE_TIME = 5 * 60 * 1000;
+export const UTILITARIOS_GC_TIME = 20 * 60 * 1000;
 
-export const useTermosLocacao = () => {
+type UseUtilitariosQueryOptions = {
+  enabled?: boolean;
+};
+
+export const useTermosLocacao = (options?: UseUtilitariosQueryOptions) => {
   return useQuery({
     queryKey: TERMOS_LOCACAO_QUERY_KEY,
     queryFn: () => utilitariosService.listarTermosLocacao(),
+    enabled: options?.enabled ?? true,
+    staleTime: UTILITARIOS_STALE_TIME,
+    gcTime: UTILITARIOS_GC_TIME,
   });
 };
 
-export const useVencimentosUtilitarios = (filtro: VencimentosFiltro) => {
+export const useVencimentosUtilitarios = (
+  filtro: VencimentosFiltro,
+  options?: UseUtilitariosQueryOptions
+) => {
   return useQuery({
     queryKey: [...VENCIMENTOS_QUERY_KEY, filtro],
     queryFn: () => utilitariosService.gerarRelatorioVencimentos(filtro),
-    enabled: filtro.incluirCalibracao || filtro.incluirPreventiva,
+    enabled:
+      (options?.enabled ?? true) &&
+      (filtro.incluirCalibracao || filtro.incluirPreventiva),
+    placeholderData: (previousData) => previousData,
+    staleTime: UTILITARIOS_STALE_TIME,
+    gcTime: UTILITARIOS_GC_TIME,
+    refetchOnWindowFocus: false,
   });
 };
 
-export const useRecibos = () => {
+export const useRecibos = (options?: UseUtilitariosQueryOptions) => {
   return useQuery({
     queryKey: RECIBOS_QUERY_KEY,
     queryFn: () => utilitariosService.listarRecibos(),
+    enabled: options?.enabled ?? true,
+    staleTime: UTILITARIOS_STALE_TIME,
+    gcTime: UTILITARIOS_GC_TIME,
   });
 };
 

@@ -36,6 +36,7 @@ type PreventivaChecklistDialogProps = {
   osExistenteId?: string | null;
   planoCicloItemId?: string | null;
   dataFechamentoPrevista?: string | null;
+  dataReferenciaValidade?: string | null;
   modo?: "criar_os" | "usar_os_existente";
   onConcluido?: (resultado: { osId: string; checklistId?: string | null }) => void;
 };
@@ -85,6 +86,7 @@ const PreventivaChecklistDialog = ({
   osExistenteId = null,
   planoCicloItemId = null,
   dataFechamentoPrevista = null,
+  dataReferenciaValidade = null,
   onConcluido,
 }: PreventivaChecklistDialogProps) => {
   const usarOsExistente = Boolean(osExistenteId);
@@ -274,6 +276,7 @@ const PreventivaChecklistDialog = ({
           respostas: montarRespostas(),
           observacoes,
           dataFechamento: dataFechamentoPrevista,
+          dataReferenciaValidade,
           planoCicloItemId,
         });
         toast({ title: os.status_sistema === "fechada" ? "Preventiva concluida." : "Checklist salvo." });

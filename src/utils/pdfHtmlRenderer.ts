@@ -13,11 +13,14 @@ type RenderHtmlPdfOptions = {
   footerText?: string;
   footerHeightMm?: number;
   footerFontSizePt?: number;
+  fixedPageSlices?: boolean;
 };
 
 type AvoidBlock = {
   top: number;
   bottom: number;
+  tagName: string;
+  className: string;
 };
 
 const DOCUMENT_WIDTH_PX = 1123;
@@ -28,12 +31,16 @@ const DEFAULT_SCALE = 2.5;
 const DEFAULT_FONT_SCALE = 1.5;
 const DEFAULT_FOOTER_HEIGHT_MM = 15;
 const DEFAULT_FOOTER_FONT_SIZE_PT = 10.4;
+const DEFAULT_BOTTOM_SAFE_HEIGHT_MM = 6;
 const MIN_SLICE_RATIO = 0.58;
 const PAGE_BREAK_GAP_PX = 16;
 const PAGE_BREAK_GAP_CSS_PX = 18;
 const MIN_TRAILING_SLICE_PX = 24;
 const PAGE_BREAK_SPACER_CLASS = "pdf-page-break-spacer";
 const FOOTER_SPACER_CLASS = "pdf-footer-bottom-spacer";
+const TABLE_ROW_SPACER_CLASS = "pdf-table-row-spacer";
+const TABLE_PAGE_SPACER_CLASS = "pdf-table-page-spacer";
+const TABLE_PAGINATED_CLASS = "pdf-table-paginated";
 
 const PAGE_BREAK_SELECTOR = [
   "header",
@@ -44,6 +51,8 @@ const PAGE_BREAK_SELECTOR = [
   "thead",
   "tbody",
   "tr",
+  "td",
+  "th",
   "h1",
   "h2",
   "h3",
@@ -63,21 +72,25 @@ const PAGE_BREAK_SELECTOR = [
   ".clause",
   ".notice",
   ".date-line",
+  ".final-block",
   ".signature-line",
+  ".signature-block",
+  ".signature-area",
   ".result-block",
 ].join(",");
 
 const PAGE_BREAK_LAYOUT_SELECTOR = [
-  "table",
-  "tr",
   "h2",
   "h3",
   ".result-block",
   ".clause",
   ".notice",
   ".date-line",
+  ".final-block",
+  ".signature",
+  ".signature-block",
+  ".signature-area",
   ".signatures",
-  ".signature-line",
 ].join(",");
 
 const RENDER_QUALITY_CSS = `
@@ -89,14 +102,62 @@ const RENDER_QUALITY_CSS = `
 
   table {
     border-collapse: collapse;
+    width: 100%;
+    page-break-inside: auto;
+    break-inside: auto;
+  }
+
+  html,
+  body {
+    width: auto;
+    height: auto;
+    overflow: visible !important;
+  }
+
+  .document,
+  .annual,
+  .pdf-page,
+  .pdf-content,
+  .report-container,
+  .table-wrapper,
+  .cronograma-wrapper,
+  .setor-block {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    position: relative !important;
+    transform: none !important;
+    zoom: 1 !important;
+  }
+
+  table thead {
+    display: table-header-group !important;
+  }
+
+  table tbody {
+    display: table-row-group !important;
+  }
+
+  table tfoot {
+    display: table-footer-group !important;
+  }
+
+  table tr {
+    break-inside: avoid-page !important;
+    page-break-inside: avoid !important;
+  }
+
+  table td,
+  table th {
+    overflow: visible !important;
+    break-inside: avoid-page !important;
+    page-break-inside: avoid !important;
   }
 
   thead,
-  tbody,
   tr,
   th,
   td,
-  table,
   section,
   article,
   header,
@@ -120,12 +181,24 @@ const RENDER_QUALITY_CSS = `
   .clause,
   .notice,
   .date-line,
+  .final-block,
+  .signature-block,
+  .signature-area,
   .signature-line {
     break-inside: avoid;
     page-break-inside: avoid;
   }
 
   .result-block {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .${TABLE_PAGE_SPACER_CLASS},
+  .${PAGE_BREAK_SPACER_CLASS},
+  .${FOOTER_SPACER_CLASS} {
+    display: block;
+    width: 100%;
     break-inside: avoid;
     page-break-inside: avoid;
   }
@@ -233,7 +306,16 @@ const insertPageBreakSpacers = (element: HTMLElement, pageHeightPx: number) => {
       )
       .sort((a, b) => a.top - b.top);
 
-    const target = blocks.find(({ top }) => top % pageHeightPx > 24);
+    const target = blocks.find(({ block, top }) => {
+      const parentTag = block.parentElement?.tagName.toLowerCase();
+      return (
+        top % pageHeightPx > 24 &&
+        !["table", "thead", "tbody", "tfoot", "tr"].includes(parentTag || "") &&
+        !["table", "thead", "tbody", "tfoot", "tr"].includes(
+          block.tagName.toLowerCase()
+        )
+      );
+    });
 
     if (!target) return;
 
@@ -252,6 +334,243 @@ const insertPageBreakSpacers = (element: HTMLElement, pageHeightPx: number) => {
 
     target.block.parentNode?.insertBefore(spacer, target.block);
     spacer.getBoundingClientRect();
+  }
+};
+
+const insertTableRowBreakSpacers = (
+  element: HTMLElement,
+  pageHeightPx: number
+) => {
+  Array.from(element.querySelectorAll(`.${TABLE_ROW_SPACER_CLASS}`)).forEach(
+    (spacer) => spacer.remove()
+  );
+
+  const maxIterations = 200;
+
+  for (let iteration = 0; iteration < maxIterations; iteration += 1) {
+    const rootRect = element.getBoundingClientRect();
+    const rows = Array.from(element.querySelectorAll<HTMLTableRowElement>("tbody tr"))
+      .filter((row) => !row.classList.contains(TABLE_ROW_SPACER_CLASS))
+      .map((row) => {
+        const rect = row.getBoundingClientRect();
+        const top = rect.top - rootRect.top;
+        const bottom = rect.bottom - rootRect.top;
+        return {
+          row,
+          top,
+          bottom,
+          height: bottom - top,
+        };
+      })
+      .filter(({ top, bottom, height }) => {
+        const topPage = Math.floor(Math.max(0, top) / pageHeightPx);
+        const bottomPage = Math.floor(Math.max(0, bottom - 1) / pageHeightPx);
+        return (
+          bottom > top &&
+          height > 6 &&
+          height < pageHeightPx * 0.82 &&
+          topPage < bottomPage &&
+          top % pageHeightPx > 12
+        );
+      })
+      .sort((a, b) => a.top - b.top);
+
+    const target = rows[0];
+    if (!target) return;
+
+    const nextPageTop = (Math.floor(target.top / pageHeightPx) + 1) * pageHeightPx;
+    const spacerHeight = Math.ceil(
+      nextPageTop - target.top + PAGE_BREAK_GAP_CSS_PX
+    );
+
+    if (spacerHeight <= 0 || spacerHeight > pageHeightPx * 0.95) return;
+
+    const cellCount = Math.max(
+      1,
+      Array.from(target.row.cells).reduce(
+        (total, cell) => total + (cell.colSpan || 1),
+        0
+      )
+    );
+    const spacer = element.ownerDocument.createElement("tr");
+    spacer.className = TABLE_ROW_SPACER_CLASS;
+    spacer.setAttribute("aria-hidden", "true");
+
+    const cell = element.ownerDocument.createElement("td");
+    cell.colSpan = cellCount;
+    cell.style.height = `${spacerHeight}px`;
+    cell.style.padding = "0";
+    cell.style.border = "0";
+    cell.style.lineHeight = "0";
+    cell.style.background = "#ffffff";
+
+    spacer.appendChild(cell);
+    target.row.parentNode?.insertBefore(spacer, target.row);
+    spacer.getBoundingClientRect();
+  }
+};
+
+const cloneTableShell = (table: HTMLTableElement) => {
+  const clone = table.cloneNode(false) as HTMLTableElement;
+
+  Array.from(table.children).forEach((child) => {
+    const tagName = child.tagName.toLowerCase();
+    if (tagName === "colgroup" || tagName === "thead" || tagName === "tfoot") {
+      clone.appendChild(child.cloneNode(true));
+    }
+  });
+
+  const body = table.ownerDocument.createElement("tbody");
+  clone.appendChild(body);
+  clone.classList.add(TABLE_PAGINATED_CLASS);
+
+  return {
+    body,
+    clone,
+  };
+};
+
+const insertSpacerBeforeElement = (
+  target: HTMLElement,
+  element: HTMLElement,
+  pageHeightPx: number
+) => {
+  const rootRect = element.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
+  const targetTop = targetRect.top - rootRect.top;
+  const targetPageOffset = targetTop % pageHeightPx;
+
+  if (targetPageOffset < 8) return false;
+
+  const nextPageTop = (Math.floor(targetTop / pageHeightPx) + 1) * pageHeightPx;
+  const spacerHeight = Math.ceil(nextPageTop - targetTop + PAGE_BREAK_GAP_CSS_PX);
+
+  if (spacerHeight <= 0 || spacerHeight > pageHeightPx * 0.95) return false;
+
+  const spacer = element.ownerDocument.createElement("div");
+  spacer.className = TABLE_PAGE_SPACER_CLASS;
+  spacer.style.height = `${spacerHeight}px`;
+  spacer.style.flexShrink = "0";
+  spacer.setAttribute("aria-hidden", "true");
+
+  target.parentNode?.insertBefore(spacer, target);
+  spacer.getBoundingClientRect();
+  return true;
+};
+
+const moveRowsToContinuationTable = (
+  row: HTMLTableRowElement,
+  table: HTMLTableElement
+) => {
+  const tbody = row.parentElement;
+  if (!tbody) return null;
+
+  const { body, clone } = cloneTableShell(table);
+  let current: ChildNode | null = row;
+
+  while (current) {
+    const next: ChildNode | null = current.nextSibling;
+    body.appendChild(current);
+    current = next;
+  }
+
+  const spacer = table.ownerDocument.createElement("div");
+  spacer.className = TABLE_PAGE_SPACER_CLASS;
+  spacer.style.height = "0px";
+  spacer.style.flexShrink = "0";
+  spacer.setAttribute("aria-hidden", "true");
+
+  table.parentNode?.insertBefore(spacer, table.nextSibling);
+  spacer.parentNode?.insertBefore(clone, spacer.nextSibling);
+
+  return {
+    clone,
+    spacer,
+  };
+};
+
+const paginateTables = (element: HTMLElement, pageHeightPx: number) => {
+  Array.from(element.querySelectorAll(`.${TABLE_PAGE_SPACER_CLASS}`)).forEach(
+    (spacer) => spacer.remove()
+  );
+
+  const maxIterations = 500;
+
+  for (let iteration = 0; iteration < maxIterations; iteration += 1) {
+    const rootRect = element.getBoundingClientRect();
+    const rows = Array.from(element.querySelectorAll<HTMLTableRowElement>("tbody tr"))
+      .filter((row) => !row.classList.contains(TABLE_ROW_SPACER_CLASS))
+      .map((row) => {
+        const rect = row.getBoundingClientRect();
+        const top = rect.top - rootRect.top;
+        const bottom = rect.bottom - rootRect.top;
+        return {
+          bottom,
+          height: bottom - top,
+          row,
+          top,
+        };
+      })
+      .filter(({ bottom, height, top }) => {
+        const topPage = Math.floor(Math.max(0, top) / pageHeightPx);
+        const bottomPage = Math.floor(Math.max(0, bottom - 1) / pageHeightPx);
+        return (
+          bottom > top &&
+          height > 2 &&
+          height < pageHeightPx * 0.78 &&
+          topPage < bottomPage
+        );
+      })
+      .sort((a, b) => a.top - b.top);
+
+    const target = rows[0];
+    if (!target) return;
+
+    const table = target.row.closest("table");
+    const tbody = target.row.parentElement;
+    if (!table || !tbody) return;
+
+    const firstBodyRow = Array.from(tbody.children).find(
+      (child) =>
+        child.tagName.toLowerCase() === "tr" &&
+        !child.classList.contains(TABLE_ROW_SPACER_CLASS)
+    );
+
+    if (firstBodyRow === target.row) {
+      const previousElement = table.previousElementSibling;
+      const breakTarget =
+        previousElement?.tagName.toLowerCase() === "h2"
+          ? (previousElement as HTMLElement)
+          : table;
+
+      if (insertSpacerBeforeElement(breakTarget, element, pageHeightPx)) {
+        continue;
+      }
+
+      return;
+    }
+
+    const continuation = moveRowsToContinuationTable(target.row, table);
+    if (!continuation) return;
+
+    const rootAfterMove = element.getBoundingClientRect();
+    const continuationTop =
+      continuation.clone.getBoundingClientRect().top - rootAfterMove.top;
+    const continuationOffset = continuationTop % pageHeightPx;
+
+    if (continuationOffset > 8) {
+      const nextPageTop =
+        (Math.floor(continuationTop / pageHeightPx) + 1) * pageHeightPx;
+      const spacerHeight = Math.ceil(
+        nextPageTop - continuationTop + PAGE_BREAK_GAP_CSS_PX
+      );
+
+      if (spacerHeight > 0 && spacerHeight < pageHeightPx * 0.95) {
+        continuation.spacer.style.height = `${spacerHeight}px`;
+      }
+    }
+
+    continuation.clone.getBoundingClientRect();
   }
 };
 
@@ -282,21 +601,35 @@ const alignFooterToPageBottom = (element: HTMLElement, pageHeightPx: number) => 
   footer.parentNode?.insertBefore(spacer, footer);
 };
 
+const isTableTagName = (tagName: string) =>
+  tagName === "tr" || tagName === "td" || tagName === "th";
+
 const collectAvoidBlocks = (element: HTMLElement, canvasScale: number) => {
   const rootRect = element.getBoundingClientRect();
   const maxHeight = element.scrollHeight * canvasScale;
 
   return Array.from(element.querySelectorAll(PAGE_BREAK_SELECTOR))
     .map((node) => {
-      const rect = (node as HTMLElement).getBoundingClientRect();
+      const htmlNode = node as HTMLElement;
+      const rect = htmlNode.getBoundingClientRect();
       return {
         top: Math.max(0, (rect.top - rootRect.top) * canvasScale),
         bottom: Math.min(maxHeight, (rect.bottom - rootRect.top) * canvasScale),
+        tagName: htmlNode.tagName.toLowerCase(),
+        className: String(htmlNode.className || ""),
       };
     })
-    .filter((block) => block.bottom - block.top > 6 * canvasScale)
+    .filter((block) => {
+      const blockHeight = block.bottom - block.top;
+      return isTableTagName(block.tagName)
+        ? blockHeight > 1.5 * canvasScale
+        : blockHeight > 6 * canvasScale;
+    })
     .sort((a, b) => a.top - b.top);
 };
+
+const isTableFragment = (block: AvoidBlock) =>
+  isTableTagName(block.tagName);
 
 const chooseSliceHeight = ({
   avoidBlocks,
@@ -320,6 +653,72 @@ const chooseSliceHeight = ({
   const minimumBottom = renderedHeight + pageHeightPx * MIN_SLICE_RATIO;
   const gap = PAGE_BREAK_GAP_PX;
 
+  const keepTableRowsWhole = (sliceHeight: number) => {
+    const sliceBottom = renderedHeight + sliceHeight;
+    const crossingTableBlock = avoidBlocks.find((block) => {
+      const blockHeight = block.bottom - block.top;
+      return (
+        isTableFragment(block) &&
+        block.top < sliceBottom &&
+        block.bottom > sliceBottom &&
+        block.top > renderedHeight + gap * 2 &&
+        blockHeight < pageHeightPx * 0.5
+      );
+    });
+
+    if (!crossingTableBlock) {
+      return sliceHeight;
+    }
+
+    const sliceBeforeBlock = Math.floor(
+      crossingTableBlock.top - renderedHeight - gap
+    );
+
+    if (sliceBeforeBlock > pageHeightPx * 0.08) {
+      return Math.max(1, sliceBeforeBlock);
+    }
+
+    return sliceHeight;
+  };
+
+  const crossingTableFragment = avoidBlocks.find((block) => {
+    const blockHeight = block.bottom - block.top;
+    return (
+      isTableFragment(block) &&
+      block.top < targetBottom &&
+      block.bottom > targetBottom &&
+      blockHeight < pageHeightPx * 0.5 &&
+      block.top > renderedHeight + gap
+    );
+  });
+
+  if (crossingTableFragment) {
+    const sliceBeforeFragment = Math.floor(
+      crossingTableFragment.top - renderedHeight - gap
+    );
+
+    if (sliceBeforeFragment > pageHeightPx * 0.08) {
+      return Math.max(1, sliceBeforeFragment);
+    }
+  }
+
+  const crossingRow = avoidBlocks.find((block) => {
+    const blockHeight = block.bottom - block.top;
+    return (
+      block.top < targetBottom &&
+      block.bottom > targetBottom &&
+      blockHeight < pageHeightPx * 0.24 &&
+      block.top > renderedHeight + gap * 2
+    );
+  });
+
+  if (crossingRow) {
+    const sliceBeforeRow = Math.floor(crossingRow.top - renderedHeight - gap);
+    if (sliceBeforeRow > pageHeightPx * 0.42) {
+      return keepTableRowsWhole(Math.max(1, sliceBeforeRow));
+    }
+  }
+
   const cuttingBlock = avoidBlocks.find(
     (block) =>
       block.top < targetBottom &&
@@ -328,7 +727,9 @@ const chooseSliceHeight = ({
   );
 
   if (cuttingBlock) {
-    return Math.max(1, Math.floor(cuttingBlock.top - renderedHeight - gap));
+    return keepTableRowsWhole(
+      Math.max(1, Math.floor(cuttingBlock.top - renderedHeight - gap))
+    );
   }
 
   const candidate = [...avoidBlocks]
@@ -341,10 +742,12 @@ const chooseSliceHeight = ({
     );
 
   if (candidate) {
-    return Math.max(1, Math.floor(candidate.bottom - renderedHeight + gap));
+    return keepTableRowsWhole(
+      Math.max(1, Math.floor(candidate.bottom - renderedHeight + gap))
+    );
   }
 
-  return nominalHeight;
+  return keepTableRowsWhole(nominalHeight);
 };
 
 const resolveRenderScale = (
@@ -386,6 +789,46 @@ const canvasHasVisibleContent = (canvas: HTMLCanvasElement) => {
   }
 
   return false;
+};
+
+const findVisibleCanvasBottom = (canvas: HTMLCanvasElement) => {
+  const probeWidth = 320;
+  const probeHeight = Math.max(
+    1,
+    Math.round((canvas.height / canvas.width) * probeWidth)
+  );
+  const probe = document.createElement("canvas");
+  probe.width = probeWidth;
+  probe.height = probeHeight;
+  const context = probe.getContext("2d", { willReadFrequently: true });
+  if (!context) return canvas.height;
+
+  context.drawImage(canvas, 0, 0, probe.width, probe.height);
+
+  const rowStep = 2;
+  const columnStep = 2;
+  const threshold = 247;
+
+  for (let y = probe.height - 1; y >= 0; y -= rowStep) {
+    const row = context.getImageData(0, y, probe.width, 1).data;
+
+    for (let x = 0; x < probe.width; x += columnStep) {
+      const index = x * 4;
+      if (
+        row[index + 3] > 8 &&
+        (row[index] < threshold ||
+          row[index + 1] < threshold ||
+          row[index + 2] < threshold)
+      ) {
+        return Math.min(
+          canvas.height,
+          Math.ceil(((y + 10) / probe.height) * canvas.height)
+        );
+      }
+    }
+  }
+
+  return canvas.height;
 };
 
 const buildFrameHtml = (html: string) => {
@@ -431,14 +874,14 @@ const createRenderFrame = (html: string, orientation: "p" | "l") => {
   frame.setAttribute("aria-hidden", "true");
   frame.tabIndex = -1;
   frame.style.position = "fixed";
-  frame.style.left = "0";
+  frame.style.left = "-100000px";
   frame.style.top = "0";
   frame.style.width = `${dimensions.width}px`;
   frame.style.height = `${dimensions.height}px`;
   frame.style.border = "0";
   frame.style.opacity = "0";
   frame.style.pointerEvents = "none";
-  frame.style.transform = "translateX(-200vw)";
+  frame.style.transform = "none";
   frame.style.zIndex = "-1";
 
   document.body.appendChild(frame);
@@ -473,6 +916,7 @@ export const renderHtmlToPdf = async ({
   footerText,
   footerHeightMm = DEFAULT_FOOTER_HEIGHT_MM,
   footerFontSizePt = DEFAULT_FOOTER_FONT_SIZE_PT,
+  fixedPageSlices = false,
 }: RenderHtmlPdfOptions) => {
   const { frame, frameDocument } = createRenderFrame(html, orientation);
 
@@ -499,11 +943,15 @@ export const renderHtmlToPdf = async ({
     );
     const contentWidthMm = pageWidthMm - marginMm * 2;
     const contentHeightMm =
-      pageHeightMm - marginMm * 2 - (footerText ? footerHeightMm : 0);
+      pageHeightMm -
+      marginMm * 2 -
+      (footerText ? footerHeightMm : DEFAULT_BOTTOM_SAFE_HEIGHT_MM);
     const cssPxPerMm = elementWidth / contentWidthMm;
     const pageHeightCssPx = Math.floor(contentHeightMm * cssPxPerMm);
 
     insertPageBreakSpacers(element, pageHeightCssPx);
+    paginateTables(element, pageHeightCssPx);
+    insertTableRowBreakSpacers(element, pageHeightCssPx);
     if (!footerText) alignFooterToPageBottom(element, pageHeightCssPx);
     await new Promise((resolve) =>
       (frameDocument.defaultView ?? window).requestAnimationFrame(resolve)
@@ -535,6 +983,7 @@ export const renderHtmlToPdf = async ({
 
     const pxPerMm = canvas.width / contentWidthMm;
     const pageHeightPx = Math.floor(contentHeightMm * pxPerMm);
+    const effectiveCanvasHeight = findVisibleCanvasBottom(canvas);
     const canvasScale = canvas.height / elementHeight;
     const avoidBlocks = collectAvoidBlocks(element, canvasScale);
 
@@ -545,20 +994,23 @@ export const renderHtmlToPdf = async ({
     let pageIndex = 0;
     let renderedHeight = 0;
 
-    while (renderedHeight < canvas.height) {
-      if (canvas.height - renderedHeight <= MIN_TRAILING_SLICE_PX) {
+    while (renderedHeight < effectiveCanvasHeight) {
+      if (effectiveCanvasHeight - renderedHeight <= MIN_TRAILING_SLICE_PX) {
         break;
       }
 
+      const remainingHeight = effectiveCanvasHeight - renderedHeight;
       const sliceHeight = Math.max(
         1,
         Math.floor(
-          chooseSliceHeight({
-            avoidBlocks,
-            canvasHeight: canvas.height,
-            pageHeightPx,
-            renderedHeight,
-          })
+          fixedPageSlices
+            ? Math.min(pageHeightPx, remainingHeight)
+            : chooseSliceHeight({
+                avoidBlocks,
+                canvasHeight: effectiveCanvasHeight,
+                pageHeightPx,
+                renderedHeight,
+              })
         )
       );
       const pageCanvas = document.createElement("canvas");

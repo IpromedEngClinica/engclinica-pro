@@ -5,6 +5,7 @@ import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import PlanoNaoLocalizadoDialog from "@/components/PlanoNaoLocalizadoDialog";
 import PlanoResultadoLoteDialog from "@/components/PlanoResultadoLoteDialog";
 import PreventivaChecklistDialog from "@/components/PreventivaChecklistDialog";
+import SortableTableHeader from "@/components/SortableTableHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -13,6 +14,7 @@ import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   useAbrirPreventivaItem,
+  useCancelarEquipamentosNoCiclo,
   useConcluirItemCicloCalibracao,
   useCriarOuBuscarCalibracaoParaItem,
   useFinalizarPreventivasConformesEmLote,
@@ -30,10 +32,12 @@ import type {
   PlanoCicloItem,
   PlanoTipoServico,
   ProgressoFinalizacaoPreventivasLote,
+  ResultadoCancelamentoItensCiclo,
   ResultadoFinalizacaoPreventivasLote,
   ResultadoNaoLocalizados,
 } from "@/services/planosService";
 import { formatDateTimeValue } from "@/utils/planoDatas";
+import type { SortDirection } from "@/utils/sortUtils";
 
 type Props = {
   planoId: string;
@@ -45,6 +49,16 @@ type SetorOpcao = {
   label: string;
   ordem: number;
 };
+
+type SortField =
+  | "ordem"
+  | "equipamento"
+  | "numero_serie"
+  | "patrimonio"
+  | "abertura"
+  | "previsao"
+  | "status"
+  | "documento";
 
 const TODOS = "todos";
 const SEM_SETOR = "sem-setor";
@@ -86,6 +100,9 @@ const statusLabel: Record<string, string> = {
   nao_localizado: "Nao localizado",
 };
 
+const compareText = (a: string | null | undefined, b: string | null | undefined) =>
+  (a || "").localeCompare(b || "", "pt-BR", { numeric: true, sensitivity: "base" });
+
 const PlanoExecucaoTab = ({ planoId, onNovoCiclo }: Props) => {
   const { data: ciclo, isLoading: loadingCiclo } = usePlanoCicloAtual(planoId);
   const { data: itensQuery = [], isLoading: loadingItens } = usePlanoCicloItens(ciclo?.id);
@@ -94,6 +111,7 @@ const PlanoExecucaoTab = ({ planoId, onNovoCiclo }: Props) => {
   const concluirCalibracao = useConcluirItemCicloCalibracao();
   const finalizarConformes = useFinalizarPreventivasConformesEmLote();
   const marcarNaoLocalizados = useMarcarEquipamentosNaoLocalizados();
+  const cancelarEquipamentos = useCancelarEquipamentosNoCiclo();
   const itens = useMemo(
     () => itensQuery.length ? itensQuery : ciclo?.itens || [],
     [ciclo?.itens, itensQuery]
@@ -103,6 +121,8 @@ const PlanoExecucaoTab = ({ planoId, onNovoCiclo }: Props) => {
   const [statusFiltro, setStatusFiltro] = useState("operacionais");
   const [search, setSearch] = useState("");
   const [pageSize, setPageSize] = useState("10");
+  const [sortField, setSortField] = useState<SortField>("ordem");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [checklistOpen, setChecklistOpen] = useState(false);
   const [checklistOsId, setChecklistOsId] = useState<string | null>(null);
@@ -113,7 +133,8 @@ const PlanoExecucaoTab = ({ planoId, onNovoCiclo }: Props) => {
   const [naoLocalizadoOpen, setNaoLocalizadoOpen] = useState(false);
   const [resultadoOpen, setResultadoOpen] = useState(false);
   const [resultadoTitulo, setResultadoTitulo] = useState("");
-  const [resultadoLote, setResultadoLote] = useState<ResultadoFinalizacaoPreventivasLote | ResultadoNaoLocalizados | null>(null);
+  const [resultadoLote, setResultadoLote] =
+    useState<ResultadoFinalizacaoPreventivasLote | ResultadoNaoLocalizados | ResultadoCancelamentoItensCiclo | null>(null);
   const [equipamentoDetalhes, setEquipamentoDetalhes] =
     useState<EquipamentoSupabase | null>(null);
   const [equipamentoDetalhesOpen, setEquipamentoDetalhesOpen] = useState(false);
@@ -162,10 +183,48 @@ const PlanoExecucaoTab = ({ planoId, onNovoCiclo }: Props) => {
 
   const filtrados = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return filtradosPorStatus.filter((item) =>
-      item.tipo_servico === servico && (!q || textoBusca(item).includes(q))
-    );
-  }, [filtradosPorStatus, search, servico]);
+    const ordemOriginal = new Map(filtradosPorStatus.map((item, index) => [item.id, index]));
+
+    const getSortValue = (item: PlanoCicloItem) => {
+      if (sortField === "ordem") return ordemOriginal.get(item.id) ?? 0;
+      if (sortField === "equipamento") return equipamentoNome(item);
+      if (sortField === "numero_serie") return item.equipamento?.numero_serie || "";
+      if (sortField === "patrimonio") return item.equipamento?.patrimonio || "";
+      if (sortField === "abertura") return item.aberto_em || ciclo?.data_abertura || "";
+      if (sortField === "previsao") return ciclo?.data_fechamento_prevista || "";
+      if (sortField === "status") return statusLabel[item.status] || item.status;
+      if (sortField === "documento") {
+        if (item.os_id) return "OS vinculada";
+        if (item.calibracao_execucao_id) return "Certificado vinculado";
+        return "";
+      }
+      return "";
+    };
+
+    return filtradosPorStatus
+      .filter((item) =>
+        item.tipo_servico === servico && (!q || textoBusca(item).includes(q))
+      )
+      .sort((a, b) => {
+        const valueA = getSortValue(a);
+        const valueB = getSortValue(b);
+        const compare = typeof valueA === "number" && typeof valueB === "number"
+          ? valueA - valueB
+          : compareText(String(valueA), String(valueB));
+        if (compare !== 0) return sortDirection === "asc" ? compare : -compare;
+        return (ordemOriginal.get(a.id) ?? 0) - (ordemOriginal.get(b.id) ?? 0);
+      });
+  }, [ciclo?.data_abertura, ciclo?.data_fechamento_prevista, filtradosPorStatus, search, servico, sortDirection, sortField]);
+
+  const handleSort = (field: string) => {
+    const nextField = field as SortField;
+    if (sortField === nextField) {
+      setSortDirection((current) => current === "asc" ? "desc" : "asc");
+      return;
+    }
+    setSortField(nextField);
+    setSortDirection("asc");
+  };
 
   const visiveis = pageSize === "todos" ? filtrados : filtrados.slice(0, Number(pageSize));
   const todosVisiveisSelecionados = visiveis.length > 0 && visiveis.every((item) => selecionados.has(item.id));
@@ -179,9 +238,16 @@ const PlanoExecucaoTab = ({ planoId, onNovoCiclo }: Props) => {
   const equipamentosNaoLocalizadosValidos = Array.from(new Set(
     naoLocalizadosSelecionadosValidos.map((item) => item.equipamento_id)
   ));
+  const cancelamentosSelecionadosValidos = itensSelecionadosVisiveis.filter((item) =>
+    item.status === "pendente" && !item.os_id && !item.calibracao_execucao_id
+  );
+  const equipamentosCancelamentoValidos = Array.from(new Set(
+    cancelamentosSelecionadosValidos.map((item) => item.equipamento_id)
+  ));
   const mutacaoLotePendente = abrirPreventiva.isPending ||
     finalizarConformes.isPending ||
-    marcarNaoLocalizados.isPending;
+    marcarNaoLocalizados.isPending ||
+    cancelarEquipamentos.isPending;
 
   const toggleTodos = (checked: boolean) => {
     setSelecionados((current) => {
@@ -287,6 +353,7 @@ const PlanoExecucaoTab = ({ planoId, onNovoCiclo }: Props) => {
         cicloId: ciclo.id,
         planoId,
         dataFechamento: ciclo.data_fechamento_prevista,
+        dataReferenciaValidade: ciclo.data_abertura,
         onProgress: setProgressoFinalizacao,
       });
       await new Promise((resolve) => window.setTimeout(resolve, 350));
@@ -344,6 +411,33 @@ const PlanoExecucaoTab = ({ planoId, onNovoCiclo }: Props) => {
     }
   };
 
+  const cancelarSelecionados = async () => {
+    if (!ciclo || !equipamentosCancelamentoValidos.length) return;
+
+    const confirmado = window.confirm(
+      `Cancelar a execucao de ${equipamentosCancelamentoValidos.length} equipamento(s) selecionado(s)? Esta acao nao cria OS e remove estes itens dos relatorios do ciclo.`
+    );
+    if (!confirmado) return;
+
+    try {
+      const resultado = await cancelarEquipamentos.mutateAsync({
+        cicloId: ciclo.id,
+        planoId,
+        equipamentoIds: equipamentosCancelamentoValidos,
+      });
+      setSelecionados(new Set());
+      setResultadoTitulo("Execucoes canceladas");
+      setResultadoLote(resultado);
+      setResultadoOpen(true);
+    } catch (error) {
+      toast({
+        title: "Erro ao cancelar execucao",
+        description: error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (loadingCiclo) {
     return <div className="rounded-lg border bg-card p-8 text-sm text-muted-foreground">Carregando execucao...</div>;
   }
@@ -372,6 +466,7 @@ const PlanoExecucaoTab = ({ planoId, onNovoCiclo }: Props) => {
         osExistenteId={checklistOsId}
         planoCicloItemId={checklistItemId}
         dataFechamentoPrevista={ciclo.data_fechamento_prevista}
+        dataReferenciaValidade={ciclo.data_abertura}
         modo="usar_os_existente"
       />
       <CalibracaoExecucaoFormDialog
@@ -485,6 +580,17 @@ const PlanoExecucaoTab = ({ planoId, onNovoCiclo }: Props) => {
             >
               Marcar como nao localizado
             </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={equipamentosCancelamentoValidos.length === 0 || mutacaoLotePendente}
+              onClick={cancelarSelecionados}
+            >
+              {cancelarEquipamentos.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Cancelar execução
+            </Button>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
             <div className="relative">
@@ -547,14 +653,14 @@ const PlanoExecucaoTab = ({ planoId, onNovoCiclo }: Props) => {
               <tr className="bg-muted/40">
                 <Th><Checkbox checked={todosVisiveisSelecionados} onCheckedChange={(value) => toggleTodos(Boolean(value))} /></Th>
                 <Th>Play</Th>
-                <Th>#</Th>
-                <Th>Equipamento</Th>
-                <Th>N Serie</Th>
-                <Th>Patrimonio</Th>
-                <Th>Abertura</Th>
-                <Th>Previsao</Th>
-                <Th>Status</Th>
-                <Th>Documento</Th>
+                <Th><SortableTableHeader label="#" sortField="ordem" sortKey={sortField} sortDirection={sortDirection} onSort={handleSort} /></Th>
+                <Th><SortableTableHeader label="Equipamento" sortField="equipamento" sortKey={sortField} sortDirection={sortDirection} onSort={handleSort} /></Th>
+                <Th><SortableTableHeader label="N Serie" sortField="numero_serie" sortKey={sortField} sortDirection={sortDirection} onSort={handleSort} /></Th>
+                <Th><SortableTableHeader label="Patrimonio" sortField="patrimonio" sortKey={sortField} sortDirection={sortDirection} onSort={handleSort} /></Th>
+                <Th><SortableTableHeader label="Abertura" sortField="abertura" sortKey={sortField} sortDirection={sortDirection} onSort={handleSort} /></Th>
+                <Th><SortableTableHeader label="Previsao" sortField="previsao" sortKey={sortField} sortDirection={sortDirection} onSort={handleSort} /></Th>
+                <Th><SortableTableHeader label="Status" sortField="status" sortKey={sortField} sortDirection={sortDirection} onSort={handleSort} /></Th>
+                <Th><SortableTableHeader label="Documento" sortField="documento" sortKey={sortField} sortDirection={sortDirection} onSort={handleSort} /></Th>
               </tr>
             </thead>
             <tbody>

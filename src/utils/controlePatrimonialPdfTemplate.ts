@@ -74,11 +74,9 @@ const equipamentoRow = (equipamento: EquipamentoSupabase, index: number) => `
     </td>
     <td>${safe(equipamento.setor)}</td>
     <td><span class="${statusClass(getStatusEquipamentoRelatorio(equipamento))}">${safe(getStatusEquipamentoRelatorio(equipamento))}</span></td>
-    <td>
-      <strong>Preventiva</strong>
-      <span>${safe(formatDate(equipamento.data_ultima_preventiva))} -> ${safe(formatDate(equipamento.data_proxima_preventiva))}</span>
-      <strong>Calibracao</strong>
-      <span>${safe(formatDate(equipamento.data_ultima_calibracao))} -> ${safe(formatDate(equipamento.data_proxima_calibracao))}</span>
+    <td class="dates">
+      <span><strong>Prev.:</strong> ${safe(formatDate(equipamento.data_ultima_preventiva))} -> ${safe(formatDate(equipamento.data_proxima_preventiva))}</span>
+      <span><strong>Cal.:</strong> ${safe(formatDate(equipamento.data_ultima_calibracao))} -> ${safe(formatDate(equipamento.data_proxima_calibracao))}</span>
     </td>
   </tr>
 `;
@@ -95,9 +93,9 @@ export const buildControlePatrimonialHtml = (
     <style>
       * { box-sizing: border-box; }
       body { margin: 0; font-family: Arial, Helvetica, sans-serif; color: #243b53; background: #fff; }
-      .document { width: 1588px; min-height: 1123px; padding: 20px 22px 28px; background: #fff; }
+      .document { width: 1588px; min-height: 1123px; padding: 18px 14px 26px; background: #fff; }
       .header { display: flex; align-items: flex-start; justify-content: space-between; border-bottom: 1px solid #d9e2ec; padding-bottom: 14px; }
-      .logo { width: 180px; height: auto; display: block; }
+      .logo { width: 270px; height: auto; display: block; }
       .title { text-align: right; }
       .title h1 { margin: 4px 0 8px; font-size: 26px; font-weight: 600; letter-spacing: 0; color: #334e68; }
       .title p { margin: 0; font-size: 11px; color: #627d98; line-height: 1.5; }
@@ -111,25 +109,29 @@ export const buildControlePatrimonialHtml = (
       .summary-table th { background: #f1f5f9; color: #334e68; text-align: left; padding: 7px 8px; font-size: 10px; text-transform: uppercase; }
       .summary-table td { border-top: 1px solid #e4e7eb; padding: 8px; }
       .summary-table th:last-child, .summary-table td:last-child { width: 120px; text-align: right; }
-      .company { margin-top: 20px; page-break-inside: avoid; }
-      .company-title { display: flex; align-items: baseline; justify-content: space-between; border-bottom: 1px solid #cbd2d9; padding-bottom: 6px; margin-bottom: 8px; }
+      .company { margin-top: 18px; break-inside: auto !important; page-break-inside: auto !important; }
+      .company-title { display: flex; align-items: baseline; justify-content: space-between; border-bottom: 1px solid #cbd2d9; padding-bottom: 6px; margin-bottom: 8px; break-after: avoid; page-break-after: avoid; }
       .company-title h2 { margin: 0; }
       .company-title span { font-size: 11px; color: #627d98; }
-      .equip-list { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 10px; }
-      .equip-list th { background: #f8fafc; color: #52606d; text-align: left; padding: 7px 6px; font-size: 9px; text-transform: uppercase; border-top: 1px solid #d9e2ec; border-bottom: 1px solid #d9e2ec; }
-      .equip-list td { padding: 8px 6px; border-bottom: 1px solid #e4e7eb; vertical-align: top; word-break: break-word; }
+      .equip-list { width: 100%; min-width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 10px; border: 1px solid #d9e2ec; break-inside: auto !important; page-break-inside: auto !important; }
+      .equip-list thead { display: table-header-group; break-inside: avoid !important; page-break-inside: avoid !important; }
+      .equip-list tbody { break-inside: auto !important; page-break-inside: auto !important; }
+      .equip-list tr { break-inside: avoid !important; page-break-inside: avoid !important; }
+      .equip-list th { background: #f8fafc; color: #52606d; text-align: left; padding: 6px 6px; font-size: 8.5px; text-transform: uppercase; border: 1px solid #d9e2ec; line-height: 1.15; }
+      .equip-list td { padding: 5px 6px; border: 1px solid #e1e8f0; vertical-align: top; overflow-wrap: anywhere; line-height: 1.2; }
       .equip-list tr:nth-child(even) td { background: #fbfdff; }
-      .equip-list th:nth-child(1), .equip-list td:nth-child(1) { width: 4%; text-align: center; }
-      .equip-list th:nth-child(2) { width: 23%; }
-      .equip-list th:nth-child(3) { width: 13%; }
-      .equip-list th:nth-child(4) { width: 14%; }
-      .equip-list th:nth-child(5) { width: 10%; }
-      .equip-list th:nth-child(6) { width: 11%; }
-      .equip-list th:nth-child(7) { width: 25%; }
+      .equip-list th:nth-child(1), .equip-list td:nth-child(1) { width: 3%; text-align: center; }
+      .equip-list th:nth-child(2), .equip-list td:nth-child(2) { width: 24%; }
+      .equip-list th:nth-child(3), .equip-list td:nth-child(3) { width: 10%; }
+      .equip-list th:nth-child(4), .equip-list td:nth-child(4) { width: 11%; }
+      .equip-list th:nth-child(5), .equip-list td:nth-child(5) { width: 17%; }
+      .equip-list th:nth-child(6), .equip-list td:nth-child(6) { width: 10%; }
+      .equip-list th:nth-child(7), .equip-list td:nth-child(7) { width: 25%; }
       .equip-list td strong { display: block; font-size: 10px; color: #102a43; }
-      .equip-list td span { display: block; margin-top: 2px; color: #627d98; }
+      .equip-list td span { display: block; margin-top: 1px; color: #526d89; }
+      .equip-list .dates strong { display: inline; font-size: 10px; }
       .index { color: #627d98; font-weight: 700; }
-      .status { display: inline-block; border-radius: 999px; padding: 3px 8px; font-size: 9px; font-weight: 700; white-space: nowrap; }
+      .status { display: inline-block; min-width: 86px; border-radius: 999px; padding: 3px 8px; font-size: 9px; font-weight: 700; text-align: center; white-space: nowrap; }
       .status.active { background: #e8f5e9; color: #256029; }
       .status.maintenance { background: #fff7e6; color: #8a4b00; }
       .status.inactive { background: #fdecea; color: #b42318; }
@@ -176,6 +178,15 @@ export const buildControlePatrimonialHtml = (
                       <span>${safe(itens.length)} equipamento(s)</span>
                     </div>
                     <table class="equip-list">
+                      <colgroup>
+                        <col style="width: 3%" />
+                        <col style="width: 24%" />
+                        <col style="width: 10%" />
+                        <col style="width: 11%" />
+                        <col style="width: 17%" />
+                        <col style="width: 10%" />
+                        <col style="width: 25%" />
+                      </colgroup>
                       <thead>
                         <tr>
                           <th>#</th>

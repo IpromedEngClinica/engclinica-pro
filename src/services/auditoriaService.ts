@@ -34,71 +34,61 @@ export type AuditoriaListResult = {
   total: number;
 };
 
-const listSelect = `
-  id,
-  organizacao_id,
-  usuario_id,
-  usuario_nome_snapshot,
-  usuario_email_snapshot,
-  usuario_perfil_snapshot,
-  acao,
-  modulo,
-  tabela,
-  registro_id,
-  registro_descricao,
-  campos_alterados,
-  criado_em
-`;
-
 const normalizeSearch = (value?: string) => value?.trim().toLowerCase() || "";
 
-const sanitizeOrSearch = (value: string) => value.replace(/[%(),]/g, " ").trim();
+const sanitizeSearch = (value: string) => value.replace(/[%]/g, " ").trim();
+
+type AuditoriaResumoRpcRow = Omit<
+  AuditoriaLog,
+  "dados_anteriores" | "dados_novos" | "detalhes"
+> & {
+  total_count?: number | string | null;
+};
+
+const mapResumoRpcRow = (row: AuditoriaResumoRpcRow): AuditoriaLog => ({
+  id: row.id,
+  organizacao_id: row.organizacao_id,
+  usuario_id: row.usuario_id,
+  usuario_nome_snapshot: row.usuario_nome_snapshot,
+  usuario_email_snapshot: row.usuario_email_snapshot,
+  usuario_perfil_snapshot: row.usuario_perfil_snapshot,
+  acao: row.acao,
+  modulo: row.modulo,
+  tabela: row.tabela,
+  registro_id: row.registro_id,
+  registro_descricao: row.registro_descricao,
+  campos_alterados: row.campos_alterados || [],
+  dados_anteriores: null,
+  dados_novos: null,
+  detalhes: {},
+  criado_em: row.criado_em,
+});
 
 export const auditoriaService = {
   async listar(filtro: AuditoriaFiltro = {}): Promise<AuditoriaListResult> {
-    const limit = filtro.limit ?? 200;
+    const limit = filtro.limit ?? 25;
     const page = Math.max(1, filtro.page ?? 1);
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
-    const search = sanitizeOrSearch(normalizeSearch(filtro.search));
+    const offset = (page - 1) * limit;
+    const search = sanitizeSearch(normalizeSearch(filtro.search));
 
-    let query = supabase
-      .from("auditoria_logs")
-      .select(listSelect, { count: "exact" })
-      .order("criado_em", { ascending: false })
-      .range(from, to);
-
-    if (filtro.modulo && filtro.modulo !== "todos") {
-      query = query.eq("modulo", filtro.modulo);
-    }
-
-    if (filtro.acao && filtro.acao !== "todas") {
-      query = query.eq("acao", filtro.acao);
-    }
-
-    if (search) {
-      const pattern = `%${search}%`;
-      query = query.or(
-        [
-          `modulo.ilike.${pattern}`,
-          `tabela.ilike.${pattern}`,
-          `registro_descricao.ilike.${pattern}`,
-          `usuario_nome_snapshot.ilike.${pattern}`,
-          `usuario_email_snapshot.ilike.${pattern}`,
-          `acao.ilike.${pattern}`,
-        ].join(",")
-      );
-    }
-
-    const { data, error, count } = await query;
+    const { data, error } = await supabase.rpc("listar_auditoria_logs_resumo", {
+      p_termo: search || null,
+      p_modulo: filtro.modulo && filtro.modulo !== "todos" ? filtro.modulo : null,
+      p_acao: filtro.acao && filtro.acao !== "todas" ? filtro.acao : null,
+      p_offset: offset,
+      p_limit: limit,
+    });
 
     if (error) {
       throw new Error(error.message);
     }
 
+    const rows = (data || []) as AuditoriaResumoRpcRow[];
+    const total = rows.length ? Number(rows[0].total_count || 0) : 0;
+
     return {
-      items: (data || []) as AuditoriaLog[],
-      total: count ?? data?.length ?? 0,
+      items: rows.map(mapResumoRpcRow),
+      total,
     };
   },
 

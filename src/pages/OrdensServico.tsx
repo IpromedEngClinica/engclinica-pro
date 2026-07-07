@@ -95,16 +95,8 @@ const getTipoServico = (os: OrdemServicoSupabase) => {
   return os.tipo_os?.nome || "Não informado";
 };
 
-const getChecklistPreventiva = (os: OrdemServicoSupabase) => {
-  const checklist = os.checklist_preventiva;
-  if (Array.isArray(checklist)) return checklist[0] || null;
-  return checklist || null;
-};
-
 const isOSPreventiva = (os: OrdemServicoSupabase) =>
-  getTipoServico(os).toLowerCase().includes("preventiva") ||
-  (os.descricao_servico || "").toLowerCase().includes("preventiva") ||
-  Boolean(getChecklistPreventiva(os));
+  getTipoServico(os).toLowerCase().includes("preventiva");
 
 const getEstado = (os: OrdemServicoSupabase) => {
   return os.estado_os?.nome || os.status_sistema || "Não informado";
@@ -222,9 +214,10 @@ const OrdensServico = () => {
   );
 
   const sortByServerField = useMemo(() => {
+    if (sortKey === "numero") return "numero_ordem";
     if (sortKey === "data") return "data_abertura";
     if (sortKey === "responsavel") return "responsavel_texto";
-    return sortableServerFields.has(sortKey) ? sortKey : "numero";
+    return sortableServerFields.has(sortKey) ? sortKey : "numero_ordem";
   }, [sortKey, sortableServerFields]);
 
   const ordensServicoQueryFiltros = useMemo(
@@ -872,7 +865,6 @@ const OrdensServico = () => {
                   const tecnico = getTecnico(os);
                   const tipoServico = getTipoServico(os);
                   const preventiva = isOSPreventiva(os);
-                  const checklist = getChecklistPreventiva(os);
 
                   return (
                     <tr
@@ -982,7 +974,7 @@ const OrdensServico = () => {
                               {preventiva && (
                                 <DropdownMenuItem onClick={() => openChecklist(os)}>
                                   <ClipboardList className="w-4 h-4 mr-2" />
-                                  {checklist ? "Editar checklist" : "Acessar checklist"}
+                                  Checklist preventiva
                                 </DropdownMenuItem>
                               )}
 
@@ -1044,7 +1036,6 @@ const OrdensServico = () => {
               firstVisibleIndex={firstVisibleIndex}
               lastVisibleIndex={lastVisibleIndex}
               onPageChange={setPage}
-              showTotal={false}
             />
           </div>
         )}

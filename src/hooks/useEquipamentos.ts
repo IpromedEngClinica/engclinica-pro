@@ -9,6 +9,9 @@ import {
 } from "@/services/equipamentosService";
 
 export const EQUIPAMENTOS_QUERY_KEY = ["equipamentos"];
+const DASHBOARD_QUERY_KEY = ["dashboard-operacional"];
+const ORGANIZACAO_SETORES_QUERY_KEY = ["organizacao-setores"];
+const PLANOS_QUERY_KEY = ["planos"];
 
 type UseEquipamentosOptions = {
   enabled?: boolean;
@@ -16,8 +19,17 @@ type UseEquipamentosOptions = {
   gcTime?: number;
 };
 
-const EQUIPAMENTOS_STALE_TIME = 5 * 60 * 1000;
-const EQUIPAMENTOS_GC_TIME = 15 * 60 * 1000;
+export const EQUIPAMENTOS_STALE_TIME = 5 * 60 * 1000;
+export const EQUIPAMENTOS_GC_TIME = 20 * 60 * 1000;
+export const EQUIPAMENTOS_DEFAULT_PAGINADO_FILTROS: ListarEquipamentosPaginadoFiltros =
+  {
+    statusFiltro: "ativos",
+    termo: "",
+    page: 1,
+    limit: 25,
+    sortBy: "numero_cadastro",
+    ascending: false,
+  };
 
 export const useEquipamentos = (
   filtros?: ListarEquipamentosFiltros,
@@ -61,6 +73,9 @@ export const useCriarEquipamento = () => {
       equipamentosService.criar(input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: EQUIPAMENTOS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ORGANIZACAO_SETORES_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: PLANOS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY });
     },
   });
 };
@@ -73,6 +88,9 @@ export const useAtualizarEquipamento = () => {
       equipamentosService.atualizar(id, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: EQUIPAMENTOS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ORGANIZACAO_SETORES_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: PLANOS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY });
     },
   });
 };
@@ -85,6 +103,9 @@ export const useCriarEquipamentosEmLote = () => {
       equipamentosService.criarEmLote(inputs),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: EQUIPAMENTOS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ORGANIZACAO_SETORES_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: PLANOS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY });
     },
   });
 };
@@ -96,7 +117,9 @@ export const useExcluirEquipamento = () => {
     mutationFn: (id: string) => equipamentosService.excluir(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: EQUIPAMENTOS_QUERY_KEY });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ORGANIZACAO_SETORES_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: PLANOS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY });
     },
   });
 };

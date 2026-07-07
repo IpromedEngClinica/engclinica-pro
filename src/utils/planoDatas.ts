@@ -44,3 +44,24 @@ export const calcularValidadeFimDoMes = (dataBase: string, meses: number) => {
     String(date.getDate()).padStart(2, "0"),
   ].join("-");
 };
+
+export const getDataBaseValidadeCiclo = (ciclo: {
+  cronograma_mes_inicio?: string | null;
+  data_abertura?: string | null;
+  data_prevista?: string | null;
+}) => {
+  if (ciclo.cronograma_mes_inicio) {
+    return `${ciclo.cronograma_mes_inicio.slice(0, 7)}-01`;
+  }
+
+  return ciclo.data_abertura || ciclo.data_prevista || new Date().toISOString();
+};
+
+export const calcularValidadeRelatorioCiclo = (
+  ciclo: {
+    cronograma_mes_inicio?: string | null;
+    data_abertura?: string | null;
+    data_prevista?: string | null;
+  },
+  meses: number
+) => calcularValidadeFimDoMes(getDataBaseValidadeCiclo(ciclo), meses);

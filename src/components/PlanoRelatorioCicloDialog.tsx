@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useGerarRelatorioCompletoCiclo, usePlanoCiclo } from "@/hooks/usePlanos";
 import { toast } from "@/hooks/use-toast";
 import type { PlanoRelatorioCicloOpcoes } from "@/services/planosService";
-import { calcularValidadeFimDoMes, formatDateValue } from "@/utils/planoDatas";
+import { calcularValidadeRelatorioCiclo, formatDateValue } from "@/utils/planoDatas";
 
 type Props = {
   open: boolean;
@@ -36,13 +36,14 @@ const PlanoRelatorioCicloDialog = ({ cicloId, onOpenChange, open }: Props) => {
 
   useEffect(() => {
     if (!open) return;
-    setValidadeModo("12");
-    setValidadePersonalizada("12");
+    const meses = String(ciclo?.relatorio_validade_meses || 12);
+    setValidadeModo(["6", "12", "18", "24"].includes(meses) ? meses : "personalizado");
+    setValidadePersonalizada(meses);
     setIncluirOsPreventivas(true);
     setIncluirOsCorretivas(true);
     setIncluirCertificadosCalibracao(true);
     setIncluirCertificadosSegurancaEletrica(true);
-  }, [open]);
+  }, [ciclo?.relatorio_validade_meses, open]);
 
   const validadeMeses = useMemo(() => {
     if (validadeModo === "personalizado") {
@@ -53,8 +54,14 @@ const PlanoRelatorioCicloDialog = ({ cicloId, onOpenChange, open }: Props) => {
   }, [validadeModo, validadePersonalizada]);
 
   const emitidoEm = hoje();
+  const validadeSalvaCorrespondeAosMeses =
+    ciclo?.relatorio_validade_ate &&
+    !ciclo.cronograma_mes_inicio &&
+    Number(ciclo.relatorio_validade_meses || 12) === validadeMeses;
   const validadeAte = ciclo
-    ? calcularValidadeFimDoMes(ciclo.data_abertura, validadeMeses)
+    ? validadeSalvaCorrespondeAosMeses
+      ? ciclo.relatorio_validade_ate as string
+      : calcularValidadeRelatorioCiclo(ciclo, validadeMeses)
     : emitidoEm;
 
   const handleGerar = async () => {

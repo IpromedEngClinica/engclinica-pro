@@ -108,6 +108,12 @@ const formatUsuario = (log: AuditoriaLog) =>
   log.usuario_email_snapshot ||
   (log.usuario_id ? "Usuario sem nome" : "Sistema");
 
+const isMigrationMissingError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+  return /auditoria_logs|listar_auditoria_logs_resumo/i.test(message) &&
+    /does not exist|not found|schema cache|could not find/i.test(message);
+};
+
 const formatCampo = (campo: string) => campoLabels[campo] || campo;
 
 const formatValue = (value: unknown) => {
@@ -284,14 +290,26 @@ const Auditoria = () => {
                   <div className="mx-auto max-w-2xl rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
                     <div className="mb-1 flex items-center gap-2 font-semibold">
                       <AlertCircle className="h-4 w-4" />
-                      Auditoria ainda nao esta ativa no banco
+                      {isMigrationMissingError(error)
+                        ? "Auditoria ainda nao esta ativa no banco"
+                        : "Erro ao carregar auditoria"}
                     </div>
                     <p className="text-sm">
-                      Execute a migration{" "}
-                      <span className="font-mono">
-                        060_auditoria_logs.sql
-                      </span>{" "}
-                      no Supabase. Erro retornado:{" "}
+                      {isMigrationMissingError(error) ? (
+                        <>
+                          Execute as migrations{" "}
+                          <span className="font-mono">
+                            060_auditoria_logs.sql
+                          </span>{" "}
+                          e{" "}
+                          <span className="font-mono">
+                            089_auditoria_rpc_listagem.sql
+                          </span>{" "}
+                          no Supabase. Erro retornado:{" "}
+                        </>
+                      ) : (
+                        "Erro retornado: "
+                      )}
                       {error instanceof Error ? error.message : String(error)}
                     </p>
                   </div>

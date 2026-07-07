@@ -438,6 +438,17 @@ type OrdemPreventivaResumo = {
   }> | null;
 };
 
+type ChecklistPreventivaVencimentoResumo = {
+  data_validade: string | null;
+  created_at: string | null;
+  ordem_servico?: {
+    equipamento_id: string | null;
+    data_fechamento: string | null;
+    status_sistema: string | null;
+    ativo: boolean | null;
+  } | null;
+};
+
 type EquipamentoVencimentoResumo = {
   id: string;
   data_ultima_preventiva: string | null;
@@ -683,7 +694,26 @@ export const utilitariosService = {
       return { ano, tipos, meses: [], total: 0 };
     }
 
-    const [calibracoes, preventivas] = await Promise.all([
+    const anoInicio = `${ano}-01-01`;
+    const anoFim = `${ano}-12-31`;
+    const camposDataEquipamento = [
+      ...(filtro.incluirCalibracao
+        ? [
+            `and(data_proxima_calibracao.gte.${anoInicio},data_proxima_calibracao.lte.${anoFim})`,
+          ]
+        : []),
+      ...(filtro.incluirPreventiva
+        ? [
+            `and(data_proxima_preventiva.gte.${anoInicio},data_proxima_preventiva.lte.${anoFim})`,
+          ]
+        : []),
+    ];
+
+    const [
+      calibracoesNoAno,
+      preventivasNoAno,
+      equipamentosComDataNoAno,
+    ] = await Promise.all([
       filtro.incluirCalibracao
         ? fetchAllPages<CalibracaoExecucaoResumo>(() =>
             supabase
@@ -695,30 +725,121 @@ export const utilitariosService = {
               .eq("ativo", true)
               .not("equipamento_id", "is", null)
               .not("data_validade", "is", null)
+              .gte("data_validade", anoInicio)
+              .lte("data_validade", anoFim)
           )
         : Promise.resolve([]),
       filtro.incluirPreventiva
-        ? fetchAllPages<OrdemPreventivaResumo>(() =>
+        ? fetchAllPages<ChecklistPreventivaVencimentoResumo>(() =>
             supabase
-              .from("ordens_servico")
+              .from("os_checklists_preventiva")
               .select(
                 `
-                  equipamento_id,
-                  data_fechamento,
-                  status_sistema,
-                  ativo,
-                  checklist_preventiva:os_checklists_preventiva (
-                    data_validade,
-                    created_at
+                  data_validade,
+                  created_at,
+                  ordem_servico:ordens_servico!inner (
+                    equipamento_id,
+                    data_fechamento,
+                    status_sistema,
+                    ativo
                   )
                 `
               )
+              .gte("data_validade", anoInicio)
+              .lte("data_validade", anoFim)
+              .eq("ordem_servico.ativo", true)
+              .eq("ordem_servico.status_sistema", "fechada")
+              .not("ordem_servico.equipamento_id", "is", null)
+          )
+        : Promise.resolve([]),
+      camposDataEquipamento.length
+        ? fetchAllPages<EquipamentoVencimentoResumo>(() =>
+            supabase
+              .from("equipamentos")
+              .select(
+                `
+                  id,
+                  data_ultima_preventiva,
+                  data_proxima_preventiva,
+                  data_ultima_calibracao,
+                  data_proxima_calibracao
+                `
+              )
               .eq("ativo", true)
-              .eq("status_sistema", "fechada")
-              .not("equipamento_id", "is", null)
+              .or(camposDataEquipamento.join(","))
           )
         : Promise.resolve([]),
     ]);
+
+    const equipamentoIds = new Set<string>();
+
+    calibracoesNoAno.forEach((calibracao) => {
+      if (calibracao.equipamento_id) equipamentoIds.add(calibracao.equipamento_id);
+    });
+
+    preventivasNoAno.forEach((checklist) => {
+      const equipamentoId = checklist.ordem_servico?.equipamento_id;
+      if (equipamentoId) equipamentoIds.add(equipamentoId);
+    });
+
+    equipamentosComDataNoAno.forEach((equipamento) => {
+      equipamentoIds.add(equipamento.id);
+    });
+
+    const equipamentoIdsList = Array.from(equipamentoIds);
+
+    const [calibracoes, preventivas] = equipamentoIdsList.length
+      ? await Promise.all([
+          filtro.incluirCalibracao
+            ? (
+                await Promise.all(
+                  chunkArray(equipamentoIdsList, 200).map((ids) =>
+                    fetchAllPages<CalibracaoExecucaoResumo>(() =>
+                      supabase
+                        .from("calibracao_execucoes")
+                        .select(
+                          "equipamento_id, data_calibracao, data_validade, status, ativo"
+                        )
+                        .eq("status", "fechada")
+                        .eq("ativo", true)
+                        .not("equipamento_id", "is", null)
+                        .not("data_validade", "is", null)
+                        .in("equipamento_id", ids)
+                    )
+                  )
+                )
+              ).flat()
+            : Promise.resolve([]),
+          filtro.incluirPreventiva
+            ? (
+                await Promise.all(
+                  chunkArray(equipamentoIdsList, 200).map((ids) =>
+                    fetchAllPages<OrdemPreventivaResumo>(() =>
+                      supabase
+                        .from("ordens_servico")
+                        .select(
+                          `
+                            equipamento_id,
+                            data_fechamento,
+                            status_sistema,
+                            ativo,
+                            checklist_preventiva:os_checklists_preventiva (
+                              data_validade,
+                              created_at
+                            )
+                          `
+                        )
+                        .eq("ativo", true)
+                        .eq("status_sistema", "fechada")
+                        .not("equipamento_id", "is", null)
+                        .in("equipamento_id", ids)
+                    )
+                  )
+                )
+              ).flat()
+            : Promise.resolve([]),
+        ])
+      : [[], []];
 
     const ultimasCalibracoes = new Map<string, UltimoServicoResumo>();
     calibracoes.forEach((calibracao) => {
@@ -754,75 +875,6 @@ export const utilitariosService = {
           });
         }
       });
-    });
-
-    const anoInicio = `${ano}-01-01`;
-    const anoFim = `${ano}-12-31`;
-    const camposDataEquipamento = [
-      ...(filtro.incluirCalibracao
-        ? [
-            `and(data_proxima_calibracao.gte.${anoInicio},data_proxima_calibracao.lte.${anoFim})`,
-          ]
-        : []),
-      ...(filtro.incluirPreventiva
-        ? [
-            `and(data_proxima_preventiva.gte.${anoInicio},data_proxima_preventiva.lte.${anoFim})`,
-          ]
-        : []),
-    ];
-
-    const equipamentosComDataNoAno = camposDataEquipamento.length
-      ? await fetchAllPages<EquipamentoVencimentoResumo>(() =>
-          supabase
-            .from("equipamentos")
-            .select(
-              `
-                id,
-                data_ultima_preventiva,
-                data_proxima_preventiva,
-                data_ultima_calibracao,
-                data_proxima_calibracao
-              `
-            )
-            .eq("ativo", true)
-            .or(camposDataEquipamento.join(","))
-        )
-      : [];
-
-    const equipamentoIds = new Set<string>();
-
-    if (filtro.incluirCalibracao) {
-      ultimasCalibracoes.forEach((servico, equipamentoId) => {
-        if (isDateInYear(servico.dataValidade, ano)) {
-          equipamentoIds.add(equipamentoId);
-        }
-      });
-    }
-
-    if (filtro.incluirPreventiva) {
-      ultimasPreventivas.forEach((servico, equipamentoId) => {
-        if (isDateInYear(servico.dataValidade, ano)) {
-          equipamentoIds.add(equipamentoId);
-        }
-      });
-    }
-
-    equipamentosComDataNoAno.forEach((equipamento) => {
-      const dataCalibracao = maxDateIso(
-        equipamento.data_proxima_calibracao,
-        ultimasCalibracoes.get(equipamento.id)?.dataValidade
-      );
-      const dataPreventiva = maxDateIso(
-        equipamento.data_proxima_preventiva,
-        ultimasPreventivas.get(equipamento.id)?.dataValidade
-      );
-
-      if (
-        (filtro.incluirCalibracao && isDateInYear(dataCalibracao, ano)) ||
-        (filtro.incluirPreventiva && isDateInYear(dataPreventiva, ano))
-      ) {
-        equipamentoIds.add(equipamento.id);
-      }
     });
 
     const equipamentos =

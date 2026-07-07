@@ -442,20 +442,32 @@ const Utilitarios = () => {
   const [vencimentosAno, setVencimentosAno] = useState(String(anoAtual));
   const [incluirCalibracao, setIncluirCalibracao] = useState(true);
   const [incluirPreventiva, setIncluirPreventiva] = useState(true);
+  const isTermosLocacao =
+    location.pathname.endsWith("/termos-locacao") ||
+    location.pathname === "/utilitarios";
+  const carregarCadastrosAuxiliares =
+    isTermosLocacao || isRecibos || isCadastroVisita;
 
-  const { data: empresas = [] } = useEmpresas({ statusFiltro: "ativas" });
+  const { data: empresas = [] } = useEmpresas(
+    { statusFiltro: "ativas" },
+    { enabled: carregarCadastrosAuxiliares }
+  );
   const { data: equipamentos = [] } = useEquipamentos({
     statusFiltro: "ativos",
+  }, { enabled: isTermosLocacao || isRecibos });
+  const { data: ordensServico = [] } = useOrdensServico({
+    enabled: isRecibos,
   });
-  const { data: ordensServico = [] } = useOrdensServico();
-  const { data: orcamentos = [] } = useOrcamentos();
-  const { data: termos = [], isLoading, refetch, isFetching } = useTermosLocacao();
+  const { data: orcamentos = [] } = useOrcamentos({ enabled: isRecibos });
+  const { data: termos = [], isLoading, refetch, isFetching } = useTermosLocacao({
+    enabled: isTermosLocacao,
+  });
   const {
     data: recibos = [],
     isLoading: recibosLoading,
     refetch: refetchRecibos,
     isFetching: recibosFetching,
-  } = useRecibos();
+  } = useRecibos({ enabled: isRecibos });
   const vencimentosFiltro = useMemo(
     () => ({
       ano: Number(vencimentosAno) || anoAtual,
@@ -469,7 +481,9 @@ const Utilitarios = () => {
     isLoading: vencimentosLoading,
     isFetching: vencimentosFetching,
     refetch: refetchVencimentos,
-  } = useVencimentosUtilitarios(vencimentosFiltro);
+  } = useVencimentosUtilitarios(vencimentosFiltro, {
+    enabled: isVencimentos,
+  });
   const criarTermo = useCriarTermoLocacao();
   const criarRecibo = useCriarRecibo();
   const atualizarStatus = useAtualizarStatusTermoLocacao();

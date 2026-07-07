@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
-import { Plus, Settings2, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Plus, Trash2 } from "lucide-react";
 import PlanoAdicionarEquipamentosDialog from "@/components/PlanoAdicionarEquipamentosDialog";
-import PlanoSetoresDialog from "@/components/PlanoSetoresDialog";
+import SortableTableHeader from "@/components/SortableTableHeader";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -11,20 +11,82 @@ import {
   useRemoverEquipamentoPlano,
 } from "@/hooks/usePlanos";
 import { toast } from "@/hooks/use-toast";
-import type { Plano, PlanoEquipamento, PlanoEquipamentoInput } from "@/services/planosService";
+import {
+  getSetorKeyPlanoEquipamento,
+  getSetorNomePlanoEquipamento,
+  listarSetoresDerivadosPlano,
+  type Plano,
+  type PlanoEquipamento,
+  type PlanoEquipamentoInput,
+} from "@/services/planosService";
+import type { SortDirection } from "@/utils/sortUtils";
 
 type Props = {
   plano: Plano;
 };
 
 const ALL = "__all__";
-const NONE = "__none__";
+type SortField =
+  | "ordem"
+  | "equipamento"
+  | "setor"
+  | "tipo"
+  | "modelo"
+  | "fabricante"
+  | "numero_serie"
+  | "patrimonio"
+  | "preventiva"
+  | "calibracao"
+  | "seguranca_eletrica";
+
+const compareText = (a: string | null | undefined, b: string | null | undefined) =>
+  (a || "").localeCompare(b || "", "pt-BR", { numeric: true, sensitivity: "base" });
+
+const getSortValue = (item: PlanoEquipamento, field: SortField) => {
+  const equipamento = item.equipamento;
+  switch (field) {
+    case "ordem":
+      return item.ordem;
+    case "equipamento":
+      return equipamento?.tipo_equipamento?.nome || equipamento?.tipo_texto || "";
+    case "setor":
+      return getSetorNomePlanoEquipamento(item);
+    case "tipo":
+      return equipamento?.tipo_equipamento?.nome || equipamento?.tipo_texto || "";
+    case "modelo":
+      return equipamento?.modelo || "";
+    case "fabricante":
+      return equipamento?.fabricante || "";
+    case "numero_serie":
+      return equipamento?.numero_serie || "";
+    case "patrimonio":
+      return equipamento?.patrimonio || "";
+    case "preventiva":
+      return item.executar_preventiva ? 1 : 0;
+    case "calibracao":
+      return item.executar_calibracao ? 1 : 0;
+    case "seguranca_eletrica":
+      return item.executar_seguranca_eletrica ? 1 : 0;
+    default:
+      return "";
+  }
+};
+
+const comparePlanoEquipamento = (a: PlanoEquipamento, b: PlanoEquipamento, field: SortField) => {
+  const valueA = getSortValue(a, field);
+  const valueB = getSortValue(b, field);
+
+  if (typeof valueA === "number" && typeof valueB === "number") {
+    return valueA - valueB;
+  }
+
+  return compareText(String(valueA), String(valueB));
+};
 
 const PlanoEquipamentosTab = ({ plano }: Props) => {
   const atualizar = useAtualizarEquipamentoPlano();
   const remover = useRemoverEquipamentoPlano();
   const [addOpen, setAddOpen] = useState(false);
-  const [setoresOpen, setSetoresOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [setor, setSetor] = useState(ALL);
   const [tipo, setTipo] = useState(ALL);
@@ -32,8 +94,16 @@ const PlanoEquipamentosTab = ({ plano }: Props) => {
   const [modelo, setModelo] = useState("");
   const [status, setStatus] = useState(ALL);
   const [selecionados, setSelecionados] = useState<string[]>([]);
+  const [sortField, setSortField] = useState<SortField>("ordem");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const equipamentos = useMemo(() => plano.equipamentos || [], [plano.equipamentos]);
-  const setores = useMemo(() => plano.setores || [], [plano.setores]);
+  const setores = useMemo(() => listarSetoresDerivadosPlano(equipamentos), [equipamentos]);
+
+  useEffect(() => {
+    if (setor !== ALL && !setores.some((item) => item.key === setor)) {
+      setSetor(ALL);
+    }
+  }, [setor, setores]);
 
   const tipos = useMemo(() =>
     Array.from(new Map(equipamentos.map((item) => [
@@ -45,26 +115,43 @@ const PlanoEquipamentosTab = ({ plano }: Props) => {
 
   const filtrados = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return equipamentos.filter((item) => {
-      const equipamento = item.equipamento;
-      const texto = [
-        equipamento?.tipo_equipamento?.nome || equipamento?.tipo_texto,
-        equipamento?.fabricante,
-        equipamento?.modelo,
-        equipamento?.numero_serie,
-        equipamento?.patrimonio,
-        equipamento?.tag,
-        item.setor?.nome,
-      ].filter(Boolean).join(" ").toLowerCase();
-      const tipoId = equipamento?.tipo_equipamento_id || equipamento?.tipo_texto || "";
-      return (!q || texto.includes(q))
-        && (setor === ALL || (setor === NONE ? !item.setor_id : item.setor_id === setor))
-        && (tipo === ALL || tipoId === tipo)
-        && (!fabricante.trim() || (equipamento?.fabricante || "").toLowerCase().includes(fabricante.trim().toLowerCase()))
-        && (!modelo.trim() || (equipamento?.modelo || "").toLowerCase().includes(modelo.trim().toLowerCase()))
-        && (status === ALL || equipamento?.status === status);
-    });
-  }, [equipamentos, fabricante, modelo, search, setor, status, tipo]);
+    return equipamentos
+      .filter((item) => {
+        const equipamento = item.equipamento;
+        const texto = [
+          equipamento?.tipo_equipamento?.nome || equipamento?.tipo_texto,
+          equipamento?.fabricante,
+          equipamento?.modelo,
+          equipamento?.numero_serie,
+          equipamento?.patrimonio,
+          equipamento?.tag,
+          equipamento?.setor,
+          item.setor?.nome,
+        ].filter(Boolean).join(" ").toLowerCase();
+        const tipoId = equipamento?.tipo_equipamento_id || equipamento?.tipo_texto || "";
+        return (!q || texto.includes(q))
+          && (setor === ALL || getSetorKeyPlanoEquipamento(item) === setor)
+          && (tipo === ALL || tipoId === tipo)
+          && (!fabricante.trim() || (equipamento?.fabricante || "").toLowerCase().includes(fabricante.trim().toLowerCase()))
+          && (!modelo.trim() || (equipamento?.modelo || "").toLowerCase().includes(modelo.trim().toLowerCase()))
+          && (status === ALL || equipamento?.status === status);
+      })
+      .sort((a, b) => {
+        const compare = comparePlanoEquipamento(a, b, sortField);
+        if (compare !== 0) return sortDirection === "asc" ? compare : -compare;
+        return a.ordem - b.ordem;
+      });
+  }, [equipamentos, fabricante, modelo, search, setor, sortDirection, sortField, status, tipo]);
+
+  const handleSort = (field: string) => {
+    const nextField = field as SortField;
+    if (sortField === nextField) {
+      setSortDirection((current) => current === "asc" ? "desc" : "asc");
+      return;
+    }
+    setSortField(nextField);
+    setSortDirection(nextField === "ordem" ? "asc" : "asc");
+  };
 
   const salvar = async (item: PlanoEquipamento, patch: Partial<PlanoEquipamentoInput>) => {
     try {
@@ -119,24 +206,34 @@ const PlanoEquipamentosTab = ({ plano }: Props) => {
   return (
     <div className="space-y-4">
       <PlanoAdicionarEquipamentosDialog open={addOpen} onOpenChange={setAddOpen} plano={plano} />
-      <PlanoSetoresDialog open={setoresOpen} onOpenChange={setSetoresOpen} plano={plano} />
 
       <div className="flex flex-wrap gap-2">
         <Button onClick={() => setAddOpen(true)}><Plus className="mr-2 h-4 w-4" />Adicionar equipamentos</Button>
-        <Button variant="outline" onClick={() => setSetoresOpen(true)}><Settings2 className="mr-2 h-4 w-4" />Gerenciar setores</Button>
-        <Button variant="outline" onClick={() => toast({ title: "Estrutura salva." })}>Salvar estrutura</Button>
       </div>
 
-      <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-6">
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        <Button
+          size="sm"
+          variant={setor === ALL ? "default" : "outline"}
+          onClick={() => setSetor(ALL)}
+        >
+          Todos ({equipamentos.length})
+        </Button>
+        {setores.map((item) => (
+          <Button
+            key={item.key}
+            size="sm"
+            variant={setor === item.key ? "default" : "outline"}
+            className="whitespace-nowrap"
+            onClick={() => setSetor(item.key)}
+          >
+            {item.nome} ({item.quantidade})
+          </Button>
+        ))}
+      </div>
+
+      <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-5">
         <Input placeholder="Busca geral" value={search} onChange={(event) => setSearch(event.target.value)} />
-        <Select value={setor} onValueChange={setSetor}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>Todos os setores</SelectItem>
-            <SelectItem value={NONE}>Sem setor</SelectItem>
-            {setores.map((item) => <SelectItem key={item.id} value={item.id}>{item.nome}</SelectItem>)}
-          </SelectContent>
-        </Select>
         <Select value={tipo} onValueChange={setTipo}>
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -174,17 +271,17 @@ const PlanoEquipamentosTab = ({ plano }: Props) => {
           <thead>
             <tr className="bg-muted/40">
               <Th><Checkbox checked={todosMarcados} onCheckedChange={(value) => setSelecionados(value ? filtrados.map((item) => item.id) : [])} /></Th>
-              <Th>#</Th>
-              <Th>Equipamento</Th>
-              <Th>Setor</Th>
-              <Th>Tipo</Th>
-              <Th>Modelo</Th>
-              <Th>Fabricante</Th>
-              <Th>Numero de serie</Th>
-              <Th>Patrimonio</Th>
-              <Th>P</Th>
-              <Th>C</Th>
-              <Th>E</Th>
+              <Th><SortableTableHeader label="#" sortField="ordem" sortKey={sortField} sortDirection={sortDirection} onSort={handleSort} /></Th>
+              <Th><SortableTableHeader label="Equipamento" sortField="equipamento" sortKey={sortField} sortDirection={sortDirection} onSort={handleSort} /></Th>
+              <Th><SortableTableHeader label="Setor" sortField="setor" sortKey={sortField} sortDirection={sortDirection} onSort={handleSort} /></Th>
+              <Th><SortableTableHeader label="Tipo" sortField="tipo" sortKey={sortField} sortDirection={sortDirection} onSort={handleSort} /></Th>
+              <Th><SortableTableHeader label="Modelo" sortField="modelo" sortKey={sortField} sortDirection={sortDirection} onSort={handleSort} /></Th>
+              <Th><SortableTableHeader label="Fabricante" sortField="fabricante" sortKey={sortField} sortDirection={sortDirection} onSort={handleSort} /></Th>
+              <Th><SortableTableHeader label="Numero de serie" sortField="numero_serie" sortKey={sortField} sortDirection={sortDirection} onSort={handleSort} /></Th>
+              <Th><SortableTableHeader label="Patrimonio" sortField="patrimonio" sortKey={sortField} sortDirection={sortDirection} onSort={handleSort} /></Th>
+              <Th><SortableTableHeader label="P" sortField="preventiva" sortKey={sortField} sortDirection={sortDirection} onSort={handleSort} /></Th>
+              <Th><SortableTableHeader label="C" sortField="calibracao" sortKey={sortField} sortDirection={sortDirection} onSort={handleSort} /></Th>
+              <Th><SortableTableHeader label="E" sortField="seguranca_eletrica" sortKey={sortField} sortDirection={sortDirection} onSort={handleSort} /></Th>
               <Th />
             </tr>
           </thead>
@@ -194,15 +291,7 @@ const PlanoEquipamentosTab = ({ plano }: Props) => {
                 <Td><Checkbox checked={selecionados.includes(item.id)} onCheckedChange={(value) => setSelecionados((current) => value ? [...current, item.id] : current.filter((id) => id !== item.id))} /></Td>
                 <Td>{index + 1}</Td>
                 <Td>{item.equipamento?.tipo_equipamento?.nome || item.equipamento?.tipo_texto || "Equipamento"}</Td>
-                <Td>
-                  <Select value={item.setor_id || NONE} onValueChange={(value) => salvar(item, { setorId: value === NONE ? null : value })}>
-                    <SelectTrigger className="h-8 min-w-40"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NONE}>Sem setor</SelectItem>
-                      {setores.map((setorItem) => <SelectItem key={setorItem.id} value={setorItem.id}>{setorItem.nome}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </Td>
+                <Td>{getSetorNomePlanoEquipamento(item)}</Td>
                 <Td>{item.equipamento?.tipo_equipamento?.nome || item.equipamento?.tipo_texto || "-"}</Td>
                 <Td>{item.equipamento?.modelo || "-"}</Td>
                 <Td>{item.equipamento?.fabricante || "-"}</Td>

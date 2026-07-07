@@ -6,6 +6,12 @@ import {
 } from "@/services/relatoriosService";
 
 export const RELATORIOS_QUERY_KEY = ["relatorios"];
+export const RELATORIOS_EQUIPAMENTOS_OPCOES_QUERY_KEY = [
+  ...RELATORIOS_QUERY_KEY,
+  "equipamentos-opcoes",
+];
+export const RELATORIOS_EQUIPAMENTOS_STALE_TIME = 5 * 60 * 1000;
+export const RELATORIOS_EQUIPAMENTOS_GC_TIME = 20 * 60 * 1000;
 
 export const useRelatorios = () =>
   useQuery({
@@ -13,11 +19,12 @@ export const useRelatorios = () =>
     queryFn: () => relatoriosService.listar(),
   });
 
-export const useRelatoriosEquipamentosOpcoes = () =>
+export const useRelatoriosEquipamentosOpcoes = (empresaIds: string[] = []) =>
   useQuery({
-    queryKey: [...RELATORIOS_QUERY_KEY, "equipamentos-opcoes"],
-    queryFn: () => relatoriosService.listarOpcoesEquipamentos(),
-    staleTime: 60_000,
+    queryKey: [...RELATORIOS_EQUIPAMENTOS_OPCOES_QUERY_KEY, empresaIds],
+    queryFn: () => relatoriosService.listarOpcoesEquipamentos(empresaIds),
+    staleTime: RELATORIOS_EQUIPAMENTOS_STALE_TIME,
+    gcTime: RELATORIOS_EQUIPAMENTOS_GC_TIME,
   });
 
 export const useCriarRelatorioControlePatrimonial = () => {

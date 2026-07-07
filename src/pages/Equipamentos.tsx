@@ -57,7 +57,6 @@ import { useNavigate } from "react-router-dom";
 import {
   useExcluirEquipamento,
   useEquipamentosPaginados,
-  useEquipamentosTotal,
 } from "@/hooks/useEquipamentos";
 import {
   EquipamentosSortField,
@@ -277,23 +276,6 @@ const Equipamentos = () => {
     ]
   );
 
-  const equipamentosTotalFiltros = useMemo(
-    () => ({
-      statusFiltro,
-      termo: debouncedSearch,
-      estado: filters.estado === ALL ? undefined : filters.estado,
-      empresaNome: filters.proprietario === ALL ? undefined : filters.proprietario,
-      tipoEquipamentoNome: filters.tipo === ALL ? undefined : filters.tipo,
-      fabricante: filters.fabricante === ALL ? undefined : filters.fabricante,
-      modelo: filters.modelo,
-      tag: filters.tag,
-      serie: filters.serie,
-      patrimonio: filters.patrimonio,
-      setor: filters.setor === ALL ? undefined : filters.setor,
-    }),
-    [debouncedSearch, filters, statusFiltro]
-  );
-
   const {
     data: equipamentosResult,
     isLoading,
@@ -303,16 +285,9 @@ const Equipamentos = () => {
     isFetching,
   } = useEquipamentosPaginados(equipamentosQueryFiltros);
 
-  const {
-    data: totalEquipamentosReal,
-    isFetching: isFetchingTotalEquipamentos,
-  } = useEquipamentosTotal(equipamentosTotalFiltros);
-
   const equipamentos = equipamentosResult?.items || [];
-  const totalEquipamentosOperacional = equipamentosResult?.total || 0;
-  const totalEquipamentos =
-    totalEquipamentosReal ?? totalEquipamentosOperacional;
-  const showTotalEquipamentos = totalEquipamentosReal !== undefined;
+  const totalEquipamentos = equipamentosResult?.total || 0;
+  const showTotalEquipamentos = equipamentosResult !== undefined;
 
   const uniq = (arr: string[]) =>
     Array.from(new Set(arr.filter(Boolean))).sort((a, b) =>
@@ -364,7 +339,7 @@ const Equipamentos = () => {
     : 0;
   const lastVisibleIndex = showTotalEquipamentos
     ? Math.min(page * listLimit, totalEquipamentos)
-    : Math.min(page * listLimit, totalEquipamentosOperacional);
+    : Math.min(page * listLimit, totalEquipamentos);
 
   const handleSort = (key: string) => {
     if (sortKey === key) {
@@ -912,14 +887,10 @@ const Equipamentos = () => {
           </div>
         </div>
 
-        {(isFetching || isFetchingTotalEquipamentos) && (
+        {isFetching && (
           <div className="border-b bg-muted/20 px-5 py-2">
             <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-              <span>
-                {isFetching
-                  ? "Atualizando equipamentos..."
-                  : "Atualizando total de equipamentos..."}
-              </span>
+              <span>Atualizando equipamentos...</span>
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             </div>
             <Progress value={70} className="mt-2 h-1 animate-pulse" />

@@ -121,6 +121,7 @@ export type OrdemServicoFormInput = {
 
 export type OrdensServicoSortField =
   | "numero"
+  | "numero_ordem"
   | "data_abertura"
   | "created_at"
   | "responsavel_texto";
@@ -335,8 +336,6 @@ const selectOrdensServicoListagem = `
     organizacao_id,
     nome,
     nome_fantasia,
-    tipo_cliente,
-    tipo_relacao,
     cpf_cnpj,
     cep,
     rua,
@@ -349,10 +348,7 @@ const selectOrdensServicoListagem = `
     email,
     celular,
     telefone,
-    observacoes,
-    ativo,
-    created_at,
-    updated_at
+    ativo
   ),
   equipamento:equipamentos (
     id,
@@ -368,8 +364,6 @@ const selectOrdensServicoListagem = `
     setor,
     status,
     ativo,
-    created_at,
-    updated_at,
     tipo_equipamento:tipos_equipamento (
       id,
       nome
@@ -384,20 +378,149 @@ const selectOrdensServicoListagem = `
     nome,
     finaliza_os,
     cancela_os
-  ),
-  checklist_preventiva:os_checklists_preventiva (
-    id,
-    ordem_servico_id,
-    procedimento_id,
-    titulo_procedimento,
-    tipo_equipamento_nome,
-    validade_meses,
-    data_validade,
-    resultado_geral,
-    observacoes,
-    created_at
   )
 `;
+
+type OrdemServicoResumoRpcRow = {
+  total_count?: number | string | null;
+  id: string;
+  organizacao_id: string;
+  numero: string;
+  empresa_id: string;
+  equipamento_id: string | null;
+  tipo_os_id: string | null;
+  estado_os_id: string | null;
+  tecnico_responsavel_id: string | null;
+  solicitante_texto: string | null;
+  responsavel_texto: string | null;
+  data_abertura: string;
+  data_fechamento: string | null;
+  problema_relatado: string | null;
+  origem_problema: string | null;
+  prioridade: string;
+  status_sistema: string;
+  plano_ciclo_id: string | null;
+  ativo: boolean;
+  created_at: string;
+  updated_at: string;
+  empresa_nome: string | null;
+  empresa_nome_fantasia: string | null;
+  empresa_cpf_cnpj: string | null;
+  empresa_cep: string | null;
+  empresa_rua: string | null;
+  empresa_numero: string | null;
+  empresa_complemento: string | null;
+  empresa_bairro: string | null;
+  empresa_cidade: string | null;
+  empresa_estado: string | null;
+  empresa_contato: string | null;
+  empresa_email: string | null;
+  empresa_celular: string | null;
+  empresa_telefone: string | null;
+  empresa_ativo: boolean | null;
+  equipamento_organizacao_id: string | null;
+  equipamento_empresa_id: string | null;
+  equipamento_tipo_equipamento_id: string | null;
+  equipamento_tipo_texto: string | null;
+  equipamento_fabricante: string | null;
+  equipamento_modelo: string | null;
+  equipamento_numero_serie: string | null;
+  equipamento_patrimonio: string | null;
+  equipamento_tag: string | null;
+  equipamento_setor: string | null;
+  equipamento_status: string | null;
+  equipamento_ativo: boolean | null;
+  tipo_equipamento_nome: string | null;
+  tipo_os_nome: string | null;
+  estado_os_nome: string | null;
+  estado_os_finaliza_os: boolean | null;
+  estado_os_cancela_os: boolean | null;
+};
+
+const mapOrdemServicoResumo = (
+  row: OrdemServicoResumoRpcRow
+): OrdemServicoSupabase => ({
+  id: row.id,
+  organizacao_id: row.organizacao_id,
+  numero: row.numero,
+  empresa_id: row.empresa_id,
+  equipamento_id: row.equipamento_id,
+  tipo_os_id: row.tipo_os_id,
+  estado_os_id: row.estado_os_id,
+  tecnico_responsavel_id: row.tecnico_responsavel_id,
+  solicitante_texto: row.solicitante_texto,
+  responsavel_texto: row.responsavel_texto,
+  data_abertura: row.data_abertura,
+  data_fechamento: row.data_fechamento,
+  problema_relatado: row.problema_relatado,
+  origem_problema: row.origem_problema,
+  descricao_servico: null,
+  observacoes: null,
+  prioridade: row.prioridade,
+  status_sistema: row.status_sistema,
+  plano_ciclo_id: row.plano_ciclo_id,
+  ativo: row.ativo,
+  created_at: row.created_at,
+  updated_at: row.updated_at,
+  empresa: row.empresa_id
+    ? ({
+        id: row.empresa_id,
+        organizacao_id: row.organizacao_id,
+        nome: row.empresa_nome || "",
+        nome_fantasia: row.empresa_nome_fantasia,
+        cpf_cnpj: row.empresa_cpf_cnpj,
+        cep: row.empresa_cep,
+        rua: row.empresa_rua,
+        numero: row.empresa_numero,
+        complemento: row.empresa_complemento,
+        bairro: row.empresa_bairro,
+        cidade: row.empresa_cidade,
+        estado: row.empresa_estado,
+        contato: row.empresa_contato,
+        email: row.empresa_email,
+        celular: row.empresa_celular,
+        telefone: row.empresa_telefone,
+        ativo: row.empresa_ativo ?? true,
+      } as EmpresaSupabase)
+    : null,
+  equipamento: row.equipamento_id
+    ? ({
+        id: row.equipamento_id,
+        organizacao_id: row.equipamento_organizacao_id || row.organizacao_id,
+        empresa_id: row.equipamento_empresa_id || row.empresa_id,
+        tipo_equipamento_id: row.equipamento_tipo_equipamento_id,
+        tipo_texto: row.equipamento_tipo_texto,
+        fabricante: row.equipamento_fabricante,
+        modelo: row.equipamento_modelo,
+        numero_serie: row.equipamento_numero_serie,
+        patrimonio: row.equipamento_patrimonio,
+        tag: row.equipamento_tag,
+        setor: row.equipamento_setor,
+        status: row.equipamento_status,
+        ativo: row.equipamento_ativo ?? true,
+        tipo_equipamento: row.equipamento_tipo_equipamento_id
+          ? {
+              id: row.equipamento_tipo_equipamento_id,
+              nome: row.tipo_equipamento_nome || "",
+            }
+          : null,
+      } as EquipamentoSupabase)
+    : null,
+  tipo_os: row.tipo_os_id
+    ? {
+        id: row.tipo_os_id,
+        nome: row.tipo_os_nome || "",
+      }
+    : null,
+  estado_os: row.estado_os_id
+    ? {
+        id: row.estado_os_id,
+        nome: row.estado_os_nome || "",
+        finaliza_os: row.estado_os_finaliza_os ?? false,
+        cancela_os: row.estado_os_cancela_os ?? false,
+      }
+    : null,
+});
 
 type OrdemServicoDatabasePayload = {
   empresa_id: string;
@@ -968,7 +1091,7 @@ export const ordensServicoService = {
       .from("ordens_servico")
       .select(select)
       .eq("ativo", true)
-      .order("numero", { ascending: false })
+      .order("numero_ordem", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -984,32 +1107,39 @@ export const ordensServicoService = {
     const page = Math.max(1, filtros.page || 1);
     const limit = Math.max(1, filtros.limit || 25);
     const from = (page - 1) * limit;
-    const to = from + limit;
-    const sortBy = filtros.sortBy || "numero";
+    const sortBy = filtros.sortBy || "numero_ordem";
 
-    const baseQuery = supabase
-      .from("ordens_servico")
-      .select(selectOrdensServicoListagem)
-      .eq("ativo", true)
-      .order(sortBy, { ascending: filtros.ascending ?? false })
-      .range(from, to);
-
-    const query = await aplicarFiltrosOrdensServico(baseQuery, filtros);
-    const { data, error } = await query;
+    const { data, error } = await supabase.rpc("listar_ordens_servico_resumo", {
+      p_termo: filtros.termo || null,
+      p_ocultar_fechadas: filtros.ocultarFechadas || false,
+      p_estado_nome: filtros.estadoNome || null,
+      p_solicitante_nome: filtros.solicitanteNome || null,
+      p_tipo_servico_nome: filtros.tipoServicoNome || null,
+      p_responsavel_tecnico: filtros.responsavelTecnico || null,
+      p_numero: filtros.numero || null,
+      p_offset: from,
+      p_limit: limit,
+      p_sort_by: sortBy,
+      p_ascending: filtros.ascending ?? false,
+    });
 
     if (error) {
       throw new Error(error.message);
     }
 
-    const hasNextPage = (data || []).length > limit;
-    const items = ((data || []) as unknown as OrdemServicoSupabase[]).slice(
-      0,
-      limit
-    );
+    const items = ((data || []) as OrdemServicoResumoRpcRow[])
+      .map(mapOrdemServicoResumo);
+    const totalCount = data?.[0]?.total_count;
+    const total =
+      typeof totalCount === "number"
+        ? totalCount
+        : typeof totalCount === "string"
+          ? Number(totalCount)
+          : from + items.length;
 
     return {
       items,
-      total: hasNextPage ? from + limit + 1 : from + items.length,
+      total: Number.isFinite(total) ? total : from + items.length,
     };
   },
 
