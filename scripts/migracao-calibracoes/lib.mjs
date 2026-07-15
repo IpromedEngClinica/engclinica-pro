@@ -79,6 +79,7 @@ async function arkmedsHeaders(accept) {
 async function fetchArkmeds(pathname, accept) {
   const response = await fetch(`${arkmedsBaseUrl}${pathname}`, {
     headers: await arkmedsHeaders(accept),
+    signal: AbortSignal.timeout(45_000),
   });
   const buffer = Buffer.from(await response.arrayBuffer());
   const text = buffer.toString("utf-8");
@@ -90,6 +91,14 @@ async function fetchArkmeds(pathname, accept) {
     throw new Error(`ArkMeds HTTP ${response.status} em ${pathname}: ${text.slice(0, 250)}`);
   }
   return { response, buffer, text };
+}
+
+export async function fetchArkmedsJson(pathname) {
+  const { text } = await fetchArkmeds(
+    pathname,
+    "application/json, text/javascript, */*; q=0.01"
+  );
+  return JSON.parse(text);
 }
 
 export async function fetchCalibrationList({ start, length }) {
@@ -226,6 +235,32 @@ export function parseCalibrationHtml(html) {
   }
 
   return { fields, tables, tablesError };
+}
+
+export function parseStandardCertificateHtml(html) {
+  const selectedStandard = extractSelectValue(html, "padrao");
+  const resultsRaw = extractInputValue(html, "resultados");
+  let results = [];
+  let resultsError = null;
+
+  if (resultsRaw) {
+    try {
+      results = JSON.parse(resultsRaw);
+    } catch (error) {
+      resultsError = error.message;
+    }
+  }
+
+  return {
+    numero: extractInputValue(html, "numero"),
+    padrao: selectedStandard,
+    dataCalibracao: parseArkmedsDate(extractInputValue(html, "data_calibracao")),
+    validade: parseArkmedsDate(extractInputValue(html, "validade")),
+    orgaoCalibrador: extractInputValue(html, "orgao_calibrador"),
+    observacoes: extractTextareaValue(html, "observacoes"),
+    results,
+    resultsError,
+  };
 }
 
 export function normalizeText(value) {
