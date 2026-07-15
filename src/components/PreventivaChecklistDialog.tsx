@@ -67,7 +67,7 @@ const getEquipamentoLabel = (equipamento: EquipamentoSupabase) =>
   ].filter(Boolean).join(" - ");
 
 const getEmpresaNome = (equipamento: EquipamentoSupabase) =>
-  equipamento.empresa?.nome_fantasia || equipamento.empresa?.nome || "Nao informado";
+  equipamento.empresa?.nome || equipamento.empresa?.nome_fantasia || "Nao informado";
 
 const getChecklistPreventiva = (os: OrdemServicoSupabase | null | undefined) => {
   const checklist = os?.checklist_preventiva;

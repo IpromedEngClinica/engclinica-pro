@@ -16,6 +16,8 @@ import PageHeader from "@/components/PageHeader";
 import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
 import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
 import OrcamentoDetalhesDialog from "@/components/OrcamentoDetalhesDialog";
+import OrdemServicoDetalhesDialog from "@/components/OrdemServicoDetalhesDialog";
+import OrcamentoDescontoDialog from "@/components/OrcamentoDescontoDialog";
 import OrcamentoFormDialog, {
   OrcamentoDialogMode,
 } from "@/components/OrcamentoFormDialog";
@@ -43,6 +45,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import {
+  useAplicarDescontoOrcamento,
   useAlterarStatusOrcamento,
   useOrcamentos,
 } from "@/hooks/useOrcamentos";
@@ -52,6 +55,10 @@ import {
   OrcamentoSupabase,
   orcamentosService,
 } from "@/services/orcamentosService";
+import {
+  ordensServicoService,
+  type OrdemServicoSupabase,
+} from "@/services/ordensServicoService";
 import {
   empresasService,
   type EmpresaSupabase,
@@ -80,8 +87,7 @@ const formatDate = (iso?: string | null) => {
 };
 
 const getEmpresaNome = (orcamento: OrcamentoSupabase) =>
-  orcamento.empresa?.nome_fantasia ||
-  orcamento.empresa?.nome ||
+  orcamento.empresa?.nome || orcamento.empresa?.nome_fantasia ||
   "Nao informado";
 
 const getNumeroOrdenacao = (numero?: string | null) => {
@@ -171,6 +177,8 @@ const Orcamentos = () => {
   >(ALL);
   const [formOpen, setFormOpen] = useState(false);
   const [detalhesOpen, setDetalhesOpen] = useState(false);
+  const [descontoOrcamento, setDescontoOrcamento] =
+    useState<OrcamentoSupabase | null>(null);
   const [mode, setMode] = useState<OrcamentoDialogMode>("create");
   const [selected, setSelected] = useState<OrcamentoSupabase | null>(null);
   const [empresaDialogOpen, setEmpresaDialogOpen] = useState(false);
@@ -179,9 +187,13 @@ const Orcamentos = () => {
   const [equipamentoDialogOpen, setEquipamentoDialogOpen] = useState(false);
   const [equipamentoSelecionado, setEquipamentoSelecionado] =
     useState<EquipamentoSupabase | null>(null);
+  const [ordemServicoDialogOpen, setOrdemServicoDialogOpen] = useState(false);
+  const [ordemServicoSelecionada, setOrdemServicoSelecionada] =
+    useState<OrdemServicoSupabase | null>(null);
   const { data: orcamentos = [], isLoading, isError, error, refetch } =
     useOrcamentos();
   const alterarStatus = useAlterarStatusOrcamento();
+  const aplicarDesconto = useAplicarDescontoOrcamento();
 
   const uniq = (arr: string[]) =>
     Array.from(new Set(arr.filter(Boolean))).sort((a, b) =>
@@ -433,6 +445,20 @@ const Orcamentos = () => {
     }
   };
 
+  const abrirOrdemServico = async (ordemServicoId: string) => {
+    try {
+      const ordemServico = await ordensServicoService.buscarPorId(ordemServicoId);
+      setOrdemServicoSelecionada(ordemServico);
+      setOrdemServicoDialogOpen(true);
+    } catch (error) {
+      toast({
+        title: "Erro ao abrir ordem de serviço",
+        description: error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleAlterarStatusRapido = async (
     orcamento: OrcamentoSupabase,
     status: OrcamentoStatus
@@ -520,16 +546,55 @@ const Orcamentos = () => {
         open={detalhesOpen}
         onOpenChange={(value) => {
           setDetalhesOpen(value);
-          if (!value) setSelected(null);
+          if (!value) {
+            setSelected(null);
+            setDescontoOrcamento(null);
+          }
         }}
         orcamento={selected}
         onOpenEmpresa={abrirEmpresa}
         onOpenEquipamento={abrirEquipamento}
+        onOpenOrdemServico={abrirOrdemServico}
         onEditar={(orcamento) => {
           setDetalhesOpen(false);
           openEdit(orcamento);
         }}
+        onAplicarDesconto={(orcamento) => setDescontoOrcamento(orcamento)}
         onAlterarStatus={handleAlterarStatusRapido}
+      />
+
+      <OrcamentoDescontoDialog
+        open={Boolean(descontoOrcamento)}
+        onOpenChange={(value) => {
+          if (!value) setDescontoOrcamento(null);
+        }}
+        orcamento={descontoOrcamento}
+        onConfirm={async (orcamento, input) => {
+          try {
+            const atualizado = await aplicarDesconto.mutateAsync({
+              id: orcamento.id,
+              input,
+            });
+            setSelected(atualizado);
+            setDescontoOrcamento(atualizado);
+            toast({
+              title: "Desconto aplicado com sucesso.",
+              description:
+                input.situacao === "aprovado"
+                  ? "A proposta foi aprovada."
+                  : "A proposta permanece pendente.",
+            });
+          } catch (error) {
+            const message =
+              error instanceof Error ? error.message : "Erro inesperado.";
+            toast({
+              title: "Erro ao aplicar desconto",
+              description: message,
+              variant: "destructive",
+            });
+            throw error;
+          }
+        }}
       />
 
       <EmpresaDetalhesDialog
@@ -548,6 +613,17 @@ const Orcamentos = () => {
           if (!value) setEquipamentoSelecionado(null);
         }}
         equipamento={equipamentoSelecionado}
+      />
+
+      <OrdemServicoDetalhesDialog
+        open={ordemServicoDialogOpen}
+        onOpenChange={(value) => {
+          setOrdemServicoDialogOpen(value);
+          if (!value) setOrdemServicoSelecionada(null);
+        }}
+        os={ordemServicoSelecionada}
+        onOpenEmpresa={abrirEmpresa}
+        onOpenEquipamento={abrirEquipamento}
       />
 
       <div className="flex flex-wrap gap-1 border-b mb-6">
@@ -934,7 +1010,17 @@ const Orcamentos = () => {
                         )}
                       </td>
                       <td className="px-5 py-3 text-muted-foreground">
-                        {orcamento.ordem_servico?.numero || "-"}
+                        {orcamento.ordem_servico?.numero ? (
+                          <button
+                            type="button"
+                            className="text-primary hover:underline font-medium"
+                            onClick={() => abrirOrdemServico(orcamento.ordem_servico!.id)}
+                          >
+                            {orcamento.ordem_servico.numero}
+                          </button>
+                        ) : (
+                          "-"
+                        )}
                       </td>
                       <td className="px-5 py-3 font-medium">
                         {formatCurrency(orcamento.valor_pecas)}

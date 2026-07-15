@@ -49,8 +49,7 @@ const formatDate = (value?: string | null) =>
   value ? new Date(`${value}T00:00:00`).toLocaleDateString("pt-BR") : "-";
 
 const getEmpresaNome = (execucao: SegurancaEletricaExecucao) =>
-  execucao.empresa?.nome_fantasia ||
-  execucao.empresa?.nome ||
+  execucao.empresa?.nome || execucao.empresa?.nome_fantasia ||
   "Nao informado";
 
 const resultadoClass = (resultado: string) =>

@@ -207,7 +207,7 @@ const formatDate = (value?: string | null) => {
 };
 
 const getEmpresaNome = (empresa?: EmpresaSupabase | null) =>
-  empresa?.nome_fantasia || empresa?.nome || "-";
+  empresa?.nome || empresa?.nome_fantasia || "-";
 
 const onlyDigits = (value?: string | null) => (value || "").replace(/\D/g, "");
 

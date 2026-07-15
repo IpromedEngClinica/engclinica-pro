@@ -12,7 +12,7 @@ import { buildPdfFileName } from "@/utils/pdfFileNames";
 
 const getNomeArquivoOrdemServico = (os: OrdemServicoSupabase) => {
   const cliente =
-    os.empresa?.nome_fantasia || os.empresa?.nome || os.solicitante_texto;
+    os.empresa?.nome || os.empresa?.nome_fantasia || os.solicitante_texto;
   const equipamento =
     os.equipamento?.tipo_equipamento?.nome ||
     os.equipamento?.tipo_texto ||

@@ -117,7 +117,7 @@ const EquipamentoFormDialog = ({
     () =>
       empresasDisponiveis.map((empresa) =>
         empresa.nome_fantasia
-          ? `${empresa.nome_fantasia} — ${empresa.nome}`
+          ? `${empresa.nome} — ${empresa.nome_fantasia}`
           : empresa.nome
       ),
     [empresasDisponiveis]
@@ -134,7 +134,7 @@ const EquipamentoFormDialog = ({
     if (!empresa) return "";
 
     return empresa.nome_fantasia
-      ? `${empresa.nome_fantasia} — ${empresa.nome}`
+      ? `${empresa.nome} — ${empresa.nome_fantasia}`
       : empresa.nome;
   }, [empresasDisponiveis, form.empresaId]);
 
@@ -217,7 +217,7 @@ const EquipamentoFormDialog = ({
   const handleEmpresaChange = (label: string) => {
     const empresa = empresasDisponiveis.find((item) => {
       const optionLabel = item.nome_fantasia
-        ? `${item.nome_fantasia} — ${item.nome}`
+        ? `${item.nome} — ${item.nome_fantasia}`
         : item.nome;
 
       return optionLabel === label;
@@ -436,8 +436,7 @@ const EquipamentoFormDialog = ({
                     onClick={() => onOpenEmpresa(selectedEmpresa)}
                   >
                     {selectedEmpresaLabel ||
-                      selectedEmpresa.nome_fantasia ||
-                      selectedEmpresa.nome}
+                      selectedEmpresa.nome || selectedEmpresa.nome_fantasia}
                   </button>
                 ) : (
                   <Input value={selectedEmpresaLabel} disabled />

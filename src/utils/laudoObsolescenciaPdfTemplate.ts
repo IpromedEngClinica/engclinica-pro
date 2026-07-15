@@ -30,7 +30,7 @@ const formatDateTime = (iso?: string | null) => {
 };
 
 const getEmpresaNome = (laudo: LaudoObsolescenciaSupabase) =>
-  laudo.empresa?.nome_fantasia || laudo.empresa?.nome || EMPTY;
+  laudo.empresa?.nome || laudo.empresa?.nome_fantasia || EMPTY;
 
 const getEnderecoEmpresa = (laudo: LaudoObsolescenciaSupabase) => {
   const empresa = laudo.empresa;

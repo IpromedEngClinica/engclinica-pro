@@ -32,8 +32,7 @@ const formatDate = (value?: string | null) => {
 };
 
 const getEmpresaNome = (equipamento: EquipamentoSupabase) =>
-  equipamento.empresa?.nome_fantasia ||
-  equipamento.empresa?.nome ||
+  equipamento.empresa?.nome || equipamento.empresa?.nome_fantasia ||
   "Cliente nao informado";
 
 const getSetor = (equipamento: EquipamentoSupabase) =>
@@ -203,29 +202,29 @@ export const buildVisitaExternaHtml = (
       * { box-sizing: border-box; }
       body { margin: 0; font-family: Arial, Helvetica, sans-serif; color: #000; background: #fff; }
       .document { width: 1588px; min-height: 1123px; padding: 18px 22px 28px; background: #fff; }
-      .header { display: grid; grid-template-columns: 190px 1fr 240px; align-items: start; gap: 22px; border-bottom: 2px solid #000; padding-bottom: 12px; }
-      .logo { width: 172px; height: auto; display: block; }
-      h1 { margin: 2px 0 6px; font-size: 31px; font-weight: 800; color: #000; letter-spacing: 0; }
-      .subtitle { margin: 0; font-size: 15px; color: #000; line-height: 1.4; }
-      .meta { font-size: 14px; color: #000; line-height: 1.6; text-align: right; }
-      .visit-fields { display: grid; grid-template-columns: 1.4fr .8fr .7fr; gap: 10px; margin: 14px 0 16px; }
-      .field { border: 1.6px solid #000; border-radius: 4px; height: 44px; padding: 7px 8px; }
-      .field span { display: block; font-size: 11px; text-transform: uppercase; color: #000; margin-bottom: 4px; font-weight: 700; }
-      .company { margin-top: 14px; break-inside: auto !important; page-break-inside: auto !important; }
-      .company-title { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 8px; }
-      .company-title h2 { margin: 0; font-size: 21px; color: #000; font-weight: 800; }
-      .company-title span { font-size: 14px; color: #000; }
-      .equipment-table { margin-top: 8px; break-inside: auto !important; page-break-inside: auto !important; }
-      .sector-block { margin-top: 12px; break-inside: auto !important; page-break-inside: auto !important; }
-      .sector-block h3 { margin: 0 0 6px; font-size: 17px; color: #000; font-weight: 800; }
-      table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13px; color: #000; break-inside: auto !important; page-break-inside: auto !important; }
+      .header { display: grid; grid-template-columns: 180px 1fr 225px; align-items: start; gap: 18px; border-bottom: 2px solid #000; padding-bottom: 9px; }
+      .logo { width: 164px; height: auto; display: block; }
+      h1 { margin: 1px 0 4px; font-size: 27px; font-weight: 800; color: #000; letter-spacing: 0; }
+      .subtitle { margin: 0; font-size: 13px; color: #000; line-height: 1.3; }
+      .meta { font-size: 12px; color: #000; line-height: 1.45; text-align: right; }
+      .visit-fields { display: grid; grid-template-columns: 1.4fr .8fr .7fr; gap: 8px; margin: 10px 0 12px; }
+      .field { border: 1.6px solid #000; border-radius: 4px; height: 38px; padding: 5px 7px; }
+      .field span { display: block; font-size: 10px; text-transform: uppercase; color: #000; margin-bottom: 2px; font-weight: 700; }
+      .company { margin-top: 10px; break-inside: auto !important; page-break-inside: auto !important; }
+      .company-title { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid #000; padding-bottom: 4px; margin-bottom: 6px; }
+      .company-title h2 { margin: 0; font-size: 18px; color: #000; font-weight: 800; }
+      .company-title span { font-size: 12px; color: #000; }
+      .equipment-table { margin-top: 5px; break-inside: auto !important; page-break-inside: auto !important; }
+      .sector-block { margin-top: 8px; break-inside: auto !important; page-break-inside: auto !important; }
+      .sector-block h3 { margin: 0 0 4px; font-size: 15px; color: #000; font-weight: 800; }
+      table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11.5px; color: #000; break-inside: auto !important; page-break-inside: auto !important; }
       thead { display: table-header-group; break-inside: avoid !important; page-break-inside: avoid !important; }
       tbody { break-inside: auto !important; page-break-inside: auto !important; }
       tr { page-break-inside: avoid !important; break-inside: avoid !important; }
       th, td { page-break-inside: auto !important; break-inside: auto !important; }
-      tr { min-height: 42px; }
-      th { background: #f1f5f9; border: 1.6px solid #000; padding: 8px 6px; text-align: left; font-size: 11px; text-transform: uppercase; color: #000; font-weight: 800; line-height: 1.2; }
-      td { border: 1.4px solid #000; padding: 8px 6px; vertical-align: middle; min-height: 42px; overflow-wrap: anywhere; line-height: 1.25; }
+      tr { min-height: 34px; }
+      th { background: #f1f5f9; border: 1.6px solid #000; padding: 5px 5px; text-align: left; font-size: 9.5px; text-transform: uppercase; color: #000; font-weight: 800; line-height: 1.1; }
+      td { border: 1.4px solid #000; padding: 5px 5px; vertical-align: middle; min-height: 34px; overflow-wrap: anywhere; line-height: 1.15; }
       tr:nth-child(even) td { background: #fff; }
       th:nth-child(1), td:nth-child(1) { width: 3%; text-align: center; }
       th:nth-child(2), td:nth-child(2) { width: 17%; }
@@ -244,8 +243,8 @@ export const buildVisitaExternaHtml = (
         white-space: normal;
         overflow-wrap: normal;
         word-break: normal;
-        font-size: 10px;
-        line-height: 1.15;
+        font-size: 9px;
+        line-height: 1.05;
       }
       .equipment-name { color: #000; font-weight: 800; }
       .index { color: #000; font-weight: 800; }
@@ -253,7 +252,7 @@ export const buildVisitaExternaHtml = (
       .maintenance-row .equipment-name,
       .maintenance-row .index { color: #d11919; }
       .check-cell { vertical-align: middle; }
-      .box { display: inline-block; width: 16px; height: 16px; border: 1.8px solid #000; border-radius: 2px; }
+      .box { display: inline-block; width: 14px; height: 14px; border: 1.8px solid #000; border-radius: 2px; }
       .empty { margin-top: 18px; border: 1.6px dashed #000; border-radius: 4px; padding: 18px; text-align: center; color: #000; font-size: 15px; }
       .final-fields { margin-top: 18px; page-break-inside: avoid; break-inside: avoid; }
       .final-fields h3 { margin: 0 0 6px; font-size: 15px; color: #000; text-transform: uppercase; }

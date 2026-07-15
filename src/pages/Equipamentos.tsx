@@ -104,8 +104,7 @@ const getTipoEquipamento = (equipamento: EquipamentoSupabase) => {
 
 const getEmpresaNome = (equipamento: EquipamentoSupabase) => {
   return (
-    equipamento.empresa?.nome_fantasia ||
-    equipamento.empresa?.nome ||
+    equipamento.empresa?.nome || equipamento.empresa?.nome_fantasia ||
     "Não informado"
   );
 };
@@ -980,9 +979,12 @@ const Equipamentos = () => {
                         <button
                           type="button"
                           onClick={() => openView(e)}
-                          className="text-primary hover:underline flex items-center gap-2"
+                          className="flex max-w-64 items-start gap-2 text-left text-primary hover:underline"
                         >
-                          <Cpu className="w-4 h-4" /> {tipo}
+                          <Cpu className="mt-0.5 h-4 w-4 shrink-0" />
+                          <span className="min-w-0 whitespace-normal break-words leading-snug">
+                            {tipo}
+                          </span>
                         </button>
                       </td>
 

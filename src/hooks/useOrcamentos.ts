@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  AplicarDescontoOrcamentoInput,
   OrcamentoFormInput,
   OrcamentoStatus,
   OrcamentoSupabase,
@@ -76,6 +77,24 @@ export const useAlterarStatusOrcamento = () => {
         motivoReprovacao?: string;
       };
     }) => orcamentosService.alterarStatus(id, status, extra),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ORCAMENTOS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ["ordens-servico"] });
+    },
+  });
+};
+
+export const useAplicarDescontoOrcamento = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      id,
+      input,
+    }: {
+      id: string;
+      input: AplicarDescontoOrcamentoInput;
+    }) => orcamentosService.aplicarDesconto(id, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ORCAMENTOS_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ["ordens-servico"] });

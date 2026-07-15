@@ -411,7 +411,7 @@ export const gerarPdfRelatorioCicloPlano = async (
       </section>
 
       <section class="meta">
-        <div><span class="label">Cliente</span><span class="value">${escapeHtml(plano.empresa?.nome_fantasia || plano.empresa?.nome)}</span></div>
+        <div><span class="label">Cliente</span><span class="value">${escapeHtml(plano.empresa?.nome || plano.empresa?.nome_fantasia)}</span></div>
         <div><span class="label">Unidade</span><span class="value">${escapeHtml(plano.empresa?.cidade || plano.empresa?.estado)}</span></div>
         <div><span class="label">Responsavel</span><span class="value">${escapeHtml(plano.responsavel?.nome)}</span></div>
         <div><span class="label">Emissao</span><span class="value">${formatDate(emitidoEmDate)}</span></div>

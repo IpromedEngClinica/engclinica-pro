@@ -904,7 +904,7 @@ export const utilitariosService = {
       .filter((equipamento) => equipamento.empresa)
       .forEach((equipamento) => {
         const empresa = equipamento.empresa as EmpresaSupabase;
-        const clienteNome = empresa.nome_fantasia || empresa.nome || "-";
+        const clienteNome = empresa.nome || empresa.nome_fantasia || "-";
         const clienteCidade = [empresa.cidade, empresa.estado]
           .filter(Boolean)
           .join(" - ") || null;

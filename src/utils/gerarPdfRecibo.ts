@@ -17,7 +17,7 @@ const sanitizeFileNameSegment = (value?: string | number | null) =>
     .trim();
 
 const getClienteNome = (recibo: Recibo) =>
-  recibo.empresa?.nome_fantasia || recibo.empresa?.nome || "Cliente";
+  recibo.empresa?.nome || recibo.empresa?.nome_fantasia || "Cliente";
 
 const getEquipamentoNome = (recibo: Recibo) =>
   recibo.equipamento?.tipo_equipamento?.nome ||

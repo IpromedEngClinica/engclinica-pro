@@ -44,6 +44,7 @@ import { useTiposEquipamento } from "@/hooks/useTiposEquipamento";
 import { toast } from "@/hooks/use-toast";
 import {
   FormaPagamento,
+  DescontoTipo,
   FreteTipo,
   ModoPagamento,
   OrcamentoFormInput,
@@ -117,10 +118,12 @@ type FormState = {
   tipoOrcamento: OrcamentoTipo;
   origem: OrcamentoOrigem;
   formaPagamento: FormaPagamento | "";
-  modoPagamento: ModoPagamento;
-  numeroParcelas: number;
-  diasEntreParcelas: number;
-  valorEntrada: number;
+  modoPagamento: ModoPagamento | "";
+  numeroParcelas: number | "";
+  diasEntreParcelas: number | "";
+  valorEntrada: number | "";
+  descontoTipo: DescontoTipo;
+  descontoValor: number;
   prazoEntrega: string;
   validadeDias: number;
   frete: FreteTipo | "";
@@ -143,6 +146,8 @@ const emptyForm: FormState = {
   numeroParcelas: 1,
   diasEntreParcelas: 30,
   valorEntrada: 0,
+  descontoTipo: "valor",
+  descontoValor: 0,
   prazoEntrega: "",
   validadeDias: 90,
   frete: "",
@@ -341,7 +346,7 @@ const validadeToDays = (iso?: string | null) => {
 
 const getEmpresaNome = (
   source?: OrdemServicoSupabase | OrcamentoSupabase | null
-) => source?.empresa?.nome_fantasia || source?.empresa?.nome || "";
+) => source?.empresa?.nome || source?.empresa?.nome_fantasia || "";
 
 const getEquipamentoLabel = (
   source?: OrdemServicoSupabase | OrcamentoSupabase | null
@@ -411,13 +416,12 @@ const OrcamentoFormDialog = ({
 
   const empresaSelecionada = empresas.find((empresa) => empresa.id === form.empresaId);
   const empresaLabel =
-    empresaSelecionada?.nome_fantasia ||
-    empresaSelecionada?.nome ||
+    empresaSelecionada?.nome || empresaSelecionada?.nome_fantasia ||
     getEmpresaNome(fromOS || orcamento) ||
     "";
 
   const empresaOptions = empresas.map(
-    (empresa) => empresa.nome_fantasia || empresa.nome
+    (empresa) => empresa.nome || empresa.nome_fantasia
   );
   const tipoServicoOptions = tiposOS.map((tipo) => tipo.nome);
   const tipoEquipamentoOptions = tiposEquipamento.map((tipo) => tipo.nome);
@@ -488,10 +492,12 @@ const OrcamentoFormDialog = ({
         tipoOrcamento: orcamento.tipo_orcamento || "servico",
         origem: orcamento.origem || "avulso",
         formaPagamento: orcamento.forma_pagamento || "",
-        modoPagamento: orcamento.modo_pagamento || "avista",
-        numeroParcelas: orcamento.numero_parcelas || 1,
-        diasEntreParcelas: orcamento.dias_entre_parcelas || 30,
-        valorEntrada: Number(orcamento.valor_entrada || 0),
+        modoPagamento: orcamento.modo_pagamento || "",
+        numeroParcelas: orcamento.numero_parcelas ?? "",
+        diasEntreParcelas: orcamento.dias_entre_parcelas ?? "",
+        valorEntrada: orcamento.valor_entrada == null ? "" : Number(orcamento.valor_entrada),
+        descontoTipo: orcamento.desconto_tipo || "valor",
+        descontoValor: Number(orcamento.desconto_valor || 0),
         prazoEntrega:
           orcamento.prazo_entrega || orcamento.prazo_execucao || "",
         validadeDias: validadeToDays(orcamento.data_validade),
@@ -670,7 +676,20 @@ const OrcamentoFormDialog = ({
     ]
   );
 
-  const totalGeral = totalPecas + totalServicos;
+  const subtotalGeral = totalPecas + totalServicos;
+  const descontoAplicado = useMemo(() => {
+    const valorInformado = Math.max(0, Number(form.descontoValor || 0));
+    const desconto =
+      form.descontoTipo === "percentual"
+        ? subtotalGeral * (valorInformado / 100)
+        : valorInformado;
+
+    return Math.min(subtotalGeral, desconto);
+  }, [form.descontoTipo, form.descontoValor, subtotalGeral]);
+  const totalGeral = Math.max(0, subtotalGeral - descontoAplicado);
+  const hasParcelConfig =
+    Number(form.numeroParcelas || 0) > 0 &&
+    Number(form.diasEntreParcelas || 0) > 0;
   const numeroParcelas = Math.max(1, Number(form.numeroParcelas || 1));
   const diasEntreParcelas = Math.max(1, Number(form.diasEntreParcelas || 30));
   const valorEntrada =
@@ -678,22 +697,34 @@ const OrcamentoFormDialog = ({
       ? Math.min(Number(form.valorEntrada || 0), totalGeral)
       : 0;
   const valorParcela =
-    form.modoPagamento === "parcelado"
+    !hasParcelConfig
+      ? 0
+      : form.modoPagamento === "parcelado"
       ? totalGeral / numeroParcelas
       : form.modoPagamento === "entrada_parcela"
         ? (totalGeral - valorEntrada) / numeroParcelas
         : totalGeral;
   const condicoesPagamentoTexto = (() => {
     const forma = formatFormaPagamento(form.formaPagamento);
+    if (!form.modoPagamento) {
+      return orcamento?.condicoes_pagamento || `${forma} - Condições não informadas.`;
+    }
+
     const modo = formatModoPagamento(form.modoPagamento);
 
     if (form.modoPagamento === "parcelado") {
+      if (!Number(form.numeroParcelas) || !Number(form.diasEntreParcelas)) {
+        return orcamento?.condicoes_pagamento || `${forma} - Pagamento parcelado; condições não informadas.`;
+      }
       return `${forma} - ${numeroParcelas} parcelas de ${formatCurrency(
         valorParcela
       )} a cada ${diasEntreParcelas} dias.`;
     }
 
     if (form.modoPagamento === "entrada_parcela") {
+      if (!Number(form.numeroParcelas) || !Number(form.diasEntreParcelas) || form.valorEntrada === "") {
+        return orcamento?.condicoes_pagamento || `${forma} - Entrada e parcelas; condições não informadas.`;
+      }
       return `${forma} - Entrada de ${formatCurrency(
         valorEntrada
       )} + ${numeroParcelas} parcelas de ${formatCurrency(
@@ -835,7 +866,29 @@ const OrcamentoFormDialog = ({
       return false;
     }
 
-    if (form.modoPagamento !== "avista") {
+    if (
+      form.descontoTipo === "percentual" &&
+      Number(form.descontoValor || 0) > 100
+    ) {
+      toast({
+        title: "Desconto percentual nao pode ser maior que 100%.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    if (
+      form.descontoTipo === "valor" &&
+      Number(form.descontoValor || 0) > subtotalGeral
+    ) {
+      toast({
+        title: "Desconto nao pode ser maior que o subtotal.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    if (form.modoPagamento && form.modoPagamento !== "avista") {
       if (Number(form.numeroParcelas || 0) < 1) {
         toast({
           title: "Numero de parcelas deve ser maior que zero.",
@@ -972,25 +1025,38 @@ const OrcamentoFormDialog = ({
         ? new Date(form.dataOrcamento).toISOString()
         : undefined,
       dataValidade: addDays(form.validadeDias),
-      status: "pendente",
+      status: orcamento?.status || "pendente",
       tipoOrcamento: form.tipoOrcamento,
       origem: form.origem,
       formaPagamento: form.formaPagamento || undefined,
-      modoPagamento: form.modoPagamento,
+      modoPagamento: form.modoPagamento || undefined,
       numeroParcelas:
-        form.modoPagamento === "avista" ? undefined : numeroParcelas,
+        !form.modoPagamento || form.modoPagamento === "avista" || !Number(form.numeroParcelas)
+          ? undefined
+          : numeroParcelas,
       diasEntreParcelas:
-        form.modoPagamento === "avista" ? undefined : diasEntreParcelas,
+        !form.modoPagamento || form.modoPagamento === "avista" || !Number(form.diasEntreParcelas)
+          ? undefined
+          : diasEntreParcelas,
       valorEntrada:
-        form.modoPagamento === "entrada_parcela" ? valorEntrada : undefined,
+        form.modoPagamento === "entrada_parcela" && form.valorEntrada !== "" ? valorEntrada : undefined,
       valorParcela:
-        form.modoPagamento === "avista" ? undefined : valorParcela,
+        !form.modoPagamento || form.modoPagamento === "avista" || !Number(form.numeroParcelas)
+          ? undefined
+          : valorParcela,
+      descontoTipo: form.descontoTipo,
+      descontoValor: Number(form.descontoValor || 0),
       condicoesPagamento: condicoesPagamentoTexto,
       prazoEntrega: form.prazoEntrega.trim(),
       frete: incluirFrete ? "fob" : form.frete || undefined,
       detalhesOrcamento: form.detalhesOrcamento.trim(),
       responsavelOrcamentista:
         form.responsavelOrcamentista.trim() || RESPONSAVEL_PADRAO,
+      dataAprovacao: orcamento?.data_aprovacao || undefined,
+      dataReprovacao: orcamento?.data_reprovacao || undefined,
+      dataFaturamento: orcamento?.data_faturamento || undefined,
+      dataCancelamento: orcamento?.data_cancelamento || undefined,
+      motivoReprovacao: orcamento?.motivo_reprovacao || undefined,
       itens: [...itensPecas, ...itensServicos],
     };
   };
@@ -1025,7 +1091,7 @@ const OrcamentoFormDialog = ({
 
   const handleEmpresaChange = (label: string) => {
     const empresa = empresas.find(
-      (item) => (item.nome_fantasia || item.nome) === label
+      (item) => (item.nome || item.nome_fantasia) === label
     );
     setForm((current) => ({
       ...current,
@@ -1866,7 +1932,7 @@ const OrcamentoFormDialog = ({
               description="Totais, forma de pagamento, parcelas e condições comerciais."
             />
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
               <div className="rounded-md bg-muted/40 p-4">
                 <p className="text-xs text-muted-foreground">Total Pecas</p>
                 <p className="text-lg font-semibold">
@@ -1880,9 +1946,69 @@ const OrcamentoFormDialog = ({
                 </p>
               </div>
               <div className="rounded-md bg-primary/10 p-4">
-                <p className="text-xs text-muted-foreground">Total Geral</p>
+                <p className="text-xs text-muted-foreground">Valor antes do desconto</p>
                 <p className="text-lg font-semibold text-primary">
+                  {formatCurrency(subtotalGeral)}
+                </p>
+              </div>
+              <div className="rounded-md bg-primary p-4 text-primary-foreground">
+                <p className="text-xs text-primary-foreground/80">Total Geral</p>
+                <p className="text-lg font-semibold">
                   {formatCurrency(totalGeral)}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>Tipo de desconto</Label>
+                <Select
+                  value={form.descontoTipo}
+                  disabled={isView}
+                  onValueChange={(value) =>
+                    setForm((current) => ({
+                      ...current,
+                      descontoTipo: value as DescontoTipo,
+                    }))
+                  }
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="valor">Valor fixo (R$)</SelectItem>
+                    <SelectItem value="percentual">Percentual (%)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>
+                  {form.descontoTipo === "percentual"
+                    ? "Desconto percentual"
+                    : "Valor do desconto"}
+                </Label>
+                <Input
+                  type="number"
+                  min="0"
+                  max={form.descontoTipo === "percentual" ? 100 : undefined}
+                  step="0.01"
+                  value={form.descontoValor}
+                  disabled={isView}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      descontoValor: Number(event.target.value),
+                    }))
+                  }
+                />
+              </div>
+              <div className="rounded-md bg-muted/40 p-4">
+                <p className="text-xs text-muted-foreground">Desconto aplicado</p>
+                <p className="text-lg font-semibold">
+                  {formatCurrency(descontoAplicado)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {form.descontoTipo === "percentual"
+                    ? `${Number(form.descontoValor || 0)}% sobre o valor antes do desconto`
+                    : "Valor fixo informado"}
                 </p>
               </div>
             </div>
@@ -1916,18 +2042,30 @@ const OrcamentoFormDialog = ({
               <div className="space-y-2">
                 <Label>Modo de Pagamento</Label>
                 <Select
-                  value={form.modoPagamento}
+                  value={form.modoPagamento || "none"}
                   disabled={isView}
                   onValueChange={(value) =>
                     setForm((current) => ({
                       ...current,
-                      modoPagamento: value as ModoPagamento,
+                      modoPagamento: value === "none" ? "" : (value as ModoPagamento),
                       numeroParcelas:
-                        value === "avista" ? 1 : Math.max(2, current.numeroParcelas || 2),
+                        value === "none"
+                          ? ""
+                          : value === "avista"
+                            ? 1
+                            : Math.max(2, Number(current.numeroParcelas || 2)),
                       diasEntreParcelas:
-                        value === "avista" ? 30 : current.diasEntreParcelas || 30,
+                        value === "none"
+                          ? ""
+                          : value === "avista"
+                            ? 30
+                            : current.diasEntreParcelas || 30,
                       valorEntrada:
-                        value === "entrada_parcela" ? current.valorEntrada || 0 : 0,
+                        value === "none"
+                          ? ""
+                          : value === "entrada_parcela"
+                            ? current.valorEntrada === "" ? 0 : current.valorEntrada
+                            : 0,
                     }))
                   }
                 >
@@ -1935,6 +2073,7 @@ const OrcamentoFormDialog = ({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">Não informado</SelectItem>
                     <SelectItem value="avista">A vista</SelectItem>
                     <SelectItem value="parcelado">Parcelado</SelectItem>
                     <SelectItem value="entrada_parcela">
@@ -1945,7 +2084,7 @@ const OrcamentoFormDialog = ({
               </div>
             </div>
 
-            {form.modoPagamento !== "avista" && (
+            {form.modoPagamento && form.modoPagamento !== "avista" && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {form.modoPagamento === "entrada_parcela" && (
                   <div className="space-y-2">
@@ -1959,7 +2098,7 @@ const OrcamentoFormDialog = ({
                       onChange={(event) =>
                         setForm((current) => ({
                           ...current,
-                          valorEntrada: Number(event.target.value),
+                          valorEntrada: event.target.value === "" ? "" : Number(event.target.value),
                         }))
                       }
                     />
@@ -1976,7 +2115,7 @@ const OrcamentoFormDialog = ({
                     onChange={(event) =>
                       setForm((current) => ({
                         ...current,
-                        numeroParcelas: Number(event.target.value),
+                        numeroParcelas: event.target.value === "" ? "" : Number(event.target.value),
                       }))
                     }
                   />
@@ -1992,14 +2131,14 @@ const OrcamentoFormDialog = ({
                     onChange={(event) =>
                       setForm((current) => ({
                         ...current,
-                        diasEntreParcelas: Number(event.target.value),
+                        diasEntreParcelas: event.target.value === "" ? "" : Number(event.target.value),
                       }))
                     }
                   />
                 </div>
                 <div className="space-y-2">
                   <Label>Valor da parcela</Label>
-                  <Input value={formatCurrency(valorParcela)} readOnly />
+                  <Input value={hasParcelConfig ? formatCurrency(valorParcela) : ""} readOnly />
                 </div>
                 <div className="space-y-2 md:col-span-3">
                   <Label>Condicoes de pagamento</Label>

@@ -24,8 +24,7 @@ const diasAte = (value: string) => {
 };
 
 const getCliente = (relatorio: PlanoValidadeRelatorio) =>
-  relatorio.plano?.empresa?.nome_fantasia ||
-  relatorio.plano?.empresa?.nome ||
+  relatorio.plano?.empresa?.nome || relatorio.plano?.empresa?.nome_fantasia ||
   "Cliente nao informado";
 
 const getSituacao = (dias: number) => {

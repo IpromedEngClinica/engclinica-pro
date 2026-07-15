@@ -426,8 +426,8 @@ export const relatoriosService = {
           : true
       )
       .sort((a, b) => {
-        const empresaA = a.empresa?.nome_fantasia || a.empresa?.nome || "";
-        const empresaB = b.empresa?.nome_fantasia || b.empresa?.nome || "";
+        const empresaA = a.empresa?.nome || a.empresa?.nome_fantasia || "";
+        const empresaB = b.empresa?.nome || b.empresa?.nome_fantasia || "";
         const empresaCompare = empresaA.localeCompare(empresaB, "pt-BR");
         if (empresaCompare !== 0) return empresaCompare;
         return getTipoEquipamentoRelatorio(a).localeCompare(
@@ -463,8 +463,8 @@ export const relatoriosService = {
         setorSet.size ? setorSet.has(equipamento.setor || "Sem setor") : true
       )
       .sort((a, b) => {
-        const empresaA = a.empresa?.nome_fantasia || a.empresa?.nome || "";
-        const empresaB = b.empresa?.nome_fantasia || b.empresa?.nome || "";
+        const empresaA = a.empresa?.nome || a.empresa?.nome_fantasia || "";
+        const empresaB = b.empresa?.nome || b.empresa?.nome_fantasia || "";
         const empresaCompare = empresaA.localeCompare(empresaB, "pt-BR");
         if (empresaCompare !== 0) return empresaCompare;
         const setorCompare = (a.setor || "Sem setor").localeCompare(

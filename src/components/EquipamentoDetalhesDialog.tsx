@@ -51,8 +51,7 @@ const getTipoEquipamento = (equipamento: EquipamentoSupabase) =>
   "Equipamento";
 
 const getEmpresaNome = (equipamento: EquipamentoSupabase) =>
-  equipamento.empresa?.nome_fantasia ||
-  equipamento.empresa?.nome ||
+  equipamento.empresa?.nome || equipamento.empresa?.nome_fantasia ||
   "Não informado";
 
 const getEquipamentoStatusLabel = (equipamento: EquipamentoSupabase) => {

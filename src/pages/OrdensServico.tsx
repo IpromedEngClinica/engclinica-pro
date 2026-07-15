@@ -70,7 +70,7 @@ import { useAuth } from "@/contexts/AuthContext";
 const ALL = "__all__";
 
 const getEmpresaNome = (os: OrdemServicoSupabase) => {
-  return os.empresa?.nome_fantasia || os.empresa?.nome || "Não informado";
+  return os.empresa?.nome || os.empresa?.nome_fantasia || "Não informado";
 };
 
 const getEquipamentoLabel = (os: OrdemServicoSupabase) => {

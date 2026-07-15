@@ -24,7 +24,7 @@ const getNomeArquivoOrcamento = (orcamento: OrcamentoSupabase) => {
   const numero = sanitizeFileNameSegment(orcamento.numero) || "sem numero";
   const solicitante =
     sanitizeFileNameSegment(
-      orcamento.empresa?.nome_fantasia || orcamento.empresa?.nome
+      orcamento.empresa?.nome || orcamento.empresa?.nome_fantasia
     ) || "Solicitante nao informado";
   const identificacao =
     sanitizeFileNameSegment(orcamento.identificador) || "Sem identificacao";

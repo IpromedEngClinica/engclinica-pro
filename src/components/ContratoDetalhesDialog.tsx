@@ -31,6 +31,7 @@ interface ContratoDetalhesDialogProps {
   contrato: ContratoSupabase | null;
   onEditar?: (contrato: ContratoSupabase) => void;
   onDocumentos?: (contrato: ContratoSupabase) => void;
+  onOpenEmpresa?: (contrato: ContratoSupabase) => void;
   onDesativar?: (contrato: ContratoSupabase) => void;
 }
 
@@ -84,6 +85,7 @@ const ContratoDetalhesDialog = ({
   contrato,
   onEditar,
   onDocumentos,
+  onOpenEmpresa,
   onDesativar,
 }: ContratoDetalhesDialogProps) => {
   const [documentosOpen, setDocumentosOpen] = useState(false);
@@ -143,7 +145,19 @@ const ContratoDetalhesDialog = ({
               <h3 className="text-sm font-semibold">Identificacao</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <Field label="Tipo">{contrato.tipo}</Field>
-                <Field label="Empresa">{getEmpresaContratoNome(contrato)}</Field>
+                <Field label="Empresa">
+                  {onOpenEmpresa && contrato.empresa?.id ? (
+                    <button
+                      type="button"
+                      className="text-left text-primary hover:underline"
+                      onClick={() => onOpenEmpresa(contrato)}
+                    >
+                      {getEmpresaContratoNome(contrato)}
+                    </button>
+                  ) : (
+                    getEmpresaContratoNome(contrato)
+                  )}
+                </Field>
                 <Field label="Numero / ID">
                   {contrato.numero_identificacao || "-"}
                 </Field>

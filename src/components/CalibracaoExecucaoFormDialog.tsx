@@ -336,7 +336,7 @@ const CalibracaoExecucaoFormDialog = ({
       <div className="space-y-3 p-3 sm:p-4">
         <div className="grid gap-3 xl:grid-cols-2">
           <Card><Header title="1. Identificacao" /><CardContent className="grid gap-3 p-3 md:grid-cols-2">
-            <SelectField label="Empresa *" value={form.empresaId} onChange={selecionarEmpresa} options={empresas.map((item) => [item.id, item.nome_fantasia || item.nome])} />
+            <SelectField label="Empresa *" value={form.empresaId} onChange={selecionarEmpresa} options={empresas.map((item) => [item.id, item.nome || item.nome_fantasia])} />
             <SelectField label="Equipamento *" value={form.equipamentoId} onChange={selecionarEquipamento} options={equipamentos.map((item) => [item.id, [item.tipo_equipamento?.nome || item.tipo_texto, item.modelo, item.numero_serie || item.tag || item.patrimonio].filter(Boolean).join(" - ")])} />
             <SelectField label="Procedimento *" value={form.procedimentoId} onChange={selecionarProcedimento} options={procedimentosCompativeis.map((item) => [item.id, item.nome])} />
             {form.equipamentoId && procedimentosCompativeis.length === 0 && <div className="flex gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 md:col-span-2"><AlertCircle className="h-4 w-4 shrink-0" /><div><p>Nenhum procedimento de calibração cadastrado para este tipo de equipamento.</p><Button type="button" variant="link" className="h-auto p-0 text-amber-900" onClick={() => navigate("/calibracao/procedimentos")}>Cadastrar procedimento</Button></div></div>}

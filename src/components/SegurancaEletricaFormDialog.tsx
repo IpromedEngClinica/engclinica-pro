@@ -106,7 +106,7 @@ const emptyForm = (tecnicoExecutorNome = ""): FormState => {
 };
 
 const getEmpresaLabel = (empresa?: { nome?: string; nome_fantasia?: string | null }) =>
-  empresa?.nome_fantasia || empresa?.nome || "";
+  empresa?.nome || empresa?.nome_fantasia || "";
 
 const getEmpresaSearchText = (empresa: {
   nome?: string | null;

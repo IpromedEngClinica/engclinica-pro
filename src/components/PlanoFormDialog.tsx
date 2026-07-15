@@ -41,7 +41,7 @@ const PlanoFormDialog = ({ open, onOpenChange, plano = null, onSaved }: Props) =
   const empresaSelecionada = empresas.find((empresa) => empresa.id === form.empresaId);
   const getEmpresaOptionLabel = (empresa: (typeof empresas)[number]) =>
     [
-      empresa.nome_fantasia || empresa.nome,
+      empresa.nome || empresa.nome_fantasia,
       empresa.cidade,
       empresa.estado,
       empresa.cpf_cnpj,

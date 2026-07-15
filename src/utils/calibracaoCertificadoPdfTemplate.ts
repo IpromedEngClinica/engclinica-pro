@@ -539,7 +539,7 @@ export const buildCalibracaoCertificadoHtml = (
         <section class="section">
           ${sectionTitle("1", "Dados do Contratante")}
           <div class="info-grid info-grid-2 client-identification">
-            ${field("Nome:", empresa?.nome_fantasia || empresa?.nome)}
+            ${field("Nome:", empresa?.nome || empresa?.nome_fantasia)}
             ${field("Contato:", [empresa?.contato, empresa?.telefone || empresa?.celular].filter(Boolean).join(" / "))}
             ${field("Endereço:", getEnderecoEmpresa(empresa), true)}
             ${field("CPF/CNPJ:", empresa?.cpf_cnpj)}
@@ -632,8 +632,7 @@ export const buildCalibracaoCertificadoHtml = (
                 assinaturas.solicitante?.nome ||
                 execucao.responsavel_solicitante ||
                 empresa?.contato ||
-                empresa?.nome_fantasia ||
-                empresa?.nome,
+                empresa?.nome || empresa?.nome_fantasia,
               funcao: "Solicitante",
             })}
           </div>

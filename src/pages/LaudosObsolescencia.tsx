@@ -47,7 +47,7 @@ import { gerarPdfLaudoObsolescencia } from "@/utils/gerarPdfLaudoObsolescencia";
 import { sortByValue, type SortDirection } from "@/utils/sortUtils";
 
 const getEmpresaNome = (laudo: LaudoObsolescenciaSupabase) =>
-  laudo.empresa?.nome_fantasia || laudo.empresa?.nome || "Nao informado";
+  laudo.empresa?.nome || laudo.empresa?.nome_fantasia || "Nao informado";
 
 const formatDate = (iso?: string | null) => {
   if (!iso) return "-";

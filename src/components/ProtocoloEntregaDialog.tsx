@@ -50,7 +50,7 @@ const toLocalDatetimeValue = (d: Date) => {
 };
 
 const getEmpresaNome = (os: OrdemServicoSupabase) =>
-  os.empresa?.nome_fantasia || os.empresa?.nome || "Não informado";
+  os.empresa?.nome || os.empresa?.nome_fantasia || "Não informado";
 
 const getEquipamentoLabel = (os: OrdemServicoSupabase) => {
   if (!os.equipamento) return "Não informado";

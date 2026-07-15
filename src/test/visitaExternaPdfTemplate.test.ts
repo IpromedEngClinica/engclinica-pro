@@ -66,6 +66,8 @@ describe("visitaExternaPdfTemplate", () => {
     const html = buildVisitaExternaHtml(dados, "data:image/png;base64,logo");
 
     expect(html).toContain("width: 1588px");
+    expect(html).toContain("font-size: 11.5px");
+    expect(html).toContain("min-height: 34px");
     expect(html).toContain("Fabricante</th>");
     expect(html).toContain("Modelo</th>");
     expect(html).toContain("N&uacute;mero de S&eacute;rie");

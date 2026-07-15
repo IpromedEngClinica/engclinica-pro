@@ -59,7 +59,7 @@ const getEmpresaLabel = (empresa: {
   nome_fantasia: string | null;
 }) => {
   return empresa.nome_fantasia
-    ? `${empresa.nome_fantasia} — ${empresa.nome}`
+    ? `${empresa.nome} — ${empresa.nome_fantasia}`
     : empresa.nome;
 };
 

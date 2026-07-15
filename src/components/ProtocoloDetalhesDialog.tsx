@@ -22,7 +22,7 @@ interface ProtocoloDetalhesDialogProps {
 }
 
 const getEmpresaNome = (p: ProtocoloOSSupabase) =>
-  p.empresa?.nome_fantasia || p.empresa?.nome || "Não informado";
+  p.empresa?.nome || p.empresa?.nome_fantasia || "Não informado";
 
 const formatTipo = (tipo: string) => {
   const map: Record<string, string> = {

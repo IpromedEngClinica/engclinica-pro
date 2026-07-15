@@ -59,7 +59,7 @@ const getEmpresaNome = (empresa?: {
   id?: string;
   nome?: string | null;
   nome_fantasia?: string | null;
-}) => empresa?.nome_fantasia || empresa?.nome || "Sem nome";
+}) => empresa?.nome || empresa?.nome_fantasia || "Sem nome";
 
 const uniqueSorted = (values: string[]) =>
   [...new Set(values.filter(Boolean))].sort((a, b) =>

@@ -12,6 +12,14 @@ dist
 dist-ssr
 *.local
 
+# Local migration outputs and authenticated inspection artifacts
+outputs/
+tmp/
+tmp_*.js
+tmp_*.json
+__pycache__/
+*.pyc
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

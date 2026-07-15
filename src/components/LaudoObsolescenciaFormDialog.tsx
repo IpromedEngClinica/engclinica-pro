@@ -218,7 +218,7 @@ const LaudoObsolescenciaFormDialog = ({
                 <SelectContent>
                   {empresas.map((empresa) => (
                     <SelectItem key={empresa.id} value={empresa.id}>
-                      {empresa.nome_fantasia || empresa.nome}
+                      {empresa.nome || empresa.nome_fantasia}
                     </SelectItem>
                   ))}
                 </SelectContent>

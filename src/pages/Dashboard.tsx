@@ -278,11 +278,10 @@ const formatMes = (date: Date) =>
   });
 
 const getEmpresaNome = (empresa?: EmpresaResumo | null) =>
-  empresa?.nome_fantasia || empresa?.nome || "Cliente não informado";
+  empresa?.nome || empresa?.nome_fantasia || "Cliente não informado";
 
 const getContratoEmpresaNome = (contrato: ContratoResumo) =>
-  contrato.empresa?.nome_fantasia ||
-  contrato.empresa?.nome ||
+  contrato.empresa?.nome || contrato.empresa?.nome_fantasia ||
   contrato.empresa_nome_snapshot ||
   "Cliente não informado";
 

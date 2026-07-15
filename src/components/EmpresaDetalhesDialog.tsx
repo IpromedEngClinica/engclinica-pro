@@ -147,7 +147,7 @@ const EmpresaDetalhesDialog = ({
           <DialogHeader>
             <DialogTitle className="text-xl flex items-center gap-2">
               <Building2 className="w-5 h-5 text-primary" />
-              {empresa.nome_fantasia || empresa.nome}
+              {empresa.nome || empresa.nome_fantasia}
             </DialogTitle>
           </DialogHeader>
 

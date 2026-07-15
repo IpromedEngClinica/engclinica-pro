@@ -51,7 +51,7 @@ const PlanoDetalhes = () => {
 
   return (
     <div className="p-6 lg:p-8">
-      <PageHeader title={plano.titulo} description={plano.empresa?.nome_fantasia || plano.empresa?.nome || ""}>
+      <PageHeader title={plano.titulo} description={plano.empresa?.nome || plano.empresa?.nome_fantasia || ""}>
         <Button variant="outline" onClick={() => navigate("/planos")}><ArrowLeft className="mr-2 h-4 w-4" />Voltar para Planos</Button>
         <Button variant="outline" onClick={() => setRelatorioAnualOpen(true)}><CalendarDays className="mr-2 h-4 w-4" />Gerar relatorio anual</Button>
         <Button variant="outline" onClick={() => setRelatoriosAnuaisOpen(true)}><History className="mr-2 h-4 w-4" />Relatorios anuais</Button>

@@ -29,7 +29,7 @@ export const gerarPdfTermoLocacao = async (termo: TermoLocacao) => {
   const html = buildTermoLocacaoHtml(termo, logoBase64);
   const cliente =
     sanitizeFileNameSegment(
-      termo.empresa_locataria?.nome_fantasia || termo.empresa_locataria?.nome
+      termo.empresa_locataria?.nome || termo.empresa_locataria?.nome_fantasia
     ) || "Cliente";
   const equipamento = sanitizeFileNameSegment(getEquipamentoNome(termo));
 

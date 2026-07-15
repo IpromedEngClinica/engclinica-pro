@@ -18,6 +18,7 @@ import ContratoDocumentosDialog from "@/components/ContratoDocumentosDialog";
 import ContratoFormDialog, {
   ContratoDialogMode,
 } from "@/components/ContratoFormDialog";
+import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
 import ListPagination from "@/components/ListPagination";
 import ListLimitSelect, {
   DEFAULT_LIST_LIMIT,
@@ -43,6 +44,10 @@ import {
 import { useContratos, useDesativarContrato } from "@/hooks/useContratos";
 import { usePaginatedList } from "@/hooks/usePaginatedList";
 import { toast } from "@/hooks/use-toast";
+import {
+  empresasService,
+  type EmpresaSupabase,
+} from "@/services/empresasService";
 import {
   ContratoStatusVencimento,
   ContratoSupabase,
@@ -230,6 +235,9 @@ const Contratos = () => {
   const [documentosOpen, setDocumentosOpen] = useState(false);
   const [mode, setMode] = useState<ContratoDialogMode>("create");
   const [selected, setSelected] = useState<ContratoSupabase | null>(null);
+  const [empresaDetalhesOpen, setEmpresaDetalhesOpen] = useState(false);
+  const [empresaSelecionada, setEmpresaSelecionada] =
+    useState<EmpresaSupabase | null>(null);
 
   const { data: contratos = [], isLoading, isError, error, refetch } =
     useContratos();
@@ -446,6 +454,23 @@ const Contratos = () => {
     setDocumentosOpen(true);
   };
 
+  const openEmpresaDetalhes = async (contrato: ContratoSupabase) => {
+    if (!contrato.empresa?.id) return;
+
+    try {
+      const empresa = await empresasService.buscarPorId(contrato.empresa.id);
+      setEmpresaSelecionada(empresa);
+      setEmpresaDetalhesOpen(true);
+    } catch (error) {
+      toast({
+        title: "Erro ao abrir cliente",
+        description:
+          error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleDesativar = async (contrato: ContratoSupabase) => {
     const confirmar = window.confirm(
       `Desativar o contrato ${contrato.numero_identificacao || ""}?`
@@ -506,6 +531,7 @@ const Contratos = () => {
           openEdit(contrato);
         }}
         onDocumentos={openDocumentos}
+        onOpenEmpresa={openEmpresaDetalhes}
         onDesativar={handleDesativar}
       />
 
@@ -516,6 +542,15 @@ const Contratos = () => {
           if (!value) setSelected(null);
         }}
         contrato={selected}
+      />
+
+      <EmpresaDetalhesDialog
+        open={empresaDetalhesOpen}
+        onOpenChange={(value) => {
+          setEmpresaDetalhesOpen(value);
+          if (!value) setEmpresaSelecionada(null);
+        }}
+        empresa={empresaSelecionada}
       />
 
       <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-5">
@@ -597,7 +632,7 @@ const Contratos = () => {
                   <SelectContent>
                     <SelectItem value={ALL}>Todas as empresas</SelectItem>
                     {empresas.map((empresa) => (
-                      <SelectItem key={empresa} value={empresa.toLowerCase()}>
+                      <SelectItem key={empresa} value={empresa}>
                         {empresa}
                       </SelectItem>
                     ))}
@@ -809,7 +844,17 @@ const Contratos = () => {
                     >
                       <td className="px-4 py-3">{contrato.tipo}</td>
                       <td className="px-4 py-3 font-medium">
-                        {getEmpresaContratoNome(contrato)}
+                        {contrato.empresa?.id ? (
+                          <button
+                            type="button"
+                            className="text-left text-primary hover:underline"
+                            onClick={() => openEmpresaDetalhes(contrato)}
+                          >
+                            {getEmpresaContratoNome(contrato)}
+                          </button>
+                        ) : (
+                          getEmpresaContratoNome(contrato)
+                        )}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
                         {contrato.numero_identificacao || "-"}

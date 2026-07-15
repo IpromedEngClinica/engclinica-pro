@@ -1,4 +1,4 @@
-import { FileSignature, FileText, Pencil } from "lucide-react";
+import { BadgePercent, FileSignature, FileText, Pencil } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import ModalActionsBar from "@/components/ModalActionsBar";
@@ -24,7 +24,9 @@ interface OrcamentoDetalhesDialogProps {
   orcamento: OrcamentoSupabase | null;
   onOpenEmpresa?: (empresa: OrcamentoSupabase["empresa"]) => void;
   onOpenEquipamento?: (equipamento: OrcamentoSupabase["equipamento"]) => void;
+  onOpenOrdemServico?: (ordemServicoId: string) => void;
   onEditar?: (orcamento: OrcamentoSupabase) => void;
+  onAplicarDesconto?: (orcamento: OrcamentoSupabase) => void;
   onAlterarStatus?: (
     orcamento: OrcamentoSupabase,
     status: OrcamentoStatus
@@ -69,8 +71,7 @@ const labelMap: Record<string, string> = {
 const label = (value?: string | null) => (value ? labelMap[value] || value : "-");
 
 const getEmpresaNome = (orcamento: OrcamentoSupabase) =>
-  orcamento.empresa?.nome_fantasia ||
-  orcamento.empresa?.nome ||
+  orcamento.empresa?.nome || orcamento.empresa?.nome_fantasia ||
   "Nao informado";
 
 const getItemTipoLabel = (item: NonNullable<OrcamentoSupabase["itens"]>[number]) => {
@@ -118,7 +119,9 @@ const OrcamentoDetalhesDialog = ({
   orcamento,
   onOpenEmpresa,
   onOpenEquipamento,
+  onOpenOrdemServico,
   onEditar,
+  onAplicarDesconto,
   onAlterarStatus,
 }: OrcamentoDetalhesDialogProps) => {
   if (!orcamento) return null;
@@ -135,11 +138,23 @@ const OrcamentoDetalhesDialog = ({
           </DialogTitle>
         </DialogHeader>
 
-        <ModalActionsBar>
+        <ModalActionsBar className="mt-0 px-6 py-3">
           {onEditar && (
-            <Button size="sm" onClick={() => onEditar(orcamento)}>
-              <Pencil className="w-4 h-4 mr-2" />
-              Editar
+            <>
+              <Button size="sm" onClick={() => onEditar(orcamento)}>
+                <Pencil className="w-4 h-4 mr-2" />
+                Editar
+              </Button>
+            </>
+          )}
+          {onAplicarDesconto && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onAplicarDesconto(orcamento)}
+            >
+              <BadgePercent className="w-4 h-4 mr-2" />
+              Aplicar desconto
             </Button>
           )}
           <Button
@@ -194,7 +209,11 @@ const OrcamentoDetalhesDialog = ({
               <Field label="Numero">{orcamento.numero}</Field>
               <Field label="Status">{label(orcamento.status)}</Field>
               <Field label="Tipo">{label(orcamento.tipo_orcamento)}</Field>
-              <Field label="Origem">{label(orcamento.origem)}</Field>
+              <Field label="Origem">
+                {orcamento.arkmeds_ordem_servico_numero
+                  ? `OS ${orcamento.arkmeds_ordem_servico_numero}`
+                  : label(orcamento.origem)}
+              </Field>
               <Field label="Empresa">
                 {orcamento.empresa && onOpenEmpresa ? (
                   <button
@@ -221,8 +240,20 @@ const OrcamentoDetalhesDialog = ({
                   getEquipamentoLabel(orcamento.equipamento)
                 )}
               </Field>
-              <Field label="OS vinculada">
-                {orcamento.ordem_servico?.numero || "-"}
+              <Field label="OS do sistema">
+                {orcamento.ordem_servico?.numero && onOpenOrdemServico ? (
+                  <button
+                    type="button"
+                    className="text-primary hover:underline font-medium"
+                    onClick={() => onOpenOrdemServico(orcamento.ordem_servico!.id)}
+                  >
+                    OS {orcamento.ordem_servico.numero}
+                  </button>
+                ) : orcamento.ordem_servico?.numero ? (
+                  `OS ${orcamento.ordem_servico.numero}`
+                ) : (
+                  "-"
+                )}
               </Field>
               <Field label="Identificador">
                 {orcamento.identificador || "-"}
@@ -231,6 +262,26 @@ const OrcamentoDetalhesDialog = ({
               <Field label="Validade">
                 {formatDate(orcamento.data_validade)}
               </Field>
+              {orcamento.data_aprovacao && (
+                <Field label="Aprovacao">
+                  {formatDate(orcamento.data_aprovacao)}
+                </Field>
+              )}
+              {orcamento.data_reprovacao && (
+                <Field label="Reprovacao">
+                  {formatDate(orcamento.data_reprovacao)}
+                </Field>
+              )}
+              {orcamento.data_faturamento && (
+                <Field label="Faturamento">
+                  {formatDate(orcamento.data_faturamento)}
+                </Field>
+              )}
+              {orcamento.data_cancelamento && (
+                <Field label="Cancelamento">
+                  {formatDate(orcamento.data_cancelamento)}
+                </Field>
+              )}
               <Field label="Responsavel">
                 {orcamento.responsavel_orcamentista || "-"}
               </Field>
@@ -238,8 +289,58 @@ const OrcamentoDetalhesDialog = ({
           </section>
 
           <section className="rounded-lg border p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Itens</h3>
+              <span className="text-sm font-semibold">
+                Total: {formatCurrency(orcamento.valor_total)}
+              </span>
+            </div>
+
+            {itens.length > 0 ? (
+              <div className="space-y-3">
+                {itens.map((item) => {
+                  const itemTitulo =
+                    item.tipo === "peca"
+                      ? formatDescricaoPecaOrcamento(item)
+                      : getItemTipoLabel(item);
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="rounded-md border p-3 grid grid-cols-1 md:grid-cols-[1fr_auto_auto_auto] gap-3"
+                    >
+                      <div>
+                        <p className="font-medium">{itemTitulo}</p>
+                      </div>
+                      <span className="text-sm text-muted-foreground">
+                        Qtd. {Number(item.quantidade).toLocaleString("pt-BR")}
+                      </span>
+                      <span className="text-sm text-muted-foreground">
+                        {formatCurrency(item.valor_unitario)}
+                      </span>
+                      <span className="text-sm font-medium">
+                        {formatCurrency(item.valor_total)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Nenhum item registrado.
+              </p>
+            )}
+          </section>
+
+          <section className="rounded-lg border p-4 space-y-3">
             <h3 className="text-sm font-semibold">Financeiro</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div
+              className={`grid grid-cols-1 md:grid-cols-2 gap-3 ${
+                orcamento.desconto_aplicado > 0
+                  ? "xl:grid-cols-4"
+                  : "xl:grid-cols-3"
+              }`}
+            >
               <div className="rounded-md bg-muted/40 p-3">
                 <p className="text-xs text-muted-foreground">Total Pecas</p>
                 <p className="font-semibold">
@@ -252,6 +353,19 @@ const OrcamentoDetalhesDialog = ({
                   {formatCurrency(orcamento.valor_servicos)}
                 </p>
               </div>
+              {orcamento.desconto_aplicado > 0 && (
+                <div className="rounded-md bg-muted/40 p-3">
+                  <p className="text-xs text-muted-foreground">
+                    Valor antes do desconto
+                  </p>
+                  <p className="font-semibold">
+                    {formatCurrency(
+                      Number(orcamento.valor_pecas || 0) +
+                        Number(orcamento.valor_servicos || 0)
+                    )}
+                  </p>
+                </div>
+              )}
               <div className="rounded-md bg-primary/10 p-3">
                 <p className="text-xs text-muted-foreground">Total Geral</p>
                 <p className="font-semibold text-primary">
@@ -260,6 +374,11 @@ const OrcamentoDetalhesDialog = ({
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <Field label="Desconto aplicado">
+                {orcamento.desconto_aplicado > 0
+                  ? `${orcamento.desconto_tipo === "percentual" ? `${orcamento.desconto_valor}%` : formatCurrency(orcamento.desconto_valor)} (${formatCurrency(orcamento.desconto_aplicado)})`
+                  : "-"}
+              </Field>
               <Field label="Forma">{label(orcamento.forma_pagamento)}</Field>
               <Field label="Modo">{label(orcamento.modo_pagamento)}</Field>
               <Field label="Parcelas">
@@ -288,54 +407,6 @@ const OrcamentoDetalhesDialog = ({
             </div>
           </section>
 
-          <section className="rounded-lg border p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold">Itens</h3>
-              <span className="text-sm font-semibold">
-                Total: {formatCurrency(orcamento.valor_total)}
-              </span>
-            </div>
-
-            {itens.length > 0 ? (
-              <div className="space-y-3">
-                {itens.map((item) => (
-                  <div
-                    key={item.id}
-                    className="rounded-md border p-3 grid grid-cols-1 md:grid-cols-[1fr_auto_auto_auto] gap-3"
-                  >
-                    <div>
-                      <p className="font-medium">
-                        {item.tipo === "peca"
-                          ? formatDescricaoPecaOrcamento(item)
-                          : item.descricao}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {getItemTipoLabel(item)}
-                      </p>
-                      {item.garantia && (
-                        <p className="text-xs text-muted-foreground">
-                          Garantia: {item.garantia}
-                        </p>
-                      )}
-                    </div>
-                    <span className="text-sm text-muted-foreground">
-                      Qtd. {Number(item.quantidade).toLocaleString("pt-BR")}
-                    </span>
-                    <span className="text-sm text-muted-foreground">
-                      {formatCurrency(item.valor_unitario)}
-                    </span>
-                    <span className="text-sm font-medium">
-                      {formatCurrency(item.valor_total)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Nenhum item registrado.
-              </p>
-            )}
-          </section>
         </div>
 
         <DialogFooter className="px-6 py-4 border-t">

@@ -5,6 +5,7 @@ type PrintToPdfOptions = {
   orientation?: "p" | "l";
   footerText?: string;
   footerFontSizePx?: number;
+  marginBottomMm?: number;
 };
 
 const DEFAULT_ENDPOINT = "/api/pdf/render";
@@ -33,6 +34,7 @@ export const renderHtmlToPdfWithPrintToPdf = async ({
   orientation = "p",
   footerText,
   footerFontSizePx,
+  marginBottomMm,
 }: PrintToPdfOptions): Promise<Blob | null> => {
   const endpoint = getPdfEndpoint();
 
@@ -48,6 +50,7 @@ export const renderHtmlToPdfWithPrintToPdf = async ({
         orientation,
         footerText,
         footerFontSizePx,
+        marginBottomMm,
       }),
     });
 

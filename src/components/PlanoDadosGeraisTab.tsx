@@ -27,7 +27,7 @@ const PlanoDadosGeraisTab = ({ plano }: Props) => {
   return (
     <div className="space-y-4">
       <div className="grid gap-3 md:grid-cols-5">
-        <Info label="Cliente" value={plano.empresa?.nome_fantasia || plano.empresa?.nome || "-"} />
+        <Info label="Cliente" value={plano.empresa?.nome || plano.empresa?.nome_fantasia || "-"} />
         <Info label="Responsavel" value={plano.responsavel?.nome || "-"} />
         <Info label="Data inicial" value={formatDateValue(plano.data_inicial)} />
         <Info label="Frequencia" value={getPlanoFrequenciaLabel(plano.frequencia)} />

@@ -25,8 +25,7 @@ const formatDate = (value?: string | null) => {
 };
 
 const getEmpresaNome = (equipamento: EquipamentoSupabase) =>
-  equipamento.empresa?.nome_fantasia ||
-  equipamento.empresa?.nome ||
+  equipamento.empresa?.nome || equipamento.empresa?.nome_fantasia ||
   "Cliente nao informado";
 
 const getResumoPorTipo = (equipamentos: EquipamentoSupabase[]) => {

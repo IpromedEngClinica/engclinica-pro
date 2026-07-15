@@ -31,7 +31,7 @@ import { formatDateTimeValue, formatDateValue } from "@/utils/planoDatas";
 const ALL = "__all__";
 type SortKey = "progresso" | "titulo" | "cliente" | "responsavel" | "inicio" | "previsao" | "situacao" | "frequencia" | "equipamentos";
 
-const cliente = (plano: Plano) => plano.empresa?.nome_fantasia || plano.empresa?.nome || "-";
+const cliente = (plano: Plano) => plano.empresa?.nome || plano.empresa?.nome_fantasia || "-";
 const cicloAtual = (plano: Plano) => plano.ciclos?.find((item) => item.status === "aberto") || null;
 const todayDateOnly = () => {
   const now = new Date();

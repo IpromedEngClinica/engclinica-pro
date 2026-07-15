@@ -269,8 +269,8 @@ export const getTermosAditivosRestantes = (contrato: ContratoSupabase) => {
 };
 
 export const getEmpresaContratoNome = (contrato: ContratoSupabase) =>
-  contrato.empresa?.nome_fantasia ||
   contrato.empresa?.nome ||
+  contrato.empresa?.nome_fantasia ||
   contrato.empresa_nome_snapshot ||
   "Nao informado";
 

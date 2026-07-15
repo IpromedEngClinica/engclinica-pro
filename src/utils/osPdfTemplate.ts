@@ -41,7 +41,7 @@ const formatDate = (iso?: string | null) => {
 };
 
 const getEmpresaNome = (os: OrdemServicoSupabase) =>
-  os.empresa?.nome_fantasia || os.empresa?.nome || os.solicitante_texto || EMPTY;
+  os.empresa?.nome || os.empresa?.nome_fantasia || os.solicitante_texto || EMPTY;
 
 const getEnderecoEmpresa = (empresa?: EmpresaSupabase | null) => {
   if (!empresa) return EMPTY;

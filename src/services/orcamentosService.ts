@@ -13,6 +13,13 @@ export type OrcamentoOrigem = "os" | "avulso";
 export type FormaPagamento = "dinheiro" | "cartao" | "boleto" | "pix";
 export type ModoPagamento = "avista" | "parcelado" | "entrada_parcela";
 export type FreteTipo = "cif" | "fob";
+export type DescontoTipo = "valor" | "percentual";
+
+export type AplicarDescontoOrcamentoInput = {
+  descontoTipo: DescontoTipo;
+  descontoValor: number;
+  situacao: "pendente" | "aprovado";
+};
 
 export type OrcamentoItemSupabase = {
   id: string;
@@ -97,14 +104,24 @@ export type OrcamentoSupabase = {
   valor_parcela: number | null;
   valor_pecas: number;
   valor_servicos: number;
+  desconto_tipo: DescontoTipo;
+  desconto_valor: number;
+  desconto_aplicado: number;
   valor_total: number;
   prazo_entrega: string | null;
   frete: FreteTipo | null;
   detalhes_orcamento: string | null;
   responsavel_orcamentista: string | null;
+  origem_migracao: string | null;
+  arkmeds_orcamento_id: number | null;
+  arkmeds_ordem_servico_numero: string | null;
+  classificacao_vinculo_os: string | null;
 
   aprovado_por: string | null;
   data_aprovacao: string | null;
+  data_reprovacao: string | null;
+  data_faturamento: string | null;
+  data_cancelamento: string | null;
   motivo_reprovacao: string | null;
 
   ativo: boolean;
@@ -201,6 +218,8 @@ export type OrcamentoFormInput = {
   diasEntreParcelas?: number;
   valorEntrada?: number;
   valorParcela?: number;
+  descontoTipo?: DescontoTipo;
+  descontoValor?: number;
   prazoEntrega?: string;
   frete?: FreteTipo;
   detalhesOrcamento?: string;
@@ -208,6 +227,9 @@ export type OrcamentoFormInput = {
 
   aprovadoPor?: string;
   dataAprovacao?: string;
+  dataReprovacao?: string;
+  dataFaturamento?: string;
+  dataCancelamento?: string;
   motivoReprovacao?: string;
 
   itens?: OrcamentoItemInput[];
@@ -238,13 +260,23 @@ const selectOrcamentos = `
   valor_parcela,
   valor_pecas,
   valor_servicos,
+  desconto_tipo,
+  desconto_valor,
+  desconto_aplicado,
   valor_total,
   prazo_entrega,
   frete,
   detalhes_orcamento,
   responsavel_orcamentista,
+  origem_migracao,
+  arkmeds_orcamento_id,
+  arkmeds_ordem_servico_numero,
+  classificacao_vinculo_os,
   aprovado_por,
   data_aprovacao,
+  data_reprovacao,
+  data_faturamento,
+  data_cancelamento,
   motivo_reprovacao,
   ativo,
   created_at,
@@ -362,12 +394,17 @@ const toDatabasePayload = (input: OrcamentoFormInput) => ({
   dias_entre_parcelas: input.diasEntreParcelas || null,
   valor_entrada: input.valorEntrada ?? null,
   valor_parcela: input.valorParcela ?? null,
+  desconto_tipo: input.descontoTipo || "valor",
+  desconto_valor: input.descontoValor ?? 0,
   prazo_entrega: input.prazoEntrega || null,
   frete: input.frete || null,
   detalhes_orcamento: input.detalhesOrcamento || null,
   responsavel_orcamentista: input.responsavelOrcamentista || "Icaro Rezende",
   aprovado_por: input.aprovadoPor || null,
   data_aprovacao: input.dataAprovacao || null,
+  data_reprovacao: input.dataReprovacao || null,
+  data_faturamento: input.dataFaturamento || null,
+  data_cancelamento: input.dataCancelamento || null,
   motivo_reprovacao: input.motivoReprovacao || null,
 });
 
@@ -684,6 +721,10 @@ export const orcamentosService = {
           ordem_servico_id,
           valor_total,
           aprovado_por,
+          data_aprovacao,
+          data_reprovacao,
+          data_faturamento,
+          data_cancelamento,
           motivo_reprovacao
         `
       )
@@ -722,12 +763,19 @@ export const orcamentosService = {
 
     if (status === "reprovado") {
       payload.motivo_reprovacao = extra?.motivoReprovacao || null;
-      payload.data_aprovacao = new Date().toISOString();
+      payload.data_reprovacao = new Date().toISOString();
+    }
+
+    if (status === "faturado") {
+      payload.data_faturamento = new Date().toISOString();
+    }
+
+    if (status === "cancelado") {
+      payload.data_cancelamento = new Date().toISOString();
     }
 
     if (status === "pendente") {
       payload.aprovado_por = null;
-      payload.data_aprovacao = null;
       payload.motivo_reprovacao = null;
     }
 
@@ -749,6 +797,53 @@ export const orcamentosService = {
         aprovadoPor: extra?.aprovadoPor,
         motivoReprovacao: extra?.motivoReprovacao,
       });
+    }
+
+    return orcamentosService.buscarPorId(id);
+  },
+
+  async aplicarDesconto(
+    id: string,
+    input: AplicarDescontoOrcamentoInput
+  ) {
+    const descontoValor = Number(input.descontoValor || 0);
+
+    if (descontoValor < 0) {
+      throw new Error("Desconto nao pode ser negativo.");
+    }
+
+    if (input.descontoTipo === "percentual" && descontoValor > 100) {
+      throw new Error("Desconto percentual nao pode ser maior que 100%.");
+    }
+
+    const { error } = await supabase
+      .from("orcamentos")
+      .update({
+        desconto_tipo: input.descontoTipo,
+        desconto_valor: descontoValor,
+      })
+      .eq("id", id);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    if (input.situacao === "aprovado") {
+      return orcamentosService.alterarStatus(id, "aprovado");
+    }
+
+    const { data: atual, error: atualError } = await supabase
+      .from("orcamentos")
+      .select("status")
+      .eq("id", id)
+      .single();
+
+    if (atualError) {
+      throw new Error(atualError.message);
+    }
+
+    if (atual.status !== "pendente") {
+      return orcamentosService.alterarStatus(id, "pendente");
     }
 
     return orcamentosService.buscarPorId(id);

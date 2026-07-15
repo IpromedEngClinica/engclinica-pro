@@ -30,6 +30,7 @@ export const gerarPdfVisitaExterna = async (
     orientation: "l",
     footerText: " ",
     footerFontSizePx: 10,
+    marginBottomMm: 10,
   });
 
   if (printToPdf) return printToPdf;

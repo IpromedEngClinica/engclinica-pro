@@ -106,7 +106,7 @@ const PlanoCicloDetalhesDialog = ({ cicloId, onOpenChange, open }: Props) => {
           <div className="space-y-4">
             <div className="grid gap-3 rounded-md border bg-muted/20 p-3 text-sm md:grid-cols-4">
               <Info label="Plano" value={detalhes.plano.titulo} />
-              <Info label="Cliente" value={detalhes.plano.empresa?.nome_fantasia || detalhes.plano.empresa?.nome || "-"} />
+              <Info label="Cliente" value={detalhes.plano.empresa?.nome || detalhes.plano.empresa?.nome_fantasia || "-"} />
               <Info label="Ciclo" value={ciclo.titulo} />
               <Info label="Situacao" value={ciclo.status} />
               <Info label="Execucao" value={formatDateTimeValue(ciclo.data_abertura)} />

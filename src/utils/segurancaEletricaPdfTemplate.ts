@@ -54,7 +54,7 @@ const optionalField = (
 ) => (hasValue(value) ? field(label, value, wide) : "");
 
 const getEmpresaNome = (execucao: SegurancaEletricaExecucao) =>
-  execucao.empresa?.nome_fantasia || execucao.empresa?.nome;
+  execucao.empresa?.nome || execucao.empresa?.nome_fantasia;
 
 const getEnderecoEmpresa = (execucao: SegurancaEletricaExecucao) => {
   const empresa = execucao.empresa;

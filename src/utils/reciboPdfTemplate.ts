@@ -21,7 +21,7 @@ const formatDate = (value?: string | null) => {
 };
 
 const getEmpresaNome = (recibo: Recibo) =>
-  recibo.empresa?.nome_fantasia || recibo.empresa?.nome || "-";
+  recibo.empresa?.nome || recibo.empresa?.nome_fantasia || "-";
 
 const getEmpresaDocumento = (recibo: Recibo) => recibo.empresa?.cpf_cnpj || "-";
 

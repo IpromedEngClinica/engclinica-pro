@@ -117,7 +117,7 @@ const newRow = (): LinhaLote => ({
 
 const getEmpresaLabel = (empresa: EmpresaSupabase) =>
   empresa.nome_fantasia
-    ? `${empresa.nome_fantasia} — ${empresa.nome}`
+    ? `${empresa.nome} — ${empresa.nome_fantasia}`
     : empresa.nome;
 
 const getSetoresEmpresa = (empresa?: EmpresaSupabase | null) =>

@@ -48,7 +48,7 @@ const formatCurrency = (value?: number | null) =>
       }).format(Number(value || 0));
 
 const getEmpresaNome = (empresa?: EmpresaSupabase | null) =>
-  empresa?.nome_fantasia || empresa?.nome || "-";
+  empresa?.nome || empresa?.nome_fantasia || "-";
 
 const getEnderecoEmpresa = (empresa?: EmpresaSupabase | null) =>
   [

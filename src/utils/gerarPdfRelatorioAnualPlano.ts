@@ -346,7 +346,7 @@ export const gerarPdfRelatorioAnualPlano = async (
         </div>
       </section>
       <section class="meta">
-        <div><span class="label">Cliente</span><span class="value">${escapeHtml(dados.plano.empresa?.nome_fantasia || dados.plano.empresa?.nome)}</span></div>
+        <div><span class="label">Cliente</span><span class="value">${escapeHtml(dados.plano.empresa?.nome || dados.plano.empresa?.nome_fantasia)}</span></div>
         <div><span class="label">Setor ou unidade</span><span class="value">${escapeHtml(dados.plano.empresa?.cidade || dados.plano.empresa?.estado)}</span></div>
         <div><span class="label">Responsavel tecnico</span><span class="value">${escapeHtml(dados.plano.responsavel?.nome)}</span></div>
         <div><span class="label">Quantidade</span><span class="value">${dados.equipamentos.length}</span></div>

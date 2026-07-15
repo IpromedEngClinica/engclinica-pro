@@ -99,8 +99,7 @@ const getStringField = (record: Record<string, unknown>, keys: string[]) => {
 };
 
 const getEmpresaNome = (orcamento: OrcamentoSupabase) =>
-  orcamento.empresa?.nome_fantasia ||
-  orcamento.empresa?.nome ||
+  orcamento.empresa?.nome || orcamento.empresa?.nome_fantasia ||
   "Nao informado";
 
 const getEnderecoEmpresa = (orcamento: OrcamentoSupabase) => {
@@ -1034,13 +1033,28 @@ export const buildOrcamentoHtml = (
       ${buildSectionTitle("3", "Informa&ccedil;&otilde;es Financeiras")}
       <div class="finance-grid">
         <div class="total-card">
-          <span class="label">Valor total</span>
+          <span class="label">Total geral</span>
           <div class="value">${escapeHtml(formatCurrency(orcamento.valor_total))}</div>
         </div>
 
         <div class="finance-details">
           ${buildFinanceItem("Total pe&ccedil;as", formatCurrency(orcamento.valor_pecas))}
           ${buildFinanceItem("Total servi&ccedil;os", formatCurrency(orcamento.valor_servicos))}
+          ${buildFinanceItem(
+            "Valor antes do desconto",
+            formatCurrency(
+              Number(orcamento.valor_pecas || 0) +
+                Number(orcamento.valor_servicos || 0)
+            )
+          )}
+          ${
+            Number(orcamento.desconto_aplicado || 0) > 0
+              ? buildFinanceItem(
+                  "Desconto aplicado",
+                  `${orcamento.desconto_tipo === "percentual" ? `${Number(orcamento.desconto_valor || 0)}%` : formatCurrency(orcamento.desconto_valor)} (${formatCurrency(orcamento.desconto_aplicado)})`
+                )
+              : ""
+          }
           ${buildFinanceItem("Frete", formatLabel(orcamento.frete))}
           ${buildFinanceItem("Forma de pagamento", formatFormaPagamento(orcamento.forma_pagamento))}
           ${buildFinanceItem("Modo de pagamento", formatModoPagamento(orcamento.modo_pagamento))}

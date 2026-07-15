@@ -39,8 +39,7 @@ interface OrdemServicoDetalhesDialogProps {
 }
 
 const getEmpresaNome = (os: OrdemServicoSupabase) =>
-  os.empresa?.nome_fantasia ||
-  os.empresa?.nome ||
+  os.empresa?.nome || os.empresa?.nome_fantasia ||
   os.solicitante_texto ||
   "Não informado";
 

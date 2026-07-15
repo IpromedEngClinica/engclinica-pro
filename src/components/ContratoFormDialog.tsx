@@ -101,9 +101,7 @@ const getEmpresaLabel = (empresa: {
   nome: string;
   nome_fantasia: string | null;
 }) =>
-  empresa.nome_fantasia
-    ? `${empresa.nome_fantasia} - ${empresa.nome}`
-    : empresa.nome;
+  empresa.nome_fantasia ? `${empresa.nome} - ${empresa.nome_fantasia}` : empresa.nome;
 
 const createDocumentoId = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -184,7 +182,7 @@ const ContratoFormDialog = ({
     setForm((current) => ({
       ...current,
       empresaId,
-      empresaNomeSnapshot: empresa ? empresa.nome_fantasia || empresa.nome : "",
+      empresaNomeSnapshot: empresa ? empresa.nome || empresa.nome_fantasia : "",
     }));
   };
 
@@ -192,7 +190,7 @@ const ContratoFormDialog = ({
     tipo: form.tipo,
     empresaId: form.empresaId,
     empresaNomeSnapshot:
-      empresaSelecionada?.nome_fantasia || empresaSelecionada?.nome || null,
+      empresaSelecionada?.nome || empresaSelecionada?.nome_fantasia || null,
     numeroIdentificacao: form.numeroIdentificacao,
     dataUltimaRenovacao: form.dataUltimaRenovacao || null,
     dataProximaRenovacao: form.dataProximaRenovacao,

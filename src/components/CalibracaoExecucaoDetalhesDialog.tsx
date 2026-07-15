@@ -226,7 +226,7 @@ const CalibracaoExecucaoDetalhesDialog = ({
 
           <Section title="2. Cliente">
             <Grid>
-              <Field label="Nome" value={empresa?.nome_fantasia || empresa?.nome} />
+              <Field label="Nome" value={empresa?.nome || empresa?.nome_fantasia} />
               <Field label="Razao social" value={empresa?.nome} />
               <Field label="CPF/CNPJ" value={empresa?.cpf_cnpj} />
               <Field label="Contato" value={empresa?.contato} />

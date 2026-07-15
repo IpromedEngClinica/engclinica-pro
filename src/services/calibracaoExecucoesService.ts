@@ -854,7 +854,7 @@ export const formatNomeDownloadCertificadoCalibracao = (
   const numero = formatNomeArquivoCertificadoCalibracao(execucao)
     .replace(/\.pdf$/i, "")
     .replace(/^CAL-?/i, "");
-  const cliente = execucao.empresa?.nome_fantasia || execucao.empresa?.nome;
+  const cliente = execucao.empresa?.nome || execucao.empresa?.nome_fantasia;
   const equipamento =
     execucao.equipamento?.tipo_equipamento?.nome ||
     execucao.equipamento?.tipo_texto ||

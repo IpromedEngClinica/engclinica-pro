@@ -34,7 +34,7 @@ const formatDate = (iso?: string | null) => {
 };
 
 const getEmpresaNome = (laudo: LaudoObsolescenciaSupabase) =>
-  laudo.empresa?.nome_fantasia || laudo.empresa?.nome || "Nao informado";
+  laudo.empresa?.nome || laudo.empresa?.nome_fantasia || "Nao informado";
 
 const Field = ({
   label,

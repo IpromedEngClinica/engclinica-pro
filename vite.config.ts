@@ -34,15 +34,17 @@ const readRequestBody = (request: NodeJS.ReadableStream) =>
   });
 
 const buildPdfPrintOverrides = ({
+  bottomMarginMm,
   footerEnabled,
   landscape,
 }: {
+  bottomMarginMm?: number;
   footerEnabled: boolean;
   landscape: boolean;
 }) => `
   @page {
     size: ${landscape ? "A4 landscape" : "A4 portrait"};
-    margin: 10mm 11mm ${footerEnabled ? "14mm" : "9mm"} 11mm;
+    margin: 10mm 11mm ${bottomMarginMm ?? (footerEnabled ? 14 : 9)}mm 11mm;
   }
 
   html,
@@ -170,6 +172,7 @@ const pdfRenderPlugin = (): Plugin => {
             orientation?: "p" | "l";
             footerText?: string;
             footerFontSizePx?: number;
+            marginBottomMm?: number;
           };
 
           if (!payload.html) {
@@ -196,7 +199,11 @@ const pdfRenderPlugin = (): Plugin => {
             });
             await page.emulateMedia({ media: "print" });
             await page.addStyleTag({
-              content: buildPdfPrintOverrides({ footerEnabled, landscape }),
+              content: buildPdfPrintOverrides({
+                bottomMarginMm: payload.marginBottomMm,
+                footerEnabled,
+                landscape,
+              }),
             });
 
             const pdfBuffer = await page.pdf({

@@ -587,8 +587,7 @@ export const preventivasService = {
         tipo_os_id: tipoOS.id,
         estado_os_id: estadoFechado.id,
         solicitante_texto:
-          equipamentoData.empresa?.nome_fantasia ||
-          equipamentoData.empresa?.nome ||
+          equipamentoData.empresa?.nome || equipamentoData.empresa?.nome_fantasia ||
           null,
         responsavel_texto: "Icaro Rezende",
         data_fechamento: dataFechamento.toISOString(),
