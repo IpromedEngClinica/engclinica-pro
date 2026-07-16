@@ -880,6 +880,7 @@ const recalcularStatusEquipamentoPorOS = async (
     )
     .eq("equipamento_id", equipamentoId)
     .eq("ativo", true)
+    .eq("oculta_operacao", false)
     .eq("status_sistema", "aberta");
 
   if (error) {
@@ -1091,6 +1092,7 @@ export const ordensServicoService = {
       .from("ordens_servico")
       .select(select)
       .eq("ativo", true)
+      .eq("oculta_operacao", false)
       .order("numero_ordem", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false });
 

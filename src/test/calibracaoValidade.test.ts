@@ -22,7 +22,7 @@ describe("calibracaoValidade", () => {
     expect(formatarMesAno("2027-06-01")).toBe("06/2027");
   });
 
-  it("formata validade do padrao com separadores explicitos", () => {
-    expect(formatarDataPadrao("2027-01-30")).toBe("30 - 01 - 2027");
+  it("formata validade do padrao no formato brasileiro", () => {
+    expect(formatarDataPadrao("2027-01-30")).toBe("30/01/2027");
   });
 });

@@ -222,6 +222,7 @@ export const equipamentoHistoricoService = {
           .select(selectOsPermitido)
           .eq("equipamento_id", equipamentoId)
           .eq("ativo", true)
+          .eq("oculta_operacao", false)
           .order("created_at", { ascending: false }),
 
         supabase

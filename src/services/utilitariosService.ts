@@ -748,6 +748,7 @@ export const utilitariosService = {
               .gte("data_validade", anoInicio)
               .lte("data_validade", anoFim)
               .eq("ordem_servico.ativo", true)
+              .eq("ordem_servico.oculta_operacao", false)
               .eq("ordem_servico.status_sistema", "fechada")
               .not("ordem_servico.equipamento_id", "is", null)
           )
@@ -830,6 +831,7 @@ export const utilitariosService = {
                           `
                         )
                         .eq("ativo", true)
+                        .eq("oculta_operacao", false)
                         .eq("status_sistema", "fechada")
                         .not("equipamento_id", "is", null)
                         .in("equipamento_id", ids)

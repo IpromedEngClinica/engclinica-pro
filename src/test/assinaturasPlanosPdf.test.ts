@@ -31,6 +31,7 @@ vi.mock("@/utils/pdfImageUtils", () => ({
 vi.mock("@/services/assinaturasService", () => ({
   assinaturasService: {
     resolverDocumento: mocks.resolverDocumento,
+    buscarMinhaAssinaturaDocumento: vi.fn(async () => null),
   },
 }));
 

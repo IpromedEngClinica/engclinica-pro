@@ -56,6 +56,9 @@ export const renderHtmlToPdfWithPrintToPdf = async ({
 
     if (!response.ok) return null;
 
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.toLowerCase().includes("application/pdf")) return null;
+
     const blob = await response.blob();
 
     if (!blob.size) return null;

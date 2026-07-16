@@ -394,6 +394,7 @@ const atualizarEquipamentoParaAtivoSeSemOSAberta = async (
     .select("id", { count: "exact", head: true })
     .eq("equipamento_id", equipamentoId)
     .eq("ativo", true)
+    .eq("oculta_operacao", false)
     .eq("status_sistema", "aberta")
     .neq("id", ordemServicoIdAtual);
 

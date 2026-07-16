@@ -15,7 +15,9 @@ const confirmed =
   args["confirmar-importacao"] === true &&
   process.env.CONFIRMAR_IMPORTACAO_CALIBRACOES === "true";
 const mode = confirmed ? "importacao_real" : "dry_run";
-const inputPath = path.join(outputDir, "lote_30_compativeis.json");
+const LOTE_NOME = String(process.env.LOTE_NOME || "lote_30_compativeis").replace(/[^a-zA-Z0-9_-]/g, "_");
+const EXPECTED_COUNT = Number.parseInt(process.env.EXPECTED_COUNT || "30", 10);
+const inputPath = path.join(outputDir, `${LOTE_NOME}.json`);
 const reportDir = path.join(outputDir, "importacao");
 const bucket = "calibracao-certificados";
 const executionId = `calibracoes-${new Date().toISOString().replace(/[:.]/g, "-")}`;
@@ -283,9 +285,10 @@ await ensureOutputDir();
 await fs.mkdir(reportDir, { recursive: true });
 const payload = JSON.parse(await fs.readFile(inputPath, "utf-8"));
 const items = payload.selected || [];
-assert(items.length === 30, `O lote deve conter exatamente 30 certificados; encontrado: ${items.length}.`);
-assert(new Set(items.map((item) => item.arkmeds_calibracao_id)).size === 30, "IDs ArkMeds duplicados no lote.");
-assert(new Set(items.map((item) => item.arkmeds_numero_certificado)).size === 30, "Numeros de certificado duplicados no lote.");
+assert(Number.isInteger(EXPECTED_COUNT) && EXPECTED_COUNT > 0, "EXPECTED_COUNT deve ser um inteiro positivo.");
+assert(items.length === EXPECTED_COUNT, `O lote deve conter exatamente ${EXPECTED_COUNT} certificados; encontrado: ${items.length}.`);
+assert(new Set(items.map((item) => item.arkmeds_calibracao_id)).size === EXPECTED_COUNT, "IDs ArkMeds duplicados no lote.");
+assert(new Set(items.map((item) => item.arkmeds_numero_certificado)).size === EXPECTED_COUNT, "Numeros de certificado duplicados no lote.");
 
 const pdfBuffers = new Map();
 for (const item of items) {
@@ -370,7 +373,7 @@ try {
           pdf_storage_path: imported.storagePath || "",
           erro: "",
         });
-        console.log(`[${index + 1}/30] ${item.arkmeds_numero_certificado}: ${imported.status}`);
+        console.log(`[${index + 1}/${EXPECTED_COUNT}] ${item.arkmeds_numero_certificado}: ${imported.status}`);
       } catch (error) {
         results.push({
           arkmeds_id: item.arkmeds_calibracao_id,
@@ -386,7 +389,7 @@ try {
           erro: error.message,
         });
         await insertLog(client, payload.organizacaoId, item.arkmeds_calibracao_id, "erro", error.message);
-        console.error(`[${index + 1}/30] ${item.arkmeds_numero_certificado}: ${error.message}`);
+        console.error(`[${index + 1}/${EXPECTED_COUNT}] ${item.arkmeds_numero_certificado}: ${error.message}`);
       }
     }
   }
@@ -407,12 +410,13 @@ const columns = [
   { key: "pdf_storage_path", label: "PDF Storage" },
   { key: "erro", label: "Erro" },
 ];
-await fs.writeFile(path.join(reportDir, `${mode}_resultado.csv`), toCsv(results, columns));
+const reportPrefix = LOTE_NOME === "lote_30_compativeis" ? mode : `${LOTE_NOME}_${mode}`;
+await fs.writeFile(path.join(reportDir, `${reportPrefix}_resultado.csv`), toCsv(results, columns));
 const importedCount = results.filter((item) => item.status === "importado").length;
 const simulatedCount = results.filter((item) => item.status === "simulado").length;
 const errorCount = results.filter((item) => item.status === "erro" || item.status === "colisao_numero").length;
 await fs.writeFile(
-  path.join(reportDir, `${mode}_resumo.md`),
+  path.join(reportDir, `${reportPrefix}_resumo.md`),
   `# Importacao de calibracoes ArkMeds\n\n` +
     `- Execucao: ${executionId}\n` +
     `- Modo: ${mode}\n` +

@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabaseClient";
+import { getAppUrl } from "@/utils/appUrl";
 import { getPerfilLabel, type PerfilUsuario } from "./usuariosPermissoesService";
 
 export type ConvitePublico = {
@@ -58,7 +59,7 @@ export const conviteCadastroService = {
       email,
       password: input.senha,
       options: {
-        emailRedirectTo: `${window.location.origin}/convite/${encodeURIComponent(
+        emailRedirectTo: `${getAppUrl()}/convite/${encodeURIComponent(
           input.token
         )}`,
         data: {

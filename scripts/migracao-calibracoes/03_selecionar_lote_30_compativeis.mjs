@@ -19,6 +19,7 @@ import {
 } from "./lib.mjs";
 
 const TARGET_COUNT = Number.parseInt(process.env.TARGET_COUNT || "30", 10);
+const LOTE_NOME = String(process.env.LOTE_NOME || "lote_30_compativeis").replace(/[^a-zA-Z0-9_-]/g, "_");
 const LIST_PAGE_SIZE = 500;
 const requestedIds = new Set(
   String(process.env.ARKMEDS_CALIBRATION_IDS || "")
@@ -123,17 +124,21 @@ function closestStandardPoint(value, points) {
 }
 
 await ensureOutputDir();
-const pdfDir = path.join(outputDir, "lote-30-pdfs");
+const pdfDirName = process.env.PDF_DIR_NAME || (
+  LOTE_NOME === "lote_30_compativeis" ? "lote-30-pdfs" : `${LOTE_NOME.replace(/_/g, "-")}-pdfs`
+);
+const pdfDir = path.join(outputDir, pdfDirName);
 await fs.mkdir(pdfDir, { recursive: true });
 
 const supabase = requireSupabase();
 const organizacaoId = await resolveOrganizacaoId(supabase);
 const organizationFilter = [{ column: "organizacao_id", value: organizacaoId }];
-const [companies, equipment, procedures, procedureTables, standards, standardTables] = await Promise.all([
+const [companies, equipment, procedures, procedureTables, procedureTypes, standards, standardTables] = await Promise.all([
   fetchAllRows(supabase, "empresas", "id,numero_cadastro,nome,ativo", organizationFilter),
-  fetchAllRows(supabase, "equipamentos", "id,numero_cadastro,empresa_id,tipo_texto,fabricante,modelo,numero_serie,patrimonio,tag,ativo", organizationFilter),
+  fetchAllRows(supabase, "equipamentos", "id,numero_cadastro,empresa_id,tipo_equipamento_id,tipo_texto,fabricante,modelo,numero_serie,patrimonio,tag,ativo", organizationFilter),
   fetchAllRows(supabase, "calibracao_procedimentos", "id,nome,versao,metodo_referencia,ativo", organizationFilter),
   fetchAllRows(supabase, "calibracao_procedimento_tabelas", "id,procedimento_id,nome,grandeza,unidade,ordem,ativo", organizationFilter),
+  fetchAllRows(supabase, "calibracao_procedimento_tipos_equipamento", "procedimento_id,tipo_equipamento_id", organizationFilter),
   fetchAllRows(supabase, "calibracao_padroes", "id,numero_certificado,nome_padrao,fabricante,modelo,numero_serie,patrimonio,tag,laboratorio_calibrador,data_validade,ativo", organizationFilter),
   fetchAllRows(supabase, "calibracao_padrao_tabelas", "id,padrao_id,nome,grandeza,unidade,ativo", organizationFilter),
 ]);
@@ -149,6 +154,28 @@ for (const procedure of procedures.filter((item) => item.ativo)) {
   const key = normalizeProcedureName(procedure.nome);
   if (!proceduresByName.has(key)) proceduresByName.set(key, []);
   proceduresByName.get(key).push(procedure);
+}
+const procedureIdsByEquipmentType = new Map();
+for (const link of procedureTypes) {
+  if (!procedureIdsByEquipmentType.has(link.tipo_equipamento_id)) {
+    procedureIdsByEquipmentType.set(link.tipo_equipamento_id, new Set());
+  }
+  procedureIdsByEquipmentType.get(link.tipo_equipamento_id).add(link.procedimento_id);
+}
+
+function resolveProcedure(name, equipmentTypeId) {
+  const normalized = normalizeProcedureName(name);
+  const exact = proceduresByName.get(normalized) || [];
+  if (exact.length === 1) return exact[0];
+  if (exact.length > 1) return null;
+
+  const associatedProcedureIds = procedureIdsByEquipmentType.get(equipmentTypeId) || new Set();
+  const candidates = procedures.filter((procedure) => {
+    if (!procedure.ativo || !associatedProcedureIds.has(procedure.id)) return false;
+    const target = normalizeProcedureName(procedure.nome);
+    return normalized && (target.includes(normalized) || normalized.includes(target));
+  });
+  return candidates.length === 1 ? candidates[0] : null;
 }
 const procedureTablesByProcedure = new Map();
 for (const table of procedureTables.filter((item) => item.ativo)) {
@@ -193,11 +220,9 @@ for (const [candidateIndex, item] of candidates.entries()) {
     if (String(parsed.fields.solicitante.id) !== String(item.solicitante_id)) reasons.push("empresa_divergente_no_detalhe");
     if (String(parsed.fields.equipamento.id) !== String(item.equipamento_id)) reasons.push("equipamento_divergente_no_detalhe");
 
-    const procedureKey = normalizeProcedureName(parsed.fields.procedimento.text);
-    const procedureMatches = proceduresByName.get(procedureKey) || [];
-    if (procedureMatches.length !== 1) reasons.push(`procedimento_${procedureMatches.length ? "ambiguo" : "nao_encontrado"}`);
+    const procedure = resolveProcedure(parsed.fields.procedimento.text, localEquipment.tipo_equipamento_id);
+    if (!procedure) reasons.push("procedimento_nao_resolvido_por_nome_e_tipo");
     if (reasons.length) throw new Error(reasons.join("|"));
-    const procedure = procedureMatches[0];
 
     const pdf = await fetchCalibrationPdf(item.print_url);
     const pdfText = extractPdfText(pdf.buffer);
@@ -360,9 +385,9 @@ if (selected.length !== TARGET_COUNT) {
   throw new Error(`Foram selecionados apenas ${selected.length} de ${TARGET_COUNT} certificados compativeis.`);
 }
 
-const jsonPath = path.join(outputDir, "lote_30_compativeis.json");
-const csvPath = path.join(outputDir, "lote_30_compativeis.csv");
-const rejectedPath = path.join(outputDir, "lote_30_rejeitados.csv");
+const jsonPath = path.join(outputDir, `${LOTE_NOME}.json`);
+const csvPath = path.join(outputDir, `${LOTE_NOME}.csv`);
+const rejectedPath = path.join(outputDir, `${LOTE_NOME}_rejeitados.csv`);
 await fs.writeFile(jsonPath, JSON.stringify({ organizacaoId, selected }, null, 2));
 await fs.writeFile(
   csvPath,

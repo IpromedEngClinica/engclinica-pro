@@ -20,12 +20,13 @@ const supabase = requireSupabase();
 const organizacaoId = await resolveOrganizacaoId(supabase);
 const organizationFilter = [{ column: "organizacao_id", value: organizacaoId }];
 
-const [companies, equipment, serviceOrders, procedures, procedureTables] = await Promise.all([
+const [companies, equipment, serviceOrders, procedures, procedureTables, procedureTypes] = await Promise.all([
   fetchAllRows(supabase, "empresas", "id,numero_cadastro,nome,nome_fantasia,ativo", organizationFilter),
-  fetchAllRows(supabase, "equipamentos", "id,numero_cadastro,empresa_id,tipo_texto,fabricante,modelo,numero_serie,patrimonio,ativo", organizationFilter),
+  fetchAllRows(supabase, "equipamentos", "id,numero_cadastro,empresa_id,tipo_equipamento_id,tipo_texto,fabricante,modelo,numero_serie,patrimonio,ativo", organizationFilter),
   fetchAllRows(supabase, "ordens_servico", "id,numero,arkmeds_os_id,empresa_id,equipamento_id,ativo", organizationFilter),
   fetchAllRows(supabase, "calibracao_procedimentos", "id,codigo,nome,versao,ativo", organizationFilter),
   fetchAllRows(supabase, "calibracao_procedimento_tabelas", "id,procedimento_id,nome,grandeza,unidade,ativo", organizationFilter),
+  fetchAllRows(supabase, "calibracao_procedimento_tipos_equipamento", "procedimento_id,tipo_equipamento_id", organizationFilter),
 ]);
 
 const companiesByLegacyId = new Map(companies.map((item) => [String(item.numero_cadastro), item]));
@@ -41,9 +42,16 @@ for (const item of equipment) {
 const ordersByArkmedsId = new Map(serviceOrders.filter((item) => item.arkmeds_os_id).map((item) => [String(item.arkmeds_os_id), item]));
 const proceduresByName = new Map();
 for (const procedure of procedures.filter((item) => item.ativo)) {
-  const key = normalizeText(procedure.nome);
+  const key = normalizeProcedureName(procedure.nome);
   if (!proceduresByName.has(key)) proceduresByName.set(key, []);
   proceduresByName.get(key).push(procedure);
+}
+const procedureIdsByEquipmentType = new Map();
+for (const link of procedureTypes) {
+  if (!procedureIdsByEquipmentType.has(link.tipo_equipamento_id)) {
+    procedureIdsByEquipmentType.set(link.tipo_equipamento_id, new Set());
+  }
+  procedureIdsByEquipmentType.get(link.tipo_equipamento_id).add(link.procedimento_id);
 }
 const tablesByProcedure = new Map();
 for (const table of procedureTables.filter((item) => item.ativo)) {
@@ -51,20 +59,30 @@ for (const table of procedureTables.filter((item) => item.ativo)) {
   tablesByProcedure.get(table.procedimento_id).push(table);
 }
 
-function findProcedure(name) {
-  const normalized = normalizeText(name);
+function normalizeProcedureName(value) {
+  return normalizeText(value)
+    .replace(/\bcalibracao\b/g, " ")
+    .replace(/\bem\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function findProcedure(name, equipmentTypeId) {
+  const normalized = normalizeProcedureName(name);
   const exact = proceduresByName.get(normalized) || [];
-  if (exact.length === 1) return { match: exact[0], method: "nome_exato", candidates: exact };
+  if (exact.length === 1) return { match: exact[0], method: "nome_exato_normalizado", candidates: exact };
   if (exact.length > 1) return { match: null, method: "ambiguo", candidates: exact };
 
+  const associatedProcedureIds = procedureIdsByEquipmentType.get(equipmentTypeId) || new Set();
   const candidates = procedures.filter((item) => {
     if (!item.ativo) return false;
-    const target = normalizeText(item.nome);
-    return normalized && (target.includes(normalized) || normalized.includes(target));
+    const target = normalizeProcedureName(item.nome);
+    const nameMatches = normalized && (target.includes(normalized) || normalized.includes(target));
+    return nameMatches && (!equipmentTypeId || associatedProcedureIds.has(item.id));
   });
   return {
     match: candidates.length === 1 ? candidates[0] : null,
-    method: candidates.length === 1 ? "nome_aproximado" : candidates.length ? "ambiguo" : "nao_encontrado",
+    method: candidates.length === 1 ? "nome_aproximado_tipo_equipamento" : candidates.length ? "ambiguo" : "nao_encontrado",
     candidates,
   };
 }
@@ -99,7 +117,7 @@ const results = input.records.map((record) => {
   const order = record.arkmeds_ordem_servico_id
     ? ordersByArkmedsId.get(String(record.arkmeds_ordem_servico_id)) || null
     : null;
-  const procedureResult = findProcedure(record.procedimento_nome);
+  const procedureResult = findProcedure(record.procedimento_nome, localEquipment?.tipo_equipamento_id);
   const procedure = procedureResult.match;
 
   if (record.status_extracao !== "coletado") blockers.push(`extracao_${record.status_extracao}`);
@@ -119,7 +137,9 @@ const results = input.records.map((record) => {
   const localTableNames = localTables.map((table) => normalizeText(table.nome));
   const missingTables = sourceTableNames.filter((name) => name && !localTableNames.includes(name));
   if (procedure && missingTables.length) warnings.push(`tabelas_nao_correspondentes:${missingTables.length}`);
-  if (procedureResult.method === "nome_aproximado") warnings.push("procedimento_correspondido_por_aproximacao");
+  if (procedureResult.method === "nome_aproximado_tipo_equipamento") {
+    warnings.push("procedimento_correspondido_por_nome_e_tipo_equipamento");
+  }
   if (record.arkmeds_padrao_ids.length) warnings.push("padroes_arkmeds_ainda_exigem_mapeamento_de_certificado");
   warnings.push("calculos_finais_devem_ser_conferidos_com_pdf_original");
 

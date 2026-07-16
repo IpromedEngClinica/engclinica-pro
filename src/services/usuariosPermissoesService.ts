@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabaseClient";
+import { getAppUrl } from "@/utils/appUrl";
 
 export type PerfilUsuario =
   | "admin"
@@ -215,7 +216,7 @@ const getSha256Hex = async (value: string) => {
 };
 
 const getConviteUrl = (token: string) =>
-  `${window.location.origin}/convite/${encodeURIComponent(token)}`;
+  `${getAppUrl()}/convite/${encodeURIComponent(token)}`;
 
 export const getPerfilLabel = (perfil: string) =>
   PERFIS_USUARIO.find((item) => item.value === perfil)?.label || perfil;
