@@ -102,6 +102,8 @@ export type UsuarioConvite = {
   created_at: string;
   aceito_em: string | null;
   cancelado_em: string | null;
+  token_reenvio: string | null;
+  excluido_em: string | null;
   empresa?: {
     id: string;
     nome: string;
@@ -183,6 +185,8 @@ const selectConvites = `
   created_at,
   aceito_em,
   cancelado_em,
+  token_reenvio,
+  excluido_em,
   empresa:empresas!usuario_convites_empresa_id_fkey (
     id,
     nome,
@@ -251,6 +255,7 @@ export const usuariosPermissoesService = {
       supabase
         .from("usuario_convites")
         .select(selectConvites)
+        .is("excluido_em", null)
         .order("created_at", { ascending: false }),
     ]);
 
@@ -345,6 +350,7 @@ export const usuariosPermissoesService = {
         nome,
         perfil: input.perfil,
         token_hash: tokenHash,
+        token_reenvio: token,
         expira_em: expiraEm,
       })
       .select(selectConvites)
@@ -359,14 +365,84 @@ export const usuariosPermissoesService = {
   },
 
   async cancelarConvite(conviteId: string) {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("usuario_convites")
       .update({
         status: "cancelado",
         cancelado_em: new Date().toISOString(),
       })
       .eq("id", conviteId)
-      .eq("status", "pendente");
+      .eq("status", "pendente")
+      .is("excluido_em", null)
+      .select("id")
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    if (!data) throw new Error("Este convite nao esta mais pendente.");
+  },
+
+  async obterLinkConvite(convite: UsuarioConvite) {
+    if (convite.status !== "pendente") {
+      throw new Error("Somente convites pendentes podem ser copiados.");
+    }
+
+    if (new Date(convite.expira_em).getTime() < Date.now()) {
+      throw new Error("Este convite esta expirado.");
+    }
+
+    if (convite.token_reenvio) {
+      return getConviteUrl(convite.token_reenvio);
+    }
+
+    // Convites criados antes desta migration nao possuem o token bruto.
+    // Nesse caso, rotacionamos o token sem alterar a validade do convite.
+    const token = getTokenAleatorio();
+    const tokenHash = await getSha256Hex(token);
+    const { data, error } = await supabase
+      .from("usuario_convites")
+      .update({
+        token_hash: tokenHash,
+        token_reenvio: token,
+      })
+      .eq("id", convite.id)
+      .eq("status", "pendente")
+      .is("excluido_em", null)
+      .select("id")
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    if (!data) throw new Error("Este convite nao esta mais disponivel.");
+
+    return getConviteUrl(token);
+  },
+
+  async excluirConvite(conviteId: string) {
+    const { data: convite, error: buscarError } = await supabase
+      .from("usuario_convites")
+      .select("id,status")
+      .eq("id", conviteId)
+      .is("excluido_em", null)
+      .maybeSingle();
+
+    if (buscarError) throw new Error(buscarError.message);
+    if (!convite) throw new Error("Convite nao encontrado.");
+
+    const { data: authData } = await supabase.auth.getUser();
+    const agora = new Date().toISOString();
+    const atualizacao: Record<string, string | null> = {
+      excluido_em: agora,
+      excluido_por: authData.user?.id || null,
+    };
+
+    if (convite.status === "pendente") {
+      atualizacao.status = "cancelado";
+      atualizacao.cancelado_em = agora;
+    }
+
+    const { error } = await supabase
+      .from("usuario_convites")
+      .update(atualizacao)
+      .eq("id", conviteId);
 
     if (error) throw new Error(error.message);
   },

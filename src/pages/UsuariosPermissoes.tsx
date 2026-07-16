@@ -7,12 +7,23 @@ import {
   PenLine,
   RefreshCw,
   ShieldCheck,
+  Trash2,
   UserPlus,
   Users,
   XCircle,
 } from "lucide-react";
 import MinhaAssinaturaDialog from "@/components/MinhaAssinaturaDialog";
 import PageHeader from "@/components/PageHeader";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -38,6 +49,8 @@ import { toast } from "@/hooks/use-toast";
 import {
   useCancelarConviteUsuario,
   useCriarConviteUsuario,
+  useExcluirConviteUsuario,
+  useObterLinkConviteUsuario,
   useAtualizarPermissaoPerfil,
   useUsuariosPermissoesConfig,
 } from "@/hooks/useUsuariosPermissoes";
@@ -48,6 +61,7 @@ import {
   PERFIS_USUARIO,
   type PerfilConfiguravel,
   type PerfilUsuario,
+  type UsuarioConvite,
 } from "@/services/usuariosPermissoesService";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -68,6 +82,17 @@ const getStatusBadgeVariant = (
 const getDataLabel = (value?: string | null) =>
   value ? new Date(value).toLocaleDateString("pt-BR") : "-";
 
+const getStatusLabel = (status: string) => {
+  const labels: Record<string, string> = {
+    pendente: "Pendente",
+    aceito: "Aceito",
+    cancelado: "Cancelado",
+    expirado: "Expirado",
+  };
+
+  return labels[status] || status;
+};
+
 const UsuariosPermissoes = () => {
   const { usuario, usuarioLoading } = useAuth();
   const isAdmin = usuario?.perfil === "admin";
@@ -76,6 +101,8 @@ const UsuariosPermissoes = () => {
   const atualizarPermissao = useAtualizarPermissaoPerfil();
   const criarConvite = useCriarConviteUsuario();
   const cancelarConvite = useCancelarConviteUsuario();
+  const obterLinkConvite = useObterLinkConviteUsuario();
+  const excluirConvite = useExcluirConviteUsuario();
 
   const [conviteForm, setConviteForm] = useState({
     nome: "",
@@ -87,6 +114,8 @@ const UsuariosPermissoes = () => {
   const [ultimoLink, setUltimoLink] = useState("");
   const [ultimoEmail, setUltimoEmail] = useState("");
   const [assinaturaOpen, setAssinaturaOpen] = useState(false);
+  const [conviteParaExcluir, setConviteParaExcluir] =
+    useState<UsuarioConvite | null>(null);
 
   const contagemPorPerfil = useMemo(() => {
     const contagem = new Map<string, number>();
@@ -185,6 +214,38 @@ const UsuariosPermissoes = () => {
         title: "Erro ao cancelar convite",
         description:
           err instanceof Error ? err.message : "Erro inesperado ao cancelar.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleCopiarConviteEmitido = async (convite: UsuarioConvite) => {
+    try {
+      const link = await obterLinkConvite.mutateAsync(convite);
+      await navigator.clipboard.writeText(link);
+      toast({ title: "Link do convite copiado." });
+    } catch (err) {
+      toast({
+        title: "Erro ao copiar convite",
+        description:
+          err instanceof Error ? err.message : "Erro inesperado ao copiar.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleExcluirConvite = async () => {
+    if (!conviteParaExcluir) return;
+
+    try {
+      await excluirConvite.mutateAsync(conviteParaExcluir.id);
+      toast({ title: "Convite excluido da lista." });
+      setConviteParaExcluir(null);
+    } catch (err) {
+      toast({
+        title: "Erro ao excluir convite",
+        description:
+          err instanceof Error ? err.message : "Erro inesperado ao excluir.",
         variant: "destructive",
       });
     }
@@ -438,8 +499,8 @@ const UsuariosPermissoes = () => {
             <div className="mb-4">
               <h2 className="text-base font-semibold">Convites emitidos</h2>
               <p className="text-sm text-muted-foreground">
-                O token bruto nao fica salvo. Depois de criado, o link so pode
-                ser copiado enquanto aparece na tela.
+                Convites pendentes podem ser copiados novamente, cancelados ou
+                excluidos desta lista.
               </p>
             </div>
 
@@ -452,7 +513,7 @@ const UsuariosPermissoes = () => {
                   <TableHead>Cliente vinculado</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Expira em</TableHead>
-                  <TableHead className="w-28 text-right">Acoes</TableHead>
+                  <TableHead className="w-36 text-right">Acoes</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -466,22 +527,51 @@ const UsuariosPermissoes = () => {
                     <TableCell>{getEmpresaNome(convite.empresa)}</TableCell>
                     <TableCell>
                       <Badge variant={getStatusBadgeVariant(convite.status)}>
-                        {convite.status}
+                        {getStatusLabel(convite.status)}
                       </Badge>
                     </TableCell>
                     <TableCell>{getDataLabel(convite.expira_em)}</TableCell>
-                    <TableCell className="text-right">
-                      {convite.status === "pendente" && (
+                    <TableCell>
+                      <div className="flex items-center justify-end gap-1">
+                        {convite.status === "pendente" && (
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            title="Copiar link do convite"
+                            aria-label="Copiar link do convite"
+                            onClick={() => handleCopiarConviteEmitido(convite)}
+                            disabled={obterLinkConvite.isPending}
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {convite.status === "pendente" && (
                         <Button
-                          size="sm"
+                          type="button"
+                          size="icon"
                           variant="ghost"
+                          title="Cancelar convite"
+                          aria-label="Cancelar convite"
                           onClick={() => handleCancelarConvite(convite.id)}
                           disabled={cancelarConvite.isPending}
                         >
-                          <XCircle className="mr-2 h-4 w-4" />
-                          Cancelar
+                          <XCircle className="h-4 w-4" />
                         </Button>
                       )}
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="text-destructive hover:text-destructive"
+                          title="Excluir convite da lista"
+                          aria-label="Excluir convite da lista"
+                          onClick={() => setConviteParaExcluir(convite)}
+                          disabled={excluirConvite.isPending}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -653,6 +743,42 @@ const UsuariosPermissoes = () => {
         open={assinaturaOpen}
         onOpenChange={setAssinaturaOpen}
       />
+
+      <AlertDialog
+        open={Boolean(conviteParaExcluir)}
+        onOpenChange={(open) => {
+          if (!open && !excluirConvite.isPending) setConviteParaExcluir(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir convite da lista?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O convite de {conviteParaExcluir?.email || "acesso"} deixara de
+              aparecer na listagem. O historico sera preservado e, se o convite
+              ainda estiver pendente, o link sera cancelado.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={excluirConvite.isPending}>
+              Voltar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={excluirConvite.isPending}
+              onClick={(event) => {
+                event.preventDefault();
+                void handleExcluirConvite();
+              }}
+            >
+              {excluirConvite.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

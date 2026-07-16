@@ -3,6 +3,7 @@ import {
   usuariosPermissoesService,
   type CriarConviteInput,
   type PerfilConfiguravel,
+  type UsuarioConvite,
 } from "@/services/usuariosPermissoesService";
 
 export const USUARIOS_PERMISSOES_QUERY_KEY = ["usuarios-permissoes"];
@@ -51,6 +52,34 @@ export const useCancelarConviteUsuario = () => {
   return useMutation({
     mutationFn: (conviteId: string) =>
       usuariosPermissoesService.cancelarConvite(conviteId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: USUARIOS_PERMISSOES_QUERY_KEY,
+      });
+    },
+  });
+};
+
+export const useObterLinkConviteUsuario = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (convite: UsuarioConvite) =>
+      usuariosPermissoesService.obterLinkConvite(convite),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: USUARIOS_PERMISSOES_QUERY_KEY,
+      });
+    },
+  });
+};
+
+export const useExcluirConviteUsuario = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (conviteId: string) =>
+      usuariosPermissoesService.excluirConvite(conviteId),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: USUARIOS_PERMISSOES_QUERY_KEY,
