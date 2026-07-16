@@ -23,6 +23,13 @@ import {
   VENCIMENTOS_QUERY_KEY,
 } from "@/hooks/useUtilitarios";
 import { utilitariosService } from "@/services/utilitariosService";
+import {
+  CALIBRACAO_EXECUCOES_DEFAULT_PAGINADO_FILTROS,
+  CALIBRACAO_EXECUCOES_GC_TIME,
+  CALIBRACAO_EXECUCOES_QUERY_KEY,
+  CALIBRACAO_EXECUCOES_STALE_TIME,
+} from "@/hooks/useCalibracaoExecucoes";
+import { calibracaoExecucoesService } from "@/services/calibracaoExecucoesService";
 
 const AppLayout = () => {
   const queryClient = useQueryClient();
@@ -78,6 +85,31 @@ const AppLayout = () => {
       queryFn: () => utilitariosService.gerarRelatorioVencimentos(filtro),
       staleTime: UTILITARIOS_STALE_TIME,
       gcTime: UTILITARIOS_GC_TIME,
+    });
+  }, [hasPermission, queryClient]);
+
+  useEffect(() => {
+    if (!hasPermission("calibracao.visualizar")) return;
+
+    queryClient.prefetchQuery({
+      queryKey: [
+        ...CALIBRACAO_EXECUCOES_QUERY_KEY,
+        "paginado",
+        CALIBRACAO_EXECUCOES_DEFAULT_PAGINADO_FILTROS,
+      ],
+      queryFn: () =>
+        calibracaoExecucoesService.listarExecucoesPaginadas(
+          CALIBRACAO_EXECUCOES_DEFAULT_PAGINADO_FILTROS
+        ),
+      staleTime: CALIBRACAO_EXECUCOES_STALE_TIME,
+      gcTime: CALIBRACAO_EXECUCOES_GC_TIME,
+    });
+
+    queryClient.prefetchQuery({
+      queryKey: [...CALIBRACAO_EXECUCOES_QUERY_KEY, "filtros"],
+      queryFn: () => calibracaoExecucoesService.listarExecucoesFiltros(),
+      staleTime: CALIBRACAO_EXECUCOES_STALE_TIME,
+      gcTime: CALIBRACAO_EXECUCOES_GC_TIME,
     });
   }, [hasPermission, queryClient]);
 

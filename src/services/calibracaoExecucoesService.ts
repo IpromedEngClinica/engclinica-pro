@@ -177,6 +177,43 @@ export type CalibracaoExecucao = {
   tabelas?: CalibracaoExecucaoTabela[];
 };
 
+export type CalibracaoExecucoesSortField =
+  | "numero_certificado"
+  | "cliente"
+  | "equipamento"
+  | "data_calibracao"
+  | "vencimento";
+
+export type ListarCalibracaoExecucoesFiltros = {
+  termo?: string;
+  empresaId?: string;
+  tipoEquipamentoId?: string;
+  resultado?: string;
+  dataDe?: string;
+  dataAte?: string;
+  validadeDe?: string;
+  validadeAte?: string;
+  page: number;
+  limit: number;
+  sortBy?: CalibracaoExecucoesSortField;
+  ascending?: boolean;
+};
+
+export type CalibracaoExecucoesPaginadoResult = {
+  items: CalibracaoExecucao[];
+  total: number;
+};
+
+export type CalibracaoExecucoesFiltrosOpcoes = {
+  empresas: Array<{ id: string; nome: string }>;
+  tiposEquipamento: Array<{ id: string; nome: string }>;
+};
+
+type CalibracaoExecucaoResumoRpcRow = {
+  item: CalibracaoExecucao;
+  total_count: number | string;
+};
+
 export type CalibracaoExecucaoPontoInput = {
   procedimentoPontoId?: string | null;
   valorNominal: number;
@@ -877,6 +914,69 @@ export const calibracaoExecucoesService = {
       .order("data_calibracao", { ascending: false });
     if (error) throw new Error(error.message);
     return (data as unknown as CalibracaoExecucao[]).map(normalizeExecucao);
+  },
+
+  async listarExecucoesPaginadas(
+    filtros: ListarCalibracaoExecucoesFiltros
+  ): Promise<CalibracaoExecucoesPaginadoResult> {
+    const page = Math.max(1, filtros.page || 1);
+    const limit = Math.max(1, filtros.limit || 25);
+    const { data, error } = await supabase.rpc(
+      "listar_calibracoes_execucoes_resumo",
+      {
+        p_termo: filtros.termo || null,
+        p_empresa_id: filtros.empresaId || null,
+        p_tipo_equipamento_id: filtros.tipoEquipamentoId || null,
+        p_resultado: filtros.resultado || null,
+        p_data_de: filtros.dataDe || null,
+        p_data_ate: filtros.dataAte || null,
+        p_validade_de: filtros.validadeDe
+          ? `${filtros.validadeDe}-01`
+          : null,
+        p_validade_ate: filtros.validadeAte
+          ? `${filtros.validadeAte}-01`
+          : null,
+        p_offset: (page - 1) * limit,
+        p_limit: limit,
+        p_sort_by: filtros.sortBy || "numero_certificado",
+        p_ascending: filtros.ascending ?? false,
+      }
+    );
+
+    if (error) throw new Error(error.message);
+
+    const rows = (data || []) as CalibracaoExecucaoResumoRpcRow[];
+    const items = rows.map((row) => row.item);
+    const rawTotal = rows[0]?.total_count;
+    const total =
+      typeof rawTotal === "number"
+        ? rawTotal
+        : typeof rawTotal === "string"
+          ? Number(rawTotal)
+          : (page - 1) * limit + items.length;
+
+    return {
+      items,
+      total: Number.isFinite(total) ? total : items.length,
+    };
+  },
+
+  async listarExecucoesFiltros(): Promise<CalibracaoExecucoesFiltrosOpcoes> {
+    const { data, error } = await supabase.rpc(
+      "listar_calibracoes_execucoes_filtros"
+    );
+
+    if (error) throw new Error(error.message);
+
+    const result = (data || {}) as {
+      empresas?: Array<{ id: string; nome: string }>;
+      tipos_equipamento?: Array<{ id: string; nome: string }>;
+    };
+
+    return {
+      empresas: result.empresas || [],
+      tiposEquipamento: result.tipos_equipamento || [],
+    };
   },
 
   async buscarExecucaoPorId(id: string) {
