@@ -20,13 +20,25 @@ import {
 
 const TARGET_COUNT = Number.parseInt(process.env.TARGET_COUNT || "30", 10);
 const LOTE_NOME = String(process.env.LOTE_NOME || "lote_30_compativeis").replace(/[^a-zA-Z0-9_-]/g, "_");
-const LIST_PAGE_SIZE = 500;
-const requestedIds = new Set(
+const LIST_PAGE_SIZE = Number.parseInt(process.env.LIST_PAGE_SIZE || "500", 10);
+const LIST_FETCH_PAGE_SIZE = Math.min(
+  Number.parseInt(process.env.LIST_FETCH_PAGE_SIZE || "500", 10),
+  LIST_PAGE_SIZE
+);
+const requestedIdsFromEnv =
   String(process.env.ARKMEDS_CALIBRATION_IDS || "")
     .split(",")
     .map((value) => value.trim())
-    .filter(Boolean)
-);
+    .filter(Boolean);
+const requestedIdsFile = process.env.ARKMEDS_CALIBRATION_IDS_FILE;
+const requestedIdsFromFile = requestedIdsFile
+  ? JSON.parse(await fs.readFile(requestedIdsFile, "utf-8")).map(String)
+  : [];
+const requestedIds = new Set([...requestedIdsFromEnv, ...requestedIdsFromFile]);
+const allowImportedRequestedIds =
+  requestedIds.size > 0 && process.env.ALLOW_IMPORTED_REQUESTED_IDS === "true";
+const allowPartialLot = process.env.ALLOW_PARTIAL_LOT === "true";
+const quiet = process.env.MIGRACAO_CALIBRACOES_QUIET === "true";
 
 function normalizeProcedureName(value) {
   return normalizeText(value)
@@ -133,7 +145,7 @@ await fs.mkdir(pdfDir, { recursive: true });
 const supabase = requireSupabase();
 const organizacaoId = await resolveOrganizacaoId(supabase);
 const organizationFilter = [{ column: "organizacao_id", value: organizacaoId }];
-const [companies, equipment, procedures, procedureTables, procedureTypes, standards, standardTables] = await Promise.all([
+const [companies, equipment, procedures, procedureTables, procedureTypes, standards, standardTables, importedExecutions] = await Promise.all([
   fetchAllRows(supabase, "empresas", "id,numero_cadastro,nome,ativo", organizationFilter),
   fetchAllRows(supabase, "equipamentos", "id,numero_cadastro,empresa_id,tipo_equipamento_id,tipo_texto,fabricante,modelo,numero_serie,patrimonio,tag,ativo", organizationFilter),
   fetchAllRows(supabase, "calibracao_procedimentos", "id,nome,versao,metodo_referencia,ativo", organizationFilter),
@@ -141,7 +153,28 @@ const [companies, equipment, procedures, procedureTables, procedureTypes, standa
   fetchAllRows(supabase, "calibracao_procedimento_tipos_equipamento", "procedimento_id,tipo_equipamento_id", organizationFilter),
   fetchAllRows(supabase, "calibracao_padroes", "id,numero_certificado,nome_padrao,fabricante,modelo,numero_serie,patrimonio,tag,laboratorio_calibrador,data_validade,ativo", organizationFilter),
   fetchAllRows(supabase, "calibracao_padrao_tabelas", "id,padrao_id,nome,grandeza,unidade,ativo", organizationFilter),
+  fetchAllRows(supabase, "calibracao_execucoes", "arkmeds_calibracao_id", [
+    ...organizationFilter,
+    { column: "origem", value: "arkmeds" },
+  ]),
 ]);
+
+if (!Number.isInteger(TARGET_COUNT) || TARGET_COUNT <= 0) {
+  throw new Error("TARGET_COUNT deve ser um inteiro positivo.");
+}
+if (!Number.isInteger(LIST_PAGE_SIZE) || LIST_PAGE_SIZE < TARGET_COUNT) {
+  throw new Error("LIST_PAGE_SIZE deve ser um inteiro maior ou igual a TARGET_COUNT.");
+}
+if (!Number.isInteger(LIST_FETCH_PAGE_SIZE) || LIST_FETCH_PAGE_SIZE <= 0) {
+  throw new Error("LIST_FETCH_PAGE_SIZE deve ser um inteiro positivo.");
+}
+
+const importedArkmedsIds = new Set(
+  importedExecutions
+    .map((item) => item.arkmeds_calibracao_id)
+    .filter((value) => value != null)
+    .map(String)
+);
 
 const companiesByLegacyId = new Map(
   companies.filter((item) => item.numero_cadastro != null).map((item) => [String(item.numero_cadastro), item])
@@ -196,26 +229,44 @@ for (const table of standardTables.filter((item) => item.ativo)) {
 const standardCertificateCache = new Map();
 const selected = [];
 const rejected = [];
-const firstPage = await fetchCalibrationList({ start: 0, length: LIST_PAGE_SIZE });
-const candidates = (firstPage.data || []).filter((item) => {
+const listItems = [];
+let arkmedsTotal = null;
+for (let start = 0; start < LIST_PAGE_SIZE; start += LIST_FETCH_PAGE_SIZE) {
+  const length = Math.min(LIST_FETCH_PAGE_SIZE, LIST_PAGE_SIZE - start);
+  const page = await fetchCalibrationList({ start, length });
+  arkmedsTotal ??= Number(page.recordsTotal || 0);
+  listItems.push(...(page.data || []));
+  if (!page.data?.length || listItems.length >= arkmedsTotal) break;
+}
+
+const candidates = listItems.filter((item) => {
   if (requestedIds.size && !requestedIds.has(String(item.id))) return false;
+  if (!allowImportedRequestedIds && importedArkmedsIds.has(String(item.id))) return false;
   const company = companiesByLegacyId.get(String(item.solicitante_id));
   const localEquipment = equipmentByLegacyId.get(String(item.equipamento_id));
   return company && localEquipment && localEquipment.empresa_id === company.id;
 });
 
-console.log(`${candidates.length} candidato(s) com empresa/equipamento exatos nos ${LIST_PAGE_SIZE} certificados mais recentes.`);
+console.log(
+  `${candidates.length} candidato(s) ${allowImportedRequestedIds ? "solicitado(s) para auditoria" : "novo(s)"} ` +
+  `com empresa/equipamento exatos nos ${LIST_PAGE_SIZE} certificados mais recentes; ` +
+  `${allowImportedRequestedIds ? 0 : importedArkmedsIds.size} certificado(s) ArkMeds ja importado(s) foram ignorados.`
+);
 
 for (const [candidateIndex, item] of candidates.entries()) {
   if (selected.length >= TARGET_COUNT) break;
   const reasons = [];
-  console.log(`Analisando ${item.id} - ${item.numero}...`);
+  if (!quiet) console.log(`Analisando ${item.id} - ${item.numero}...`);
   try {
     const company = companiesByLegacyId.get(String(item.solicitante_id));
     const localEquipment = equipmentByLegacyId.get(String(item.equipamento_id));
     const parsed = parseCalibrationHtml(
       await fetchCalibrationHtml(`/calibracao/equipamento/editar/${item.id}`)
     );
+    const certificateNumber = String(parsed.fields.numero || item.numero || "").trim();
+    if (!/^\d+$/.test(certificateNumber)) {
+      throw new Error(`numero_certificado_nao_numerico_${certificateNumber || "vazio"}`);
+    }
     if (parsed.tablesError || !parsed.tables.length) reasons.push("tabelas_nao_extraidas");
     if (String(parsed.fields.solicitante.id) !== String(item.solicitante_id)) reasons.push("empresa_divergente_no_detalhe");
     if (String(parsed.fields.equipamento.id) !== String(item.equipamento_id)) reasons.push("equipamento_divergente_no_detalhe");
@@ -328,11 +379,23 @@ for (const [candidateIndex, item] of candidates.entries()) {
       });
     }
 
+    const dataCalibracao = parseArkmedsDate(parsed.fields.data_criacao || item.data_criacao);
+    const dataEmissao = parseArkmedsDate(parsed.fields.data_emissao) || parseArkmedsDate(item.data_criacao);
+    const dataValidade = parseArkmedsDate(parsed.fields.validade || item.validade);
+    const missingDates = [
+      !dataCalibracao && "calibracao",
+      !dataEmissao && "emissao",
+      !dataValidade && "validade",
+    ].filter(Boolean);
+    if (missingDates.length) {
+      throw new Error(`datas_obrigatorias_ausentes_${missingDates.join("_")}`);
+    }
+
     const pdfPath = path.join(pdfDir, `${item.id}.pdf`);
     await fs.writeFile(pdfPath, pdf.buffer);
     selected.push({
       arkmeds_calibracao_id: Number(item.id),
-      arkmeds_numero_certificado: String(parsed.fields.numero || item.numero),
+      arkmeds_numero_certificado: certificateNumber,
       arkmeds_tipo_calibracao: Number(item.type_calibration || 1),
       arkmeds_empresa_id: Number(item.solicitante_id),
       arkmeds_equipamento_id: Number(item.equipamento_id),
@@ -344,9 +407,9 @@ for (const [candidateIndex, item] of candidates.entries()) {
       procedimento_nome: procedure.nome,
       procedimento_versao: procedure.versao,
       norma_utilizada: procedure.metodo_referencia || null,
-      data_calibracao: parseArkmedsDate(parsed.fields.data_criacao || item.data_criacao),
-      data_emissao: parseArkmedsDate(parsed.fields.data_emissao) || parseArkmedsDate(item.data_criacao),
-      data_validade: parseArkmedsDate(parsed.fields.validade || item.validade),
+      data_calibracao: dataCalibracao,
+      data_emissao: dataEmissao,
+      data_validade: dataValidade,
       local_calibracao: parsed.fields.local || null,
       temperatura: parseDecimal(parsed.fields.temperatura),
       incerteza_temperatura: parseDecimal(parsed.fields.incerteza_temperatura),
@@ -366,7 +429,9 @@ for (const [candidateIndex, item] of candidates.entries()) {
       dados_lista_json: item,
       dados_formulario_json: parsed.fields,
     });
-    console.log(`[${selected.length}/${TARGET_COUNT}] ${item.numero} - ${company.nome}`);
+    if (!quiet || selected.length % 25 === 0 || selected.length === TARGET_COUNT) {
+      console.log(`[${selected.length}/${TARGET_COUNT}] ${item.numero} - ${company.nome}`);
+    }
   } catch (error) {
     console.warn(`Rejeitado ${item.id}: ${error.message}`);
     rejected.push({
@@ -381,14 +446,25 @@ for (const [candidateIndex, item] of candidates.entries()) {
   }
 }
 
-if (selected.length !== TARGET_COUNT) {
+if (selected.length !== TARGET_COUNT && !allowPartialLot) {
   throw new Error(`Foram selecionados apenas ${selected.length} de ${TARGET_COUNT} certificados compativeis.`);
 }
 
 const jsonPath = path.join(outputDir, `${LOTE_NOME}.json`);
 const csvPath = path.join(outputDir, `${LOTE_NOME}.csv`);
 const rejectedPath = path.join(outputDir, `${LOTE_NOME}_rejeitados.csv`);
-await fs.writeFile(jsonPath, JSON.stringify({ organizacaoId, selected }, null, 2));
+await fs.writeFile(
+  jsonPath,
+  JSON.stringify({
+    organizacaoId,
+    lote: LOTE_NOME,
+    janela_consultada: LIST_PAGE_SIZE,
+    total_arkmeds: arkmedsTotal,
+    certificados_arkmeds_ja_importados: importedArkmedsIds.size,
+    selected,
+    rejected,
+  }, null, 2)
+);
 await fs.writeFile(
   csvPath,
   toCsv(selected.map((item) => ({

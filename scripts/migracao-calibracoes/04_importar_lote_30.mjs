@@ -17,6 +17,7 @@ const confirmed =
 const mode = confirmed ? "importacao_real" : "dry_run";
 const LOTE_NOME = String(process.env.LOTE_NOME || "lote_30_compativeis").replace(/[^a-zA-Z0-9_-]/g, "_");
 const EXPECTED_COUNT = Number.parseInt(process.env.EXPECTED_COUNT || "30", 10);
+const quiet = process.env.MIGRACAO_CALIBRACOES_QUIET === "true";
 const inputPath = path.join(outputDir, `${LOTE_NOME}.json`);
 const reportDir = path.join(outputDir, "importacao");
 const bucket = "calibracao-certificados";
@@ -57,7 +58,7 @@ async function insertLog(client, organizacaoId, sourceId, status, message, paylo
     execucao_id: executionId,
     modo: mode,
     arkmeds_calibracao_id: sourceId,
-    etapa: "importacao_lote_30",
+    etapa: `importacao_${LOTE_NOME}`,
     status,
     mensagem: message,
     payload_json: payload,
@@ -373,7 +374,9 @@ try {
           pdf_storage_path: imported.storagePath || "",
           erro: "",
         });
-        console.log(`[${index + 1}/${EXPECTED_COUNT}] ${item.arkmeds_numero_certificado}: ${imported.status}`);
+        if (!quiet || (index + 1) % 25 === 0 || index + 1 === EXPECTED_COUNT) {
+          console.log(`[${index + 1}/${EXPECTED_COUNT}] ${item.arkmeds_numero_certificado}: ${imported.status}`);
+        }
       } catch (error) {
         results.push({
           arkmeds_id: item.arkmeds_calibracao_id,
@@ -434,3 +437,4 @@ console.log(`${mode}: ${results.length} certificado(s), ${importedCount} importa
 if (!confirmed) {
   console.log("Para importar: defina CONFIRMAR_IMPORTACAO_CALIBRACOES=true e use --confirmar-importacao.");
 }
+if (errorCount > 0) process.exitCode = 1;

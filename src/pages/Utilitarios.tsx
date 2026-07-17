@@ -232,7 +232,7 @@ const getStatusBadgeVariant = (status: TermoLocacao["status"]) => {
 };
 
 const getServicoLabel = (tipo: VencimentoEquipamentoItem["tipoServico"]) =>
-  tipo === "calibracao" ? "Calibracao" : "Preventiva";
+  tipo === "calibracao" ? "Calibração" : "Preventiva";
 
 const getVencimentoIdentificacao = (item: VencimentoEquipamentoItem) =>
   [
@@ -266,10 +266,12 @@ const getServicosMensagem = (itens: VencimentoEquipamentoItem[]) => {
   const tipos = new Set(itens.map((item) => item.tipoServico));
 
   if (tipos.has("calibracao") && tipos.has("preventiva")) {
-    return "calibracao e manutencao preventiva";
+    return "calibração e manutenção preventiva próximas do vencimento e/ou já vencidas";
   }
 
-  return tipos.has("preventiva") ? "manutencao preventiva" : "calibracao";
+  return tipos.has("preventiva")
+    ? "manutenção preventiva próxima do vencimento e/ou já vencida"
+    : "calibração próxima do vencimento e/ou já vencida";
 };
 
 const montarMensagemVencimentos = (cliente: VencimentoClienteGrupo) => {
@@ -288,13 +290,13 @@ const montarMensagemVencimentos = (cliente: VencimentoClienteGrupo) => {
   return [
     `Prezado(a)${cliente.contato ? ` ${cliente.contato}` : ""},`,
     "",
-    `Identificamos em nosso sistema que existem equipamentos sob responsabilidade de ${cliente.clienteNome} com ${servicos} proxima do vencimento e/ou ja vencida, totalizando ${cliente.itens.length} item(ns), sendo: ${resumo}.`,
+    `Identificamos em nosso sistema que existem equipamentos sob responsabilidade de ${cliente.clienteNome} com ${servicos}, totalizando ${cliente.itens.length} item(ns), sendo: ${resumo}.`,
     "",
-    "Reforcamos que a renovacao periodica ajuda a manter a confiabilidade dos equipamentos, a rastreabilidade dos servicos e a conformidade em auditorias.",
+    "Reforçamos que a renovação periódica ajuda a manter a confiabilidade dos equipamentos, a rastreabilidade dos serviços e a conformidade em auditorias.",
     "",
-    "Para evitar indisponibilidade de equipamentos ou atraso na regularizacao, recomendamos agendar os servicos com antecedencia.",
+    "Para evitar indisponibilidade de equipamentos ou atraso na regularização, recomendamos agendar os serviços com antecedência.",
     "",
-    "Ficamos a disposicao para programar o atendimento e elaborar uma proposta para execucao dos servicos.",
+    "Ficamos à disposição para programar o atendimento e elaborar uma proposta para execução dos serviços.",
     "",
     "Lista detalhada:",
     lista,
