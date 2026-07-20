@@ -2,9 +2,11 @@ import { createClient } from "@supabase/supabase-js";
 import { JSDOM } from "jsdom";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { loadArkmedsOsDetails } from "./lib/arkmeds-os-details.mjs";
 
 const root = process.cwd();
 const outputs = path.join(root, "outputs");
+const detailsCacheDir = path.join(outputs, "sincronizacao-os", "detalhes-cache");
 const statePath = path.join(root, "tmp", "arkmeds-state.json");
 const baseUrl = "https://aci.arkmeds.com";
 const execute = process.argv.includes("--execute");
@@ -403,6 +405,8 @@ async function syncOs(organizacaoId, arkOsRows, context) {
     const arkmedsId = Number(row.id);
     const numero = clean(row.numero);
     if (!arkmedsId || !numero) continue;
+    const existing = context.osByArkmedsId.get(arkmedsId);
+    const detail = context.osDetailsByArkmedsId.get(arkmedsId);
     const empresa = context.empresasByNumero.get(String(row.solicitante));
     const equipamento = row.equipamento ? context.equipamentosByNumero.get(String(row.equipamento)) : null;
     if (!empresa) {
@@ -425,8 +429,19 @@ async function syncOs(organizacaoId, arkOsRows, context) {
       responsavel_texto: clean(row.responsavel_str) || null,
       data_abertura: parseDateTimeBr(row.data_criacao_str),
       data_fechamento: parseDateTimeBr(row.data_conclusao_str),
-      problema_relatado: clean(row.problema_str) || null,
-      descricao_servico: clean(row.campo_extra) || null,
+      problema_relatado:
+        clean(existing?.problema_relatado)
+        || clean(detail?.problema_relatado)
+        || clean(row.problema_str)
+        || null,
+      origem_problema:
+        clean(existing?.origem_problema)
+        || clean(detail?.origem_problema)
+        || null,
+      descricao_servico:
+        clean(existing?.descricao_servico)
+        || clean(detail?.descricao_servico)
+        || null,
       observacoes: [clean(row.observacoes), clean(row.observacoes_adm), `Sincronizado do ArkMeds. ID ArkMeds: ${arkmedsId}.`].filter(Boolean).join("\n"),
       prioridade: prioridadeOs(row.get_prioridade),
       status_sistema: statusSistemaOs(row.estado_str),
@@ -543,7 +558,11 @@ async function main() {
     fetchAll("tipos_os", "id,nome,ativo", "nome"),
     fetchAll("estados_os", "id,nome,finaliza_os,cancela_os,ativo", "nome"),
     fetchAll("usuarios", "id,nome,email,perfil,ativo", "nome"),
-    fetchAll("ordens_servico", "id,numero,numero_ordem,arkmeds_os_id", "numero_ordem"),
+    fetchAll(
+      "ordens_servico",
+      "id,numero,numero_ordem,arkmeds_os_id,problema_relatado,origem_problema,descricao_servico",
+      "numero_ordem"
+    ),
   ]);
 
   const context = {
@@ -557,6 +576,22 @@ async function main() {
     osByArkmedsId: new Map(osRows.filter((item) => item.arkmeds_os_id).map((item) => [Number(item.arkmeds_os_id), item])),
     osByNumero: new Map(osRows.map((item) => [String(item.numero), item])),
   };
+  const osDetailsResult = await loadArkmedsOsDetails({
+    ids: arkOs
+      .filter((row) => {
+        const existing = context.osByArkmedsId.get(Number(row.id));
+        return !existing
+          || !clean(existing.problema_relatado)
+          || !clean(existing.origem_problema)
+          || !clean(existing.descricao_servico);
+      })
+      .map((row) => row.id),
+    baseUrl,
+    cookie: await cookieHeader(),
+    cacheDir: detailsCacheDir,
+    concurrency: 8,
+  });
+  context.osDetailsByArkmedsId = osDetailsResult.detailsById;
 
   const empresasResumo = await syncEmpresas(organizacaoId, arkEmpresas, context.empresasByNumero);
 
@@ -575,7 +610,11 @@ async function main() {
 
   const renumeracao = await renumerarLocaisSeNecessario(arkOs);
   if (execute && renumeracao.total > 0) {
-    const osAtualizadas = await fetchAll("ordens_servico", "id,numero,numero_ordem,arkmeds_os_id", "numero_ordem");
+    const osAtualizadas = await fetchAll(
+      "ordens_servico",
+      "id,numero,numero_ordem,arkmeds_os_id,problema_relatado,origem_problema,descricao_servico",
+      "numero_ordem"
+    );
     context.osByArkmedsId = new Map(osAtualizadas.filter((item) => item.arkmeds_os_id).map((item) => [Number(item.arkmeds_os_id), item]));
     context.osByNumero = new Map(osAtualizadas.map((item) => [String(item.numero), item]));
   }
@@ -594,6 +633,12 @@ async function main() {
     empresas: empresasResumo,
     equipamentos: equipamentosResumo,
     os: osResumo,
+    detalhes_os: {
+      lidos: osDetailsResult.detailsById.size,
+      rede: osDetailsResult.fetched,
+      cache: osDetailsResult.cached,
+      erros: osDetailsResult.errors,
+    },
     renumeracao_os_locais: {
       total: renumeracao.total,
       exemplos: renumeracao.remap.slice(0, 20),

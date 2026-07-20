@@ -480,6 +480,43 @@ export async function writeCsv(filePath, rows, columns) {
   await fs.writeFile(filePath, `${lines.join("\n")}\n`, "utf-8");
 }
 
+export function normalizeExactCompanyName(value) {
+  return cleanText(value)
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export async function readIntegerIdsFile(filePath) {
+  const text = await fs.readFile(filePath, "utf-8");
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+
+  if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+    const payload = JSON.parse(trimmed);
+    const rows = Array.isArray(payload) ? payload : payload.ids || payload.rows || [];
+    return [...new Set(rows
+      .map((row) => Number.parseInt(
+        typeof row === "object"
+          ? row.arkmeds_orcamento_id ?? row.id
+          : row,
+        10,
+      ))
+      .filter(Number.isInteger))];
+  }
+
+  const ids = [];
+  for (const line of trimmed.split(/\r?\n/)) {
+    const firstColumn = line.split(/[;,\t]/, 1)[0].replace(/^"|"$/g, "").trim();
+    const id = Number.parseInt(firstColumn, 10);
+    if (Number.isInteger(id)) ids.push(id);
+  }
+  return [...new Set(ids)];
+}
+
 export async function supabaseAll(supabase, table, select, apply = (query) => query) {
   const rows = [];
   const pageSize = 1000;

@@ -10,6 +10,7 @@ import {
   normalizarNumeroBaseOrcamento,
   normalizeArkmedsStatusGroup,
   outputDir,
+  readIntegerIdsFile,
   recomendacaoPorClassificacao,
   requireSupabase,
   statusImportPolicy,
@@ -17,6 +18,10 @@ import {
 } from "./lib.mjs";
 
 const supabase = requireSupabase();
+const maxArg = process.argv.find((arg) => arg.startsWith("--max="));
+const maxRows = maxArg ? Number.parseInt(maxArg.split("=")[1], 10) : null;
+const idsFileArg = process.argv.find((arg) => arg.startsWith("--ids-file="));
+const idsFile = idsFileArg ? path.resolve(idsFileArg.slice("--ids-file=".length)) : null;
 const symbolicValues = new Set(["0.01", "0.02", "0.03", "0.10"]);
 const nonBlockingReasons = new Set([
   "PDF_SEM_TEXTO_EXTRAIVEL",
@@ -92,6 +97,7 @@ function makeBudgetText(row, items) {
 
 function buildOsCandidateIndexes(osRows, empresasById, equipamentosById) {
   const byNumber = new Map();
+  const byArkmedsId = new Map();
 
   for (const row of osRows) {
     const numero = cleanText(row.numero || row.numero_ordem);
@@ -108,9 +114,15 @@ function buildOsCandidateIndexes(osRows, empresasById, equipamentosById) {
 
     if (!byNumber.has(numero)) byNumber.set(numero, []);
     byNumber.get(numero).push(enriched);
+
+    const arkmedsOsId = cleanText(row.arkmeds_os_id);
+    if (arkmedsOsId) {
+      if (!byArkmedsId.has(arkmedsOsId)) byArkmedsId.set(arkmedsOsId, []);
+      byArkmedsId.get(arkmedsOsId).push(enriched);
+    }
   }
 
-  return byNumber;
+  return { byNumber, byArkmedsId };
 }
 
 function equipmentMatchScore(candidate, budgetText) {
@@ -139,11 +151,14 @@ function scoreCandidate(row, budgetItems, candidate, candidateCount) {
   const motifs = [];
   let score = 0;
 
-  if (cleanText(row.arkmeds_ordem_servico_id)) {
+  const explicitOsId = cleanText(row.arkmeds_ordem_servico_id);
+  const explicitOsNumber = cleanText(row.arkmeds_ordem_servico_numero);
+
+  if (explicitOsId && explicitOsId === cleanText(candidate.arkmeds_os_id)) {
     score += 40;
     motifs.push("OS_ID_DIRETA_ARKMEDS");
   }
-  if (cleanText(row.arkmeds_ordem_servico_numero)) {
+  if (explicitOsNumber && explicitOsNumber === candidate.numero) {
     score += 35;
     motifs.push("OS_NUMERO_DIRETO_ARKMEDS");
   }
@@ -225,6 +240,14 @@ function classifyAssociation(row, budgetItems, candidates) {
   }
 
   if (!candidates.length) {
+    if (hasDirectOs) {
+      return {
+        classificacao: "pendente_validacao",
+        score: 0,
+        confianca: "pendente",
+        motifs: ["OS_EXPLICITA_NAO_LOCALIZADA"],
+      };
+    }
     const classificacao = numeroInfo.baseNumber != null && numeroInfo.baseNumber <= 1373 && !hasDirectOs
       ? "provavel_avulso_numero_baixo"
       : "sem_os_avulso";
@@ -242,9 +265,14 @@ function classifyAssociation(row, budgetItems, candidates) {
 
   let classificacao = "pendente_validacao";
 
-  if (hasDirectOs) {
+  const directMatch = best.motifs.includes("OS_ID_DIRETA_ARKMEDS") || best.motifs.includes("OS_NUMERO_DIRETO_ARKMEDS");
+
+  if (hasDirectOs && directMatch) {
     classificacao = "com_os_confirmada";
     best.score = Math.max(best.score, 80);
+  } else if (hasDirectOs) {
+    classificacao = "pendente_validacao";
+    best.motifs.push("OS_EXPLICITA_DIVERGENTE");
   } else if (candidates.length > 1 && (!second || best.score - second.score < 15)) {
     classificacao = "os_ambigua";
   } else if (clienteClass === "cliente_divergente" && numeroInfo.base === best.candidate.numero) {
@@ -316,11 +344,13 @@ function validationStatus(blockingReasons, warningReasons, row, ignoredByPolicy,
 
 async function main() {
   await ensureOutputDir();
+  const selectedIds = idsFile ? new Set(await readIntegerIdsFile(idsFile)) : null;
 
   await logMigration(supabase, {
     entidade: "orcamentos_validacao",
     status: "inicio",
     mensagem: "Inicio validacao staging orcamentos ArkMeds",
+    payload_json: { idsFile, selectedIds: selectedIds?.size || null, maxRows },
   });
 
   const [headers, items, osRows, empresas, equipamentos] = await Promise.all([
@@ -339,26 +369,32 @@ async function main() {
     supabaseAll(
       supabase,
       "ordens_servico",
-      "id,numero,numero_ordem,empresa_id,equipamento_id,data_abertura,created_at,problema_relatado,descricao_servico,observacoes",
+      "id,numero,numero_ordem,arkmeds_os_id,empresa_id,equipamento_id,data_abertura,created_at,problema_relatado,descricao_servico,observacoes",
       (query) => query.not("numero", "is", null)
     ),
     supabaseAll(supabase, "empresas", "id,nome,nome_fantasia"),
     supabaseAll(supabase, "equipamentos", "id,tipo_texto,fabricante,modelo,numero_serie,patrimonio,tag"),
   ]);
 
+  const filteredHeaders = headers
+    .filter((row) => !selectedIds || selectedIds.has(Number(row.arkmeds_orcamento_id)))
+    .slice(0, maxRows ?? undefined);
+  const filteredHeaderIds = new Set(filteredHeaders.map((row) => Number(row.arkmeds_orcamento_id)));
+  const filteredItems = items.filter((item) => filteredHeaderIds.has(Number(item.arkmeds_orcamento_id)));
+
   const empresasById = new Map(empresas.map((row) => [row.id, row]));
   const equipamentosById = new Map(equipamentos.map((row) => [row.id, row]));
-  const osByNumber = buildOsCandidateIndexes(osRows, empresasById, equipamentosById);
+  const osIndexes = buildOsCandidateIndexes(osRows, empresasById, equipamentosById);
 
   const numberCounts = new Map();
-  for (const row of headers) {
+  for (const row of filteredHeaders) {
     const key = normalizeNumberKey(row.arkmeds_orcamento_numero_original || row.arkmeds_orcamento_numero);
     if (!key) continue;
     numberCounts.set(key, (numberCounts.get(key) || 0) + 1);
   }
 
   const itemsByBudget = new Map();
-  for (const item of items) {
+  for (const item of filteredItems) {
     const key = item.arkmeds_orcamento_id;
     if (!itemsByBudget.has(key)) itemsByBudget.set(key, []);
     itemsByBudget.get(key).push(item);
@@ -366,9 +402,17 @@ async function main() {
 
   const updates = [];
 
-  for (const row of headers) {
+  for (const row of filteredHeaders) {
     const numeroInfo = normalizarNumeroBaseOrcamento(row.arkmeds_orcamento_numero_original || row.arkmeds_orcamento_numero);
-    const candidates = numeroInfo.base ? osByNumber.get(numeroInfo.base) || [] : [];
+    const explicitOsId = cleanText(row.arkmeds_ordem_servico_id);
+    const explicitOsNumber = cleanText(row.arkmeds_ordem_servico_numero);
+    let candidates = explicitOsId ? osIndexes.byArkmedsId.get(explicitOsId) || [] : [];
+    if (!candidates.length && explicitOsNumber) {
+      candidates = osIndexes.byNumber.get(explicitOsNumber) || [];
+    }
+    if (!candidates.length && !explicitOsId && !explicitOsNumber && numeroInfo.base) {
+      candidates = osIndexes.byNumber.get(numeroInfo.base) || [];
+    }
     const budgetItems = itemsByBudget.get(row.arkmeds_orcamento_id) || [];
     const assoc = classifyAssociation(row, budgetItems, candidates);
     const ignoredByPolicy = shouldIgnoreByPolicy(row.arkmeds_status_grupo);
@@ -403,6 +447,8 @@ async function main() {
     if (numeroOriginal && osNumero && numeroOriginal === osNumero) reasons.push("NUMERO_IGUAL_OS");
     if (["possivel_os_por_numero_cliente", "possivel_os_por_numero", "os_sugerida_baixa_confianca"].includes(assoc.classificacao)) reasons.push("POSSIVEL_OS_POR_NUMERO");
     if (assoc.classificacao === "os_ambigua") reasons.push("OS_AMBIGUA");
+    if (assoc.motifs.includes("OS_EXPLICITA_NAO_LOCALIZADA")) reasons.push("OS_EXPLICITA_NAO_LOCALIZADA");
+    if (assoc.motifs.includes("OS_EXPLICITA_DIVERGENTE")) reasons.push("OS_EXPLICITA_DIVERGENTE");
     if (assoc.classificacao === "provavel_avulso_numero_baixo") reasons.push("PROVAVEL_AVULSO_NUMERO_BAIXO");
     if (hasMixedType(row.arkmeds_tipo_texto)) {
       const hasService = budgetItems.some((item) => item.tipo_item === "servico");
@@ -457,13 +503,23 @@ async function main() {
     });
   }
 
-  for (const update of updates) {
-    const { error } = await supabase
+  const updateConcurrency = 10;
+  for (let offset = 0; offset < updates.length; offset += updateConcurrency) {
+    const batch = updates.slice(offset, offset + updateConcurrency);
+    const results = await Promise.all(batch.map((update) => supabase
       .from("staging_arkmeds_orcamentos")
       .update(update)
-      .eq("id", update.id);
+      .eq("id", update.id)));
 
-    if (error) throw new Error(`Erro ao atualizar validacao ${update.id}: ${error.message}`);
+    const failedIndex = results.findIndex((result) => result.error);
+    if (failedIndex >= 0) {
+      const update = batch[failedIndex];
+      throw new Error(`Erro ao atualizar validacao ${update.id}: ${results[failedIndex].error.message}`);
+    }
+
+    if ((offset + batch.length) % 250 === 0 || offset + batch.length === updates.length) {
+      console.log(`Validacao: ${offset + batch.length}/${updates.length}`);
+    }
   }
 
   const byStatus = updates.reduce((acc, row) => {
@@ -485,8 +541,10 @@ async function main() {
 
   const result = {
     dry_run: true,
-    totalHeaders: headers.length,
-    totalItems: items.length,
+    idsFile,
+    selectedIds: selectedIds?.size || null,
+    totalHeaders: filteredHeaders.length,
+    totalItems: filteredItems.length,
     byStatus,
     byReason,
     byAssociation,

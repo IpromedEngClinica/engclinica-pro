@@ -3,10 +3,12 @@ import { JSDOM } from "jsdom";
 import fs from "node:fs/promises";
 import path from "node:path";
 import pg from "pg";
+import { loadArkmedsOsDetails } from "./lib/arkmeds-os-details.mjs";
 
 const { Client } = pg;
 const root = process.cwd();
 const outputDir = path.join(root, "outputs", "sincronizacao-os");
+const detailsCacheDir = path.join(outputDir, "detalhes-cache");
 const statePath = path.join(root, "tmp", "arkmeds-state.json");
 const capturePath = path.join(root, "outputs", "arkmeds_os_list_request_capture.json");
 const baseUrl = "https://aci.arkmeds.com";
@@ -250,7 +252,11 @@ async function main() {
       fetchAll("tipos_os", "id,nome,ativo", "nome"),
       fetchAll("estados_os", "id,nome,finaliza_os,cancela_os,ativo", "nome"),
       fetchAll("usuarios", "id,nome,email,perfil,ativo", "nome"),
-      fetchAll("ordens_servico", "id,numero,numero_ordem,arkmeds_os_id,oculta_operacao", "numero_ordem"),
+      fetchAll(
+        "ordens_servico",
+        "id,numero,numero_ordem,arkmeds_os_id,oculta_operacao,problema_relatado,origem_problema,descricao_servico",
+        "numero_ordem"
+      ),
     ]);
 
   const organizacaoId = organizacoes[0]?.id;
@@ -275,6 +281,21 @@ async function main() {
   const osByArkmedsId = new Map(
     dbOs.filter((item) => item.arkmeds_os_id).map((item) => [Number(item.arkmeds_os_id), item])
   );
+  const osDetailsResult = await loadArkmedsOsDetails({
+    ids: sourceOs
+      .filter((row) => {
+        const existing = osByArkmedsId.get(Number(row.id));
+        return !existing
+          || !clean(existing.problema_relatado)
+          || !clean(existing.origem_problema)
+          || !clean(existing.descricao_servico);
+      })
+      .map((row) => row.id),
+    baseUrl,
+    cookie: await cookieHeader(),
+    cacheDir: detailsCacheDir,
+    concurrency: 8,
+  });
 
   const missingEquipmentIds = [...new Set(
     sourceOs
@@ -376,6 +397,8 @@ async function main() {
     const arkmedsId = Number(row.id);
     const numero = clean(row.numero);
     if (!arkmedsId || !numero) continue;
+    const existing = osByArkmedsId.get(arkmedsId);
+    const detail = osDetailsResult.detailsById.get(arkmedsId);
     const empresa = empresasByNumero.get(String(row.solicitante));
     const equipamentoNumero = Number(row.equipamento) || null;
     const equipamento = equipamentoNumero
@@ -442,8 +465,19 @@ async function main() {
       responsavel_texto: clean(row.responsavel_str) || null,
       data_abertura: dataAbertura,
       data_fechamento: parseDateTimeBr(row.data_conclusao_str),
-      problema_relatado: clean(row.problema_str) || null,
-      descricao_servico: clean(row.campo_extra) || null,
+      problema_relatado:
+        clean(existing?.problema_relatado)
+        || clean(detail?.problema_relatado)
+        || clean(row.problema_str)
+        || null,
+      origem_problema:
+        clean(existing?.origem_problema)
+        || clean(detail?.origem_problema)
+        || null,
+      descricao_servico:
+        clean(existing?.descricao_servico)
+        || clean(detail?.descricao_servico)
+        || null,
       observacoes: [
         clean(row.observacoes),
         clean(row.observacoes_adm),
@@ -456,7 +490,6 @@ async function main() {
       updated_at: new Date().toISOString(),
     };
 
-    const existing = osByArkmedsId.get(arkmedsId);
     if (existing) osUpdates.push({ id: existing.id, payload });
     else osCreates.push(payload);
   }
@@ -485,6 +518,12 @@ async function main() {
       total_disponivel: arkmedsResult.recordsTotal,
       consultadas: sourceOs.length,
       maior_numero: Math.max(...sourceOs.map((item) => Number(item.numero) || 0), 0),
+    },
+    detalhes_os: {
+      lidos: osDetailsResult.detailsById.size,
+      rede: osDetailsResult.fetched,
+      cache: osDetailsResult.cached,
+      erros: osDetailsResult.errors,
     },
     equipamentos: {
       necessarios: missingEquipmentIds.length,

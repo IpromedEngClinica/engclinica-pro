@@ -1,4 +1,6 @@
 import { Button } from "@/components/ui/button";
+import { MoreHorizontal } from "lucide-react";
+import { getListPaginationItems } from "@/utils/listPagination";
 
 type ListPaginationProps = {
   page: number;
@@ -23,6 +25,8 @@ const ListPagination = ({
 }: ListPaginationProps) => {
   if (totalItems === 0) return null;
 
+  const paginationItems = getListPaginationItems(page, totalPages);
+
   return (
     <div
       className={`flex flex-col gap-3 border-t px-5 py-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between ${
@@ -34,8 +38,9 @@ const ListPagination = ({
           ? `Mostrando ${firstVisibleIndex}-${lastVisibleIndex} de ${totalItems}`
           : `Mostrando ${firstVisibleIndex}-${lastVisibleIndex}`}
       </span>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-center gap-1">
         <Button
+          type="button"
           variant="outline"
           size="sm"
           disabled={page <= 1}
@@ -43,10 +48,40 @@ const ListPagination = ({
         >
           Anterior
         </Button>
-        <span>
-          {showTotal ? `Página ${page} de ${totalPages}` : `Página ${page}`}
+        {paginationItems.map((item) => {
+          if (typeof item !== "number") {
+            return (
+              <span
+                key={item}
+                className="flex h-8 w-8 items-center justify-center"
+                aria-hidden="true"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </span>
+            );
+          }
+
+          const isActive = item === page;
+          return (
+            <Button
+              key={item}
+              type="button"
+              variant={isActive ? "default" : "ghost"}
+              size="icon"
+              className="h-8 w-8 rounded-full"
+              aria-label={`Ir para a página ${item}`}
+              aria-current={isActive ? "page" : undefined}
+              onClick={() => onPageChange(item)}
+            >
+              {item}
+            </Button>
+          );
+        })}
+        <span className="sr-only">
+          Página {page} de {totalPages}
         </span>
         <Button
+          type="button"
           variant="outline"
           size="sm"
           disabled={page >= totalPages}

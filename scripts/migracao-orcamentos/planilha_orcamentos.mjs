@@ -1,4 +1,10 @@
-import { cleanText, normalizeKindText, parseArkmedsNumber } from "./lib.mjs";
+import {
+  cleanText,
+  normalizeArkmedsStatusGroup,
+  normalizeKindText,
+  parseArkmedsNumber,
+  statusImportPolicy,
+} from "./lib.mjs";
 import { parseSpreadsheetServiceEntries } from "./regras_orcamentos.mjs";
 
 const PENDING_PREFIX = "Pendente de revisão da migração ArkMeds:";
@@ -30,6 +36,27 @@ const SPREADSHEET_STATUS_MAP = {
   reprovado: { normalized: "reprovado_em_curso", destination: "reprovado", policy: "importar_historico" },
 };
 
+const LIVE_STATUS_DESTINATION = {
+  pendente: "pendente",
+  aprovado_em_curso: "aprovado",
+  reprovado_em_curso: "reprovado",
+  faturado: "faturado",
+  cancelado: "cancelado",
+  recusado_ignorado: "recusado",
+};
+
+export function currentArkmedsStatus(row) {
+  const group = cleanText(row?.arkmeds_status_grupo);
+  if (!group) return null;
+  const normalized = normalizeArkmedsStatusGroup(group);
+  return {
+    raw: cleanText(row.arkmeds_status_original || row.arkmeds_status_label || group),
+    normalized,
+    destination: LIVE_STATUS_DESTINATION[normalized] || null,
+    policy: statusImportPolicy(group),
+  };
+}
+
 export function spreadsheetStatus(row) {
   const raw = spreadsheetText(row, "etapa_atual", row.arkmeds_status_planilha);
   const mapped = SPREADSHEET_STATUS_MAP[normalizeKindText(raw)] || null;
@@ -37,15 +64,21 @@ export function spreadsheetStatus(row) {
 }
 
 export function effectiveNormalizedStatus(row) {
-  return spreadsheetStatus(row).normalized || cleanText(row.status_normalizado_importacao) || null;
+  return currentArkmedsStatus(row)?.normalized
+    || spreadsheetStatus(row).normalized
+    || cleanText(row.status_normalizado_importacao)
+    || null;
 }
 
 export function effectiveStatusPolicy(row) {
-  return spreadsheetStatus(row).policy || cleanText(row.politica_importacao_status) || null;
+  return currentArkmedsStatus(row)?.policy
+    || spreadsheetStatus(row).policy
+    || cleanText(row.politica_importacao_status)
+    || null;
 }
 
 export function destinationStatus(row) {
-  const status = spreadsheetStatus(row).destination;
+  const status = currentArkmedsStatus(row)?.destination || spreadsheetStatus(row).destination;
   if (status) return status;
 
   const normalized = effectiveNormalizedStatus(row);
@@ -168,7 +201,43 @@ export function preservePendingNotes(currentObservations, cleanObservations) {
   return [cleanMultilineText(cleanObservations), ...pending].filter(Boolean).join("\n\n") || null;
 }
 
-export function buildAdditionalCostDefinitions(row) {
+function additionalCostKindFromItem(item) {
+  const description = normalizeKindText(item?.descricao);
+  if (!description) return null;
+  if (description.includes("deslocamento")) return "deslocamento";
+  if (description.includes("viagem")) return "viagem";
+  if (description.includes("frete")) return "frete";
+  return null;
+}
+
+export function classifyAdditionalCostItem(item) {
+  const kind = additionalCostKindFromItem(item);
+  if (kind === "deslocamento") {
+    return { kind, tipo: "deslocamento", descricao: "Deslocamento" };
+  }
+  if (kind === "viagem") {
+    return { kind, tipo: "outro", descricao: "Despesas de viagem" };
+  }
+  if (kind === "frete") {
+    return { kind, tipo: "peca", descricao: "Frete", pecaNome: "Frete" };
+  }
+  return null;
+}
+
+function costAlreadyRepresented(definition, existingItems) {
+  const matchingItems = existingItems.filter(
+    (item) => classifyAdditionalCostItem(item)?.kind === definition.kind
+  );
+  if (!matchingItems.length) return false;
+
+  const total = matchingItems.reduce(
+    (sum, item) => sum + normalizeMoney(item.valor_total_calculado ?? item.valor_total),
+    0
+  );
+  return Math.abs(total - definition.value) <= 0.05;
+}
+
+export function buildAdditionalCostDefinitions(row, existingItems = []) {
   const sheet = spreadsheetData(row);
   const displacement = normalizeMoney(sheet.valor_deslocamento ?? row.arkmeds_valor_deslocamento);
   const travel = normalizeMoney(sheet.valor_viagem ?? row.arkmeds_valor_viagem);
@@ -176,13 +245,13 @@ export function buildAdditionalCostDefinitions(row) {
   const definitions = [];
 
   if (displacement > 0) {
-    definitions.push({ tipo: "deslocamento", descricao: "Deslocamento", value: displacement });
+    definitions.push({ kind: "deslocamento", tipo: "deslocamento", descricao: "Deslocamento", value: displacement });
   }
   if (travel > 0) {
-    definitions.push({ tipo: "outro", descricao: "Despesas de viagem", value: travel });
+    definitions.push({ kind: "viagem", tipo: "outro", descricao: "Despesas de viagem", value: travel });
   }
   if (freight > 0) {
-    definitions.push({ tipo: "peca", descricao: "Frete", value: freight, pecaNome: "Frete" });
+    definitions.push({ kind: "frete", tipo: "peca", descricao: "Frete", value: freight, pecaNome: "Frete" });
   }
-  return definitions;
+  return definitions.filter((definition) => !costAlreadyRepresented(definition, existingItems));
 }

@@ -34,6 +34,7 @@ import SortableTableHeader from "@/components/SortableTableHeader";
 import ListLimitSelect, {
   DEFAULT_LIST_LIMIT,
 } from "@/components/ListLimitSelect";
+import ListPagination from "@/components/ListPagination";
 import PageHeader from "@/components/PageHeader";
 import {
   AlertDialog,
@@ -875,37 +876,14 @@ const Empresas = () => {
               </tbody>
             </table>
 
-            {sortedFiltered.length > 0 && (
-              <div className="flex flex-col gap-3 border-t px-5 py-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-                <span>
-                  Mostrando {firstVisibleIndex}-{lastVisibleIndex} de{" "}
-                  {sortedFiltered.length}
-                </span>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={page <= 1}
-                    onClick={() => setPage((current) => Math.max(1, current - 1))}
-                  >
-                    Anterior
-                  </Button>
-                  <span>
-                    Página {page} de {totalPages}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={page >= totalPages}
-                    onClick={() =>
-                      setPage((current) => Math.min(totalPages, current + 1))
-                    }
-                  >
-                    Próxima
-                  </Button>
-                </div>
-              </div>
-            )}
+            <ListPagination
+              page={page}
+              totalPages={totalPages}
+              totalItems={sortedFiltered.length}
+              firstVisibleIndex={firstVisibleIndex}
+              lastVisibleIndex={lastVisibleIndex}
+              onPageChange={setPage}
+            />
           </div>
         )}
       </div>

@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { JSDOM } from "jsdom";
 import {
   cleanText,
   ensureOutputDir,
@@ -12,6 +13,7 @@ import {
   outputDir,
   parseArkmedsInteger,
   parseArkmedsNumber,
+  readIntegerIdsFile,
   requireSupabase,
   stripHtml,
   supabaseAll,
@@ -20,6 +22,8 @@ import {
 const supabase = requireSupabase();
 const maxArg = process.argv.find((arg) => arg.startsWith("--max="));
 const maxRows = maxArg ? Number.parseInt(maxArg.split("=")[1], 10) : null;
+const idsFileArg = process.argv.find((arg) => arg.startsWith("--ids-file="));
+const idsFile = idsFileArg ? path.resolve(idsFileArg.slice("--ids-file=".length)) : null;
 
 function rounded(value) {
   return Number((Number(value || 0)).toFixed(2));
@@ -40,6 +44,98 @@ function countOccurrences(text, patterns) {
   return total;
 }
 
+function decodeJsString(value) {
+  return String(value ?? "")
+    .replace(/\\u([0-9a-f]{4})/gi, (_, hex) => String.fromCodePoint(Number.parseInt(hex, 16)))
+    .replace(/\\x([0-9a-f]{2})/gi, (_, hex) => String.fromCodePoint(Number.parseInt(hex, 16)))
+    .replace(/\\r/g, "\r")
+    .replace(/\\n/g, "\n")
+    .replace(/\\t/g, "\t")
+    .replace(/\\'/g, "'")
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, "\\");
+}
+
+function parseJsLiteral(expression) {
+  const source = String(expression ?? "").trim();
+  const quoted = source.match(/^(['"])([\s\S]*)\1$/);
+  if (quoted) return decodeJsString(quoted[2]);
+  if (/^(?:null|none)$/i.test(source)) return null;
+  if (/^-?\d+(?:\.\d+)?$/.test(source)) return Number(source);
+  return undefined;
+}
+
+function lastJsInputValue(html, id) {
+  const escapedId = id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`\\$\\(["']#${escapedId}["']\\)\\.val\\(([^;)]*)\\)`, "g");
+  let selected;
+  for (const match of html.matchAll(pattern)) {
+    const value = parseJsLiteral(match[1]);
+    if (value !== undefined) selected = value;
+  }
+  return selected;
+}
+
+function lastSelect2Value(html, id) {
+  const escapedId = id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(
+    `\\$\\(["']#${escapedId}["']\\)\\.select2\\(["']val["']\\s*,\\s*([^;)]+)\\)`,
+    "g",
+  );
+  let selected;
+  for (const match of html.matchAll(pattern)) {
+    const value = parseJsLiteral(match[1]);
+    if (value !== undefined) selected = value;
+  }
+  return selected;
+}
+
+function selectOptionText(document, id, value) {
+  if (value == null) return null;
+  const select = document.getElementById(id);
+  const option = [...(select?.querySelectorAll("option") || [])]
+    .find((item) => String(item.value) === String(value));
+  return cleanText(option?.textContent) || null;
+}
+
+function structuredEditDetails(html) {
+  if (!html) return {};
+  const document = new JSDOM(html).window.document;
+  const rawInformacoes = lastJsInputValue(html, "mais-informacoes");
+  const informacoes = String(rawInformacoes ?? "").trim() || null;
+  const equipmentLine = informacoes?.match(/(?:^|\n)\s*(?:equipamento|instrumento)\s*:\s*([^\n]+)/i)?.[1]?.trim();
+  const equipamentoTexto = equipmentLine && !/^proposta\b/i.test(equipmentLine)
+    ? equipmentLine
+    : null;
+  const formaPagamentoId = lastSelect2Value(html, "forma_pagamento");
+  const modoPagamentoMatch = html.match(/var\s+modo_pagamento\s*=\s*(\d+)\s*;/);
+  const modoPagamentoId = modoPagamentoMatch ? Number(modoPagamentoMatch[1]) : null;
+  const freteMatch = [...html.matchAll(/var\s+frete\s*=\s*([^;]+);/g)].at(-1);
+  const freteValue = freteMatch ? parseJsLiteral(freteMatch[1]) : undefined;
+  const responsavelMatch = html.match(
+    /selected=["']selected["']>'\+"([^"]+)"\+'<\/option>/i,
+  );
+
+  return {
+    informacoes_tecnicas: null,
+    descricao_equipamento: equipamentoTexto,
+    equipamento_texto: equipamentoTexto,
+    fabricante: null,
+    modelo: null,
+    numero_serie: null,
+    patrimonio: null,
+    observacoes_gerais: informacoes || null,
+    prazo_entrega: lastJsInputValue(html, "prazo_entrega") ?? null,
+    validade_dias: lastJsInputValue(html, "validade") ?? null,
+    frete: freteValue == null ? null : cleanText(freteValue),
+    forma_pagamento: selectOptionText(document, "forma_pagamento", formaPagamentoId),
+    modo_pagamento: selectOptionText(document, "pagamento", modoPagamentoId),
+    responsavel_orcamentista: cleanText(responsavelMatch?.[1]) || null,
+    data_criacao_formulario: lastJsInputValue(html, "data_criacao") ?? null,
+    numero_formulario: lastJsInputValue(html, "numero") ?? null,
+  };
+}
+
 function extractTotal(text) {
   const totalByLabel = extractFirstMatch(text, [
     /(?:valor\s+total\s+do\s+orcamento|total\s+do\s+orcamento|valor\s+total|total)\s*:?\s*(R?\$?\s*[\d.,]+)/i,
@@ -52,9 +148,10 @@ function extractTotal(text) {
   return values.length ? values.at(-1) : null;
 }
 
-function extractDetailsFromText(text) {
+function extractDetailsFromText(text, editHtml = "") {
   const source = cleanText(text);
-  const equipmentInfo = extractEquipmentFromText(source);
+  const structured = structuredEditDetails(editHtml);
+  const equipmentInfo = source ? extractEquipmentFromText(source) : {};
   const formaPagamento = textAfterLabel(source, ["Forma de pagamento", "Pagamento"]);
   const modoPagamento = textAfterLabel(source, ["Modo de pagamento", "Condicao de pagamento", "Condicoes de pagamento"]);
   const prazoEntrega = textAfterLabel(source, ["Prazo de entrega", "Prazo"]);
@@ -67,7 +164,7 @@ function extractDetailsFromText(text) {
     /\b(Aprovado|Reprovado|Cancelado|Pendente|Faturado|Recusado|Emitido)\b/i,
   ]);
 
-  return {
+  const fallback = {
     ...equipmentInfo,
     observacoes_gerais: observacoes,
     prazo_entrega: prazoEntrega,
@@ -81,6 +178,14 @@ function extractDetailsFromText(text) {
     qtd_servicos_pdf: countOccurrences(source, [/servi[c\u00e7]o\s*:/gi, /\bservi[c\u00e7]os\b/gi]),
     qtd_pecas_pdf: countOccurrences(source, [/pe[c\u00e7]a\s*:/gi, /\bpe[c\u00e7]as\b/gi]),
   };
+  const merged = { ...fallback, ...structured };
+  for (const key of [
+    "informacoes_tecnicas", "descricao_equipamento", "equipamento_texto",
+    "fabricante", "modelo", "numero_serie", "patrimonio",
+  ]) {
+    if (!(key in merged)) merged[key] = null;
+  }
+  return merged;
 }
 
 function compareDetails(staging, details, pdfStatus) {
@@ -143,7 +248,8 @@ async function fetchBudgetTexts(staging) {
     pdfStatus,
     printMeta,
     editMeta,
-    text: cleanText(`${printText}\n${editText}`),
+    editHtml: editMeta?.text || "",
+    text: cleanText(printText),
   };
 }
 
@@ -158,12 +264,13 @@ async function updateDetails(staging, payload) {
 
 async function main() {
   await ensureOutputDir();
+  const selectedIds = idsFile ? new Set(await readIntegerIdsFile(idsFile)) : null;
 
   await logMigration(supabase, {
     entidade: "orcamentos_detalhes",
     status: "inicio",
     mensagem: "Inicio enriquecimento de detalhes de orcamentos ArkMeds",
-    payload_json: { maxRows },
+    payload_json: { maxRows, idsFile, selectedIds: selectedIds?.size || null },
   });
 
   let rows = await supabaseAll(
@@ -186,6 +293,10 @@ async function main() {
     (query) => query.order("arkmeds_orcamento_id", { ascending: true })
   );
 
+  if (selectedIds) {
+    rows = rows.filter((row) => selectedIds.has(Number(row.arkmeds_orcamento_id)));
+  }
+
   if (maxRows != null) rows = rows.slice(0, maxRows);
 
   let processed = 0;
@@ -197,8 +308,8 @@ async function main() {
   for (const staging of rows) {
     try {
       const fetched = await fetchBudgetTexts(staging);
-      const details = extractDetailsFromText(fetched.text);
-      const hasText = Boolean(fetched.text);
+      const details = extractDetailsFromText(fetched.text, fetched.editHtml);
+      const hasText = Boolean(fetched.text || fetched.editHtml);
       const hasTechnical =
         Boolean(details.informacoes_tecnicas || details.equipamento_texto || details.modelo || details.numero_serie || details.patrimonio);
       const statusExtracao = !hasText ? "sem_texto" : hasTechnical ? "extraido" : "parcial";
@@ -226,7 +337,12 @@ async function main() {
         pdf_texto_extraido: fetched.text || null,
         detalhes_extraidos_json: {
           print: fetched.printMeta,
-          edit: fetched.editMeta,
+          edit: fetched.editMeta ? {
+            url: fetched.editMeta.url,
+            pathname: fetched.editMeta.pathname,
+            status: fetched.editMeta.status,
+            contentType: fetched.editMeta.contentType,
+          } : null,
           mixedBudget: isMixedBudget(staging.arkmeds_tipo_texto),
           details,
         },
@@ -274,6 +390,8 @@ async function main() {
 
   const result = {
     dry_run: true,
+    idsFile,
+    selectedIds: selectedIds?.size || null,
     processed,
     extracted,
     partial,

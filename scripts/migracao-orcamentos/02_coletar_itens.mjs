@@ -10,6 +10,7 @@ import {
   logMigration,
   parseArkmedsInteger,
   parseArkmedsNumber,
+  readIntegerIdsFile,
   outputDir,
   requireSupabase,
   supabaseAll,
@@ -18,6 +19,8 @@ import {
 const supabase = requireSupabase();
 const maxArg = process.argv.find((arg) => arg.startsWith("--max="));
 const maxRows = maxArg ? Number.parseInt(maxArg.split("=")[1], 10) : null;
+const idsFileArg = process.argv.find((arg) => arg.startsWith("--ids-file="));
+const idsFile = idsFileArg ? path.resolve(idsFileArg.slice("--ids-file=".length)) : null;
 
 function firstText(item, keys) {
   for (const key of keys) {
@@ -218,12 +221,13 @@ async function collectItemsFor(staging) {
 
 async function main() {
   await ensureOutputDir();
+  const selectedIds = idsFile ? new Set(await readIntegerIdsFile(idsFile)) : null;
 
   await logMigration(supabase, {
     entidade: "orcamento_itens",
     status: "inicio",
     mensagem: "Inicio coleta itens de orcamentos ArkMeds",
-    payload_json: { maxRows },
+    payload_json: { maxRows, idsFile, selectedIds: selectedIds?.size || null },
   });
 
   let stagingRows = await supabaseAll(
@@ -232,6 +236,10 @@ async function main() {
     "id,arkmeds_orcamento_id,arkmeds_tipo_texto,identificador_migracao",
     (query) => query.order("arkmeds_orcamento_id", { ascending: true })
   );
+
+  if (selectedIds) {
+    stagingRows = stagingRows.filter((row) => selectedIds.has(Number(row.arkmeds_orcamento_id)));
+  }
 
   if (maxRows != null) stagingRows = stagingRows.slice(0, maxRows);
 
@@ -260,6 +268,8 @@ async function main() {
 
   const result = {
     dry_run: true,
+    idsFile,
+    selectedIds: selectedIds?.size || null,
     processed,
     totalItems,
     endpointErrors: errors,

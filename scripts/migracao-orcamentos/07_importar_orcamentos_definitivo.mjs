@@ -4,13 +4,20 @@ import pg from "pg";
 import {
   cleanText,
   normalizeComparableText,
+  normalizeExactCompanyName,
   outputDir,
   parseArkmedsNumber,
   writeCsv,
 } from "./lib.mjs";
-import { buildMigrationIdentifier, getSpreadsheetOsNumber } from "./regras_orcamentos.mjs";
+import {
+  buildMigrationIdentifier,
+  getSpreadsheetOsNumber,
+  identifierNeedsReview,
+  isSpreadsheetAvulso,
+} from "./regras_orcamentos.mjs";
 import {
   buildAdditionalCostDefinitions,
+  classifyAdditionalCostItem,
   buildCatalogIndex,
   cleanSpreadsheetObservations,
   destinationStatus,
@@ -28,7 +35,11 @@ import {
 const { Client } = pg;
 
 const IMPORT_OUTPUT_DIR = path.join(outputDir, "importacao");
-const LOTE_1_PATH = path.join(outputDir, "lote_1_importacao_segura.csv");
+const LOTE_PATHS = new Map([
+  ["lote_1", path.join(outputDir, "lote_1_importacao_segura.csv")],
+  ["lote_2", path.join(outputDir, "lote_2_importacao_segura.csv")],
+  ["lote_3", path.join(outputDir, "lote_3_importacao_segura.csv")],
+]);
 
 const resultColumns = [
   "arkmeds_orcamento_id",
@@ -60,6 +71,7 @@ function parseArgs(argv) {
     limit: null,
     confirmarImportacao: false,
     statusPlanilha: [],
+    statusArkmeds: [],
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -100,6 +112,22 @@ function parseArgs(argv) {
         .split(",")
         .map((value) => normalizeComparableText(value))
         .filter(Boolean);
+      continue;
+    }
+    if (arg === "--status-arkmeds") {
+      args.statusArkmeds = String(argv[index + 1] || "")
+        .split(",")
+        .map((value) => normalizeComparableText(value))
+        .filter(Boolean);
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith("--status-arkmeds=")) {
+      args.statusArkmeds = arg
+        .slice("--status-arkmeds=".length)
+        .split(",")
+        .map((value) => normalizeComparableText(value))
+        .filter(Boolean);
     }
   }
 
@@ -114,7 +142,7 @@ function isRealImport(args) {
   return (
     args.confirmarImportacao === true &&
     process.env.CONFIRMAR_IMPORTACAO_ORCAMENTOS === "true" &&
-    args.lote === "lote_1"
+    LOTE_PATHS.has(args.lote)
   );
 }
 
@@ -219,13 +247,19 @@ function combineNotes(...values) {
   return values.map(cleanText).filter(Boolean).join("\n\n") || null;
 }
 
+function selectUniqueSourceOrder(candidates) {
+  if (candidates.length === 1) return candidates[0];
+  const arkmedsOrders = candidates.filter((order) => order.arkmeds_os_id != null);
+  return arkmedsOrders.length === 1 ? arkmedsOrders[0] : null;
+}
+
 function buildBudgetPayload(row, organizacaoId) {
   const status = mapStatus(row);
   const normalizedStatus = effectiveNormalizedStatus(row);
   const importPolicy = effectiveStatusPolicy(row);
   const sheet = spreadsheetData(row);
   const payment = parseSpreadsheetPayment(row);
-  const additionalCosts = buildAdditionalCostDefinitions(row);
+  const additionalCosts = buildAdditionalCostDefinitions(row, row.__items);
   const total = normalizeMoney(row.arkmeds_valor_total);
   const servicesValue = row.__items
     .filter((item) => item.tipo_item === "servico")
@@ -339,7 +373,10 @@ function buildBudgetPayload(row, organizacaoId) {
 }
 
 function buildItemPayload(item, orcamentoId, order) {
-  const tipo = item.tipo_item === "peca" ? "peca" : item.tipo_item === "servico" ? "servico" : "outro";
+  const additionalCost = classifyAdditionalCostItem(item);
+  const tipo = additionalCost?.tipo || (
+    item.tipo_item === "peca" ? "peca" : item.tipo_item === "servico" ? "servico" : "outro"
+  );
   const { fabricante, modelo } = splitModelManufacturer(item.modelo_fabricante);
   const quantidade = normalizeMoney(item.quantidade || 1) || 1;
   const valorUnitario = normalizeMoney(item.valor_unitario);
@@ -348,7 +385,7 @@ function buildItemPayload(item, orcamentoId, order) {
   return {
     orcamento_id: orcamentoId,
     tipo,
-    descricao: cleanText(item.descricao) || `Item ArkMeds ${item.arkmeds_item_id || order}`,
+    descricao: additionalCost?.descricao || cleanText(item.descricao) || `Item ArkMeds ${item.arkmeds_item_id || order}`,
     quantidade,
     valor_unitario: valorUnitario,
     valor_total: valorTotal,
@@ -358,7 +395,7 @@ function buildItemPayload(item, orcamentoId, order) {
     tipo_servico_id: item.__tipo_servico_id || null,
     tipo_equipamento_id: item.__tipo_equipamento_id || null,
     peca_id: null,
-    peca_nome: tipo === "peca" ? cleanText(item.descricao) || null : null,
+    peca_nome: tipo === "peca" ? additionalCost?.pecaNome || cleanText(item.descricao) || null : null,
     peca_fabricante_id: null,
     peca_modelo_id: null,
     fabricante_texto: fabricante,
@@ -495,29 +532,80 @@ async function loadBatchRows(client, ids) {
 
   await resolveCompaniesByUniqueName(client, rows);
 
-  const sourceNumbers = [...new Set(rows.map(getSpreadsheetOsNumber).filter(Boolean))];
+  const sourceNumbers = [...new Set(rows
+    .map((row) => getSpreadsheetOsNumber(row) || cleanText(row.arkmeds_ordem_servico_numero))
+    .filter(Boolean))];
+  const sourceArkmedsIds = [...new Set(rows
+    .map((row) => Number.parseInt(row.arkmeds_ordem_servico_id, 10))
+    .filter(Number.isInteger))];
   const { rows: exactOrders } = sourceNumbers.length
     ? await client.query(
-        `select id, numero, empresa_id, equipamento_id
-         from public.ordens_servico
-         where numero = any($1::text[])`,
-        [sourceNumbers]
+        `select os.id, os.numero, os.arkmeds_os_id, os.empresa_id, os.equipamento_id,
+                coalesce(te.nome, e.tipo_texto) as os_tipo_equipamento
+         from public.ordens_servico os
+         left join public.equipamentos e on e.id = os.equipamento_id
+         left join public.tipos_equipamento te on te.id = e.tipo_equipamento_id
+         where os.numero = any($1::text[])
+            or os.arkmeds_os_id = any($2::bigint[])`,
+        [sourceNumbers, sourceArkmedsIds]
       )
-    : { rows: [] };
+    : sourceArkmedsIds.length
+      ? await client.query(
+          `select os.id, os.numero, os.arkmeds_os_id, os.empresa_id, os.equipamento_id,
+                  coalesce(te.nome, e.tipo_texto) as os_tipo_equipamento
+           from public.ordens_servico os
+           left join public.equipamentos e on e.id = os.equipamento_id
+           left join public.tipos_equipamento te on te.id = e.tipo_equipamento_id
+           where os.arkmeds_os_id = any($1::bigint[])`,
+          [sourceArkmedsIds]
+        )
+      : { rows: [] };
   const ordersByNumber = new Map();
+  const ordersByArkmedsId = new Map();
   for (const order of exactOrders) {
     if (!ordersByNumber.has(order.numero)) ordersByNumber.set(order.numero, []);
     ordersByNumber.get(order.numero).push(order);
+    if (order.arkmeds_os_id != null) {
+      const key = String(order.arkmeds_os_id);
+      if (!ordersByArkmedsId.has(key)) ordersByArkmedsId.set(key, []);
+      ordersByArkmedsId.get(key).push(order);
+    }
   }
   for (const row of rows) {
-    const sourceOs = getSpreadsheetOsNumber(row);
-    const candidates = (ordersByNumber.get(sourceOs) || []).filter(
+    const sourceOs = getSpreadsheetOsNumber(row) || cleanText(row.arkmeds_ordem_servico_numero);
+    const sourceArkmedsId = cleanText(row.arkmeds_ordem_servico_id);
+    const directCandidates = sourceArkmedsId ? ordersByArkmedsId.get(sourceArkmedsId) || [] : [];
+    const globalNumberCandidates = ordersByNumber.get(sourceOs) || [];
+    const numberCandidates = globalNumberCandidates.filter(
       (order) => order.empresa_id === row.empresa_id_resolvida
     );
-    const exactOrder = candidates.length === 1 ? candidates[0] : null;
+    const exactOrder = directCandidates.length === 1
+      ? directCandidates[0]
+      : selectUniqueSourceOrder(numberCandidates) || selectUniqueSourceOrder(globalNumberCandidates);
     row.arkmeds_ordem_servico_numero = sourceOs;
     row.ordem_servico_id_resolvida = exactOrder?.id || null;
     row.equipamento_id_resolvido = exactOrder?.equipamento_id || null;
+    row.os_tipo_equipamento = exactOrder?.os_tipo_equipamento || row.os_tipo_equipamento || null;
+    if (exactOrder) {
+      row.empresa_id_resolvida = exactOrder.empresa_id;
+      row.classificacao_vinculo_os = "com_os_confirmada";
+      row.motivos_bloqueantes = (row.motivos_bloqueantes || []).filter(
+        (reason) => !["OS_AMBIGUA", "POSSIVEL_OS_POR_NUMERO"].includes(reason)
+      );
+      if (row.status_validacao === "pendente_os" && !row.motivos_bloqueantes.length) {
+        row.status_validacao = "ok_para_importar_com_detalhes_parciais";
+      }
+    } else if (isSpreadsheetAvulso(row)) {
+      row.ordem_servico_id_resolvida = null;
+      row.equipamento_id_resolvido = null;
+      row.classificacao_vinculo_os = "sem_os_avulso";
+      row.motivos_bloqueantes = (row.motivos_bloqueantes || []).filter(
+        (reason) => !["OS_AMBIGUA", "POSSIVEL_OS_POR_NUMERO"].includes(reason)
+      );
+      if (row.status_validacao === "pendente_os" && !row.motivos_bloqueantes.length) {
+        row.status_validacao = "ok_para_importar_com_detalhes_parciais";
+      }
+    }
   }
 
   const byId = new Map(rows.map((row) => [row.arkmeds_orcamento_id, row]));
@@ -525,8 +613,42 @@ async function loadBatchRows(client, ids) {
 }
 
 async function selectBatchIds(client, loteIds, args) {
+  if (args.statusArkmeds.length) {
+    const { rows } = await client.query(
+      `select s.arkmeds_orcamento_id
+       from public.staging_arkmeds_orcamentos s
+       where s.arkmeds_orcamento_id = any($1::int[])
+         and lower(coalesce(s.arkmeds_status_grupo, '')) = any($2::text[])
+         and not exists (
+           select 1
+           from public.orcamentos o
+           where o.origem_migracao = 'arkmeds'
+             and o.arkmeds_orcamento_id = s.arkmeds_orcamento_id
+         )
+       order by s.arkmeds_orcamento_id`,
+      [loteIds, args.statusArkmeds]
+    );
+
+    const ids = rows.map((row) => Number(row.arkmeds_orcamento_id));
+    return args.limit ? ids.slice(0, args.limit) : ids;
+  }
+
   if (!args.statusPlanilha.length) {
-    return args.limit ? loteIds.slice(0, args.limit) : loteIds;
+    const { rows } = await client.query(
+      `select s.arkmeds_orcamento_id
+       from public.staging_arkmeds_orcamentos s
+       where s.arkmeds_orcamento_id = any($1::int[])
+         and not exists (
+           select 1
+           from public.orcamentos o
+           where o.origem_migracao = 'arkmeds'
+             and o.arkmeds_orcamento_id = s.arkmeds_orcamento_id
+         )
+       order by s.arkmeds_orcamento_id`,
+      [loteIds],
+    );
+    const ids = rows.map((row) => Number(row.arkmeds_orcamento_id));
+    return args.limit ? ids.slice(0, args.limit) : ids;
   }
 
   const { rows } = await client.query(
@@ -564,7 +686,13 @@ async function resolveCompaniesByUniqueName(client, rows) {
   );
 
   const companiesByKey = new Map();
+  const companiesByLegalName = new Map();
   for (const company of companies) {
+    const legalKey = normalizeExactCompanyName(company.nome);
+    if (legalKey) {
+      if (!companiesByLegalName.has(legalKey)) companiesByLegalName.set(legalKey, []);
+      companiesByLegalName.get(legalKey).push(company);
+    }
     for (const name of [company.nome, company.nome_fantasia]) {
       const key = normalizeComparableText(name);
       if (!key) continue;
@@ -574,6 +702,15 @@ async function resolveCompaniesByUniqueName(client, rows) {
   }
 
   for (const row of unresolved) {
+    const legalMatches = companiesByLegalName.get(
+      normalizeExactCompanyName(row.arkmeds_solicitante)
+    ) || [];
+    const uniqueLegalIds = [...new Set(legalMatches.map((company) => company.id))];
+    if (uniqueLegalIds.length === 1) {
+      row.empresa_id_resolvida = uniqueLegalIds[0];
+      row.__empresa_resolvida_por = "razao_social_exata";
+      continue;
+    }
     const key = normalizeComparableText(row.arkmeds_solicitante);
     const matches = companiesByKey.get(key) || [];
     const uniqueIds = [...new Set(matches.map((company) => company.id))];
@@ -596,22 +733,39 @@ async function resolveCompaniesByUniqueName(client, rows) {
 
 function validateLote1Row(row) {
   const blockingReasons = row.motivos_bloqueantes || [];
-  const allowedValidation = ["ok_para_importar", "ok_para_importar_com_detalhes_parciais"].includes(row.status_validacao);
   const normalizedStatus = effectiveNormalizedStatus(row);
-  const allowedStatus = ["pendente", "aprovado_em_curso", "faturado", "reprovado_em_curso"].includes(normalizedStatus);
+  const isRejectedHistorical =
+    row.status_validacao === "historico_consulta" &&
+    normalizedStatus === "reprovado_em_curso";
+  const isCancelledHistorical =
+    row.status_validacao === "historico_consulta" &&
+    normalizedStatus === "cancelado";
+  const allowedValidation =
+    ["ok_para_importar", "ok_para_importar_com_detalhes_parciais"].includes(row.status_validacao) ||
+    isRejectedHistorical ||
+    isCancelledHistorical;
+  const allowedStatus = ["pendente", "aprovado_em_curso", "faturado", "reprovado_em_curso", "cancelado"].includes(normalizedStatus);
   const safeAssociation = ["com_os_confirmada", "sem_os_avulso", "provavel_avulso_numero_baixo"].includes(row.classificacao_vinculo_os);
+  const explicitOsReference = cleanText(row.arkmeds_ordem_servico_id) || getSpreadsheetOsNumber(row) || cleanText(row.arkmeds_ordem_servico_numero);
   const diferencaValor = Number(row.diferenca_valor || 0);
   const descontoValor = normalizeMoney(row.arkmeds_desconto);
-  const additionalCostsValue = buildAdditionalCostDefinitions(row)
+  const additionalCostsValue = buildAdditionalCostDefinitions(row, row.__items)
     .reduce((sum, item) => sum + item.value, 0);
   const coherentValue =
     Math.abs(diferencaValor) <= 0.05 ||
     (descontoValor > 0 && Math.abs(diferencaValor + descontoValor) <= 0.05) ||
     Math.abs(diferencaValor - additionalCostsValue + descontoValor) <= 0.05;
+  const identifier = buildMigrationIdentifier(row);
 
   if (!allowedValidation) throw new Error(`Status de validacao fora do Lote 1: ${row.status_validacao || "-"}`);
+  if (identifierNeedsReview(identifier)) {
+    throw new Error(`Identificador generico exige conferencia manual: ${identifier || "-"}`);
+  }
   if (!allowedStatus) throw new Error(`Status normalizado nao permitido: ${normalizedStatus || "-"}`);
   if (!safeAssociation) throw new Error(`Vinculo OS/avulso inseguro: ${row.classificacao_vinculo_os || "-"}`);
+  if (explicitOsReference && !row.ordem_servico_id_resolvida) {
+    throw new Error(`OS explicita nao localizada de forma segura: ${explicitOsReference}`);
+  }
   if (blockingReasons.length) throw new Error(`Motivos bloqueantes presentes: ${blockingReasons.join(", ")}`);
   if (row.tem_itens_preservados !== true) throw new Error("Itens nao marcados como preservados.");
   if (row.status_preservacao_itens !== "itens_preservados") throw new Error(`Preservacao de itens invalida: ${row.status_preservacao_itens || "-"}`);
@@ -695,7 +849,7 @@ async function importOneBudget(client, row, organizacaoId, mode) {
 
     const orcamentoId = rows[0].id;
     const itemPayloads = row.__items.map((item, index) => buildItemPayload(item, orcamentoId, index + 1));
-    const additionalCosts = buildAdditionalCostDefinitions(row).map((definition, index) =>
+    const additionalCosts = buildAdditionalCostDefinitions(row, row.__items).map((definition, index) =>
       buildAdditionalCostPayload(definition, orcamentoId, itemPayloads.length + index + 1)
     );
     itemPayloads.push(...additionalCosts);
@@ -793,7 +947,8 @@ async function writeSummary({ args, mode, planned, rows, resultRows, errorRows, 
   const avulso = resultRows.filter((row) => row.resultado !== "erro" && !cleanText(row.os_vinculada)).length;
   const importedValue = sumBy(imported, () => true, "valor_total");
 
-  const markdown = `# Importacao definitiva de orcamentos ArkMeds - Lote 1
+  const lote = args.lote || "lote_1";
+  const markdown = `# Importacao definitiva de orcamentos ArkMeds - ${lote}
 
 Gerado em: ${finishedAt.toISOString()}
 
@@ -836,7 +991,7 @@ ${imported.length || existing.length ? resultRows
 - Nao rodar sem limit em modo real antes de validar a amostra pequena.
 `;
 
-  await fs.writeFile(path.join(IMPORT_OUTPUT_DIR, "importacao_lote_1_resumo.md"), markdown, "utf-8");
+  await fs.writeFile(path.join(IMPORT_OUTPUT_DIR, `importacao_${lote}_resumo.md`), markdown, "utf-8");
 }
 
 async function main() {
@@ -845,10 +1000,12 @@ async function main() {
   const connectionString = requireDatabaseUrl();
   await fs.mkdir(IMPORT_OUTPUT_DIR, { recursive: true });
 
-  const loteRows = await readCsv(LOTE_1_PATH);
-  if ((args.lote || "lote_1") !== "lote_1") {
-    throw new Error("Este script so aceita --lote lote_1 nesta etapa.");
+  const lote = args.lote || "lote_1";
+  const lotePath = LOTE_PATHS.get(lote);
+  if (!lotePath) {
+    throw new Error(`Lote desconhecido: ${lote}.`);
   }
+  const loteRows = await readCsv(lotePath);
 
   const loteIds = loteRows
     .map((row) => Number.parseInt(row.arkmeds_orcamento_id, 10))
@@ -870,6 +1027,7 @@ async function main() {
         lote: args.lote || "lote_1",
         limit: args.limit,
         status_planilha: args.statusPlanilha,
+        status_arkmeds: args.statusArkmeds,
         modo: mode,
         total_lote: loteIds.length,
         total_selecionado: selectedIds.length,
@@ -890,7 +1048,7 @@ async function main() {
           identificador_migracao: row.identificador_migracao,
           mensagem: importResult.message,
           payload_json: {
-            lote: "lote_1",
+            lote,
             orcamento_id_novo: importResult.orcamentoId,
             numero_orcamento: row.arkmeds_orcamento_numero_original || row.arkmeds_orcamento_numero,
             quantidade_itens: row.__items.length,
@@ -906,7 +1064,7 @@ async function main() {
           identificador_migracao: row.identificador_migracao,
           mensagem: error.message,
           payload_json: {
-            lote: "lote_1",
+            lote,
             numero_orcamento: row.arkmeds_orcamento_numero_original || row.arkmeds_orcamento_numero,
           },
         });
@@ -937,8 +1095,8 @@ async function main() {
       });
     }
 
-    await writeCsv(path.join(IMPORT_OUTPUT_DIR, "importacao_lote_1_resultado.csv"), resultRows, resultColumns);
-    await writeCsv(path.join(IMPORT_OUTPUT_DIR, "importacao_lote_1_erros.csv"), errorRows, errorColumns);
+    await writeCsv(path.join(IMPORT_OUTPUT_DIR, `importacao_${lote}_resultado.csv`), resultRows, resultColumns);
+    await writeCsv(path.join(IMPORT_OUTPUT_DIR, `importacao_${lote}_erros.csv`), errorRows, errorColumns);
     await writeSummary({
       args,
       mode,
@@ -955,6 +1113,7 @@ async function main() {
       lote: args.lote || "lote_1",
       limit: args.limit,
       status_planilha: args.statusPlanilha,
+      status_arkmeds: args.statusArkmeds,
       total_previsto_lote: loteIds.length,
       total_processado: resultRows.length,
       total_simulado: resultRows.filter((row) => row.resultado === "simulado").length,
