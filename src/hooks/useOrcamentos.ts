@@ -5,6 +5,8 @@ import {
   OrcamentoStatus,
   OrcamentoSupabase,
   OrcamentosContagemPorStatus,
+  ListarOrcamentosPaginadoFiltros,
+  OrcamentosPaginadoResult,
   orcamentosService,
 } from "@/services/orcamentosService";
 
@@ -36,6 +38,21 @@ export const useOrcamentosResumo = (options?: UseOrcamentosOptions) => {
     enabled: options?.enabled ?? true,
     staleTime: options?.staleTime ?? ORCAMENTOS_STALE_TIME,
     gcTime: options?.gcTime ?? ORCAMENTOS_GC_TIME,
+  });
+};
+
+export const useOrcamentosPaginados = (
+  filtros: ListarOrcamentosPaginadoFiltros,
+  options?: UseOrcamentosOptions
+) => {
+  return useQuery<OrcamentosPaginadoResult>({
+    queryKey: [...ORCAMENTOS_QUERY_KEY, "paginado", filtros],
+    queryFn: () => orcamentosService.listarPaginado(filtros),
+    enabled: options?.enabled ?? true,
+    staleTime: options?.staleTime ?? ORCAMENTOS_STALE_TIME,
+    gcTime: options?.gcTime ?? ORCAMENTOS_GC_TIME,
+    placeholderData: (previousData) => previousData,
+    refetchOnWindowFocus: false,
   });
 };
 

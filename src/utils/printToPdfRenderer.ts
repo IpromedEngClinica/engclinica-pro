@@ -1,3 +1,5 @@
+import { supabase } from "@/lib/supabaseClient";
+
 type PrintToPdfOptions = {
   html: string;
   fileName: string;
@@ -39,10 +41,17 @@ export const renderHtmlToPdfWithPrintToPdf = async ({
   const endpoint = getPdfEndpoint();
 
   try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
     const response = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...(session?.access_token
+          ? { Authorization: `Bearer ${session.access_token}` }
+          : {}),
       },
       body: JSON.stringify({
         html,

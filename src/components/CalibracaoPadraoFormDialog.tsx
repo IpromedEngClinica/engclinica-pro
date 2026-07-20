@@ -90,7 +90,7 @@ const emptyForm: FormDraft = {
   observacoes: "",
   temperaturaAmbiente: "",
   incertezaTemperatura: "",
-  unidadeTemperatura: "Â°C",
+  unidadeTemperatura: "°C",
   umidadeRelativa: "",
   incertezaUmidade: "",
   unidadeUmidade: "%",
@@ -202,7 +202,7 @@ const CalibracaoPadraoFormDialog = ({
       observacoes: padrao.observacoes || "",
       temperaturaAmbiente: formatDecimalPtBr(padrao.temperatura_ambiente),
       incertezaTemperatura: formatDecimalPtBr(padrao.incerteza_temperatura),
-      unidadeTemperatura: padrao.unidade_temperatura || "Â°C",
+      unidadeTemperatura: padrao.unidade_temperatura || "°C",
       umidadeRelativa: formatDecimalPtBr(padrao.umidade_relativa),
       incertezaUmidade: formatDecimalPtBr(padrao.incerteza_umidade),
       unidadeUmidade: padrao.unidade_umidade || "%",
@@ -388,7 +388,7 @@ const CalibracaoPadraoFormDialog = ({
 
   const validarDecimalOpcional = (value: string, fieldName: string) => {
     if (value.trim() && normalizeDecimalInput(value) === null) {
-      throw new Error(`Valor invÃ¡lido em "${fieldName}".`);
+      throw new Error(`Valor inválido em "${fieldName}".`);
     }
   };
 
@@ -402,7 +402,7 @@ const CalibracaoPadraoFormDialog = ({
     if ((!value.trim() && obrigatorio) || normalizeDecimalInput(value) === null) {
       if (!value.trim() && !obrigatorio) return;
       throw new Error(
-        `Valor invÃ¡lido na tabela "${tabelaNome}", linha ${linha}, campo "${fieldName}".`
+        `Valor inválido na tabela "${tabelaNome}", linha ${linha}, campo "${fieldName}".`
       );
     }
   };
@@ -461,9 +461,9 @@ const CalibracaoPadraoFormDialog = ({
           ponto.mediaValoresMedidos,
           tabela.nome,
           linha,
-          "MÃ©dia dos valores medidos"
+          "Média dos valores medidos"
         );
-        validarDecimalPonto(ponto.tendencia, tabela.nome, linha, "TendÃªncia");
+        validarDecimalPonto(ponto.tendencia, tabela.nome, linha, "Tendência");
         validarDecimalPonto(
           ponto.incertezaExpandida,
           tabela.nome,

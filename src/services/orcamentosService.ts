@@ -9,6 +9,57 @@ export type OrcamentoStatus =
 
 export type OrcamentosContagemPorStatus = Record<OrcamentoStatus, number>;
 
+export type OrcamentosSortField =
+  | "numero"
+  | "data"
+  | "cliente"
+  | "equipamento"
+  | "status"
+  | "tipo"
+  | "origem"
+  | "os"
+  | "valor_pecas"
+  | "valor_servicos"
+  | "valor_total"
+  | "forma_pagamento"
+  | "orcamentista"
+  | "validade";
+
+export type ListarOrcamentosPaginadoFiltros = {
+  termo?: string;
+  status?: OrcamentoStatus;
+  tipo?: string;
+  clienteNome?: string;
+  formaPagamento?: string;
+  modoPagamento?: string;
+  frete?: string;
+  orcamentista?: string;
+  dataInicio?: string;
+  dataFim?: string;
+  valorMinimo?: number;
+  valorMaximo?: number;
+  origem?: "com_os" | "avulso";
+  page: number;
+  limit: number;
+  sortBy: OrcamentosSortField;
+  ascending: boolean;
+};
+
+export type OrcamentosFilterOptions = {
+  clientes: string[];
+  formasPagamento: string[];
+  modosPagamento: string[];
+  fretes: string[];
+  orcamentistas: string[];
+};
+
+export type OrcamentosPaginadoResult = {
+  items: OrcamentoSupabase[];
+  total: number;
+  statusCounts: OrcamentosContagemPorStatus;
+  filterOptions: OrcamentosFilterOptions;
+};
+
 export type OrcamentoItemTipo = "servico" | "peca" | "deslocamento" | "outro";
 export type OrcamentoTipo = "servico" | "pecas" | "pecas_servicos";
 export type OrcamentoOrigem = "os" | "avulso";
@@ -593,6 +644,66 @@ const aplicarReflexoNaOS = async ({
 };
 
 export const orcamentosService = {
+  async listarPaginado(
+    filtros: ListarOrcamentosPaginadoFiltros
+  ): Promise<OrcamentosPaginadoResult> {
+    const { data, error } = await supabase.rpc("listar_orcamentos_resumo", {
+      p_termo: filtros.termo || null,
+      p_status: filtros.status || null,
+      p_tipo: filtros.tipo || null,
+      p_cliente_nome: filtros.clienteNome || null,
+      p_forma_pagamento: filtros.formaPagamento || null,
+      p_modo_pagamento: filtros.modoPagamento || null,
+      p_frete: filtros.frete || null,
+      p_orcamentista: filtros.orcamentista || null,
+      p_data_inicio: filtros.dataInicio || null,
+      p_data_fim: filtros.dataFim || null,
+      p_valor_minimo: filtros.valorMinimo ?? null,
+      p_valor_maximo: filtros.valorMaximo ?? null,
+      p_origem: filtros.origem || null,
+      p_offset: Math.max(0, (filtros.page - 1) * filtros.limit),
+      p_limit: filtros.limit,
+      p_sort_by: filtros.sortBy,
+      p_ascending: filtros.ascending,
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const result = (data || {}) as unknown as {
+      items?: OrcamentoSupabase[];
+      total?: number;
+      status_counts?: Partial<OrcamentosContagemPorStatus>;
+      filter_options?: {
+        clientes?: string[];
+        formas_pagamento?: string[];
+        modos_pagamento?: string[];
+        fretes?: string[];
+        orcamentistas?: string[];
+      };
+    };
+
+    return {
+      items: result.items || [],
+      total: Number(result.total || 0),
+      statusCounts: {
+        pendente: Number(result.status_counts?.pendente || 0),
+        aprovado: Number(result.status_counts?.aprovado || 0),
+        reprovado: Number(result.status_counts?.reprovado || 0),
+        faturado: Number(result.status_counts?.faturado || 0),
+        cancelado: Number(result.status_counts?.cancelado || 0),
+      },
+      filterOptions: {
+        clientes: result.filter_options?.clientes || [],
+        formasPagamento: result.filter_options?.formas_pagamento || [],
+        modosPagamento: result.filter_options?.modos_pagamento || [],
+        fretes: result.filter_options?.fretes || [],
+        orcamentistas: result.filter_options?.orcamentistas || [],
+      },
+    };
+  },
+
   async listarResumo() {
     const primeiraPagina = await supabase
       .from("orcamentos")

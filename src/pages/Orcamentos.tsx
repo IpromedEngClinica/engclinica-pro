@@ -11,7 +11,7 @@ import {
   SlidersHorizontal,
   ChevronDown,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
 import EquipamentoDetalhesDialog from "@/components/EquipamentoDetalhesDialog";
@@ -47,13 +47,13 @@ import { toast } from "@/hooks/use-toast";
 import {
   useAplicarDescontoOrcamento,
   useAlterarStatusOrcamento,
-  useOrcamentosContagemPorStatus,
-  useOrcamentosResumo,
+  useOrcamentosPaginados,
 } from "@/hooks/useOrcamentos";
-import { usePaginatedList } from "@/hooks/usePaginatedList";
 import {
+  ListarOrcamentosPaginadoFiltros,
   OrcamentoStatus,
   OrcamentoSupabase,
+  OrcamentosSortField,
   orcamentosService,
 } from "@/services/orcamentosService";
 import {
@@ -70,7 +70,7 @@ import {
 } from "@/services/equipamentosService";
 import { getEquipamentoLabel } from "@/utils/equipamentoDisplay";
 import { gerarPdfOrcamento } from "@/utils/gerarPdfOrcamento";
-import { sortByValue, type SortDirection } from "@/utils/sortUtils";
+import { type SortDirection } from "@/utils/sortUtils";
 
 const ALL = "__all__";
 
@@ -89,19 +89,13 @@ const formatDate = (iso?: string | null) => {
 
 const getEmpresaNome = (orcamento: OrcamentoSupabase) =>
   orcamento.empresa?.nome || orcamento.empresa?.nome_fantasia ||
-  "Nao informado";
-
-const getNumeroOrdenacao = (numero?: string | null) => {
-  const digits = (numero || "").replace(/\D/g, "");
-  const value = Number(digits || numero || 0);
-  return Number.isFinite(value) ? value : 0;
-};
+  "Não informado";
 
 const tipoLabel = (tipo?: string | null) => {
   const map: Record<string, string> = {
-    servico: "Servico",
-    pecas: "Pecas",
-    pecas_servicos: "Pecas + Servicos",
+    servico: "Serviço",
+    pecas: "Peças",
+    pecas_servicos: "Peças + Serviços",
   };
 
   return tipo ? map[tipo] || tipo : "-";
@@ -157,7 +151,9 @@ const statusOptions: Array<{ value: OrcamentoStatus; label: string }> = [
 
 const Orcamentos = () => {
   const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState("numero");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [sortKey, setSortKey] = useState<OrcamentosSortField>("data");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [listLimit, setListLimit] = useState(DEFAULT_LIST_LIMIT);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -191,149 +187,112 @@ const Orcamentos = () => {
   const [ordemServicoDialogOpen, setOrdemServicoDialogOpen] = useState(false);
   const [ordemServicoSelecionada, setOrdemServicoSelecionada] =
     useState<OrdemServicoSupabase | null>(null);
-  const { data: orcamentos = [], isLoading, isError, error, refetch } =
-    useOrcamentosResumo();
-  const { data: contagemPorStatus } = useOrcamentosContagemPorStatus();
-  const alterarStatus = useAlterarStatusOrcamento();
-  const aplicarDesconto = useAplicarDescontoOrcamento();
 
-  const uniq = (arr: string[]) =>
-    Array.from(new Set(arr.filter(Boolean))).sort((a, b) =>
-      a.localeCompare(b, "pt-BR")
-    );
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedSearch(search.trim());
+    }, 350);
 
-  const opts = useMemo(
-    () => ({
-      clientes: uniq(orcamentos.map((orcamento) => getEmpresaNome(orcamento))),
-      formasPagamento: uniq(
-        orcamentos.map((orcamento) => orcamento.forma_pagamento || "")
-      ),
-      modosPagamento: uniq(
-        orcamentos.map((orcamento) => orcamento.modo_pagamento || "")
-      ),
-      fretes: uniq(orcamentos.map((orcamento) => orcamento.frete || "")),
-      orcamentistas: uniq(
-        orcamentos.map((orcamento) => orcamento.responsavel_orcamentista || "")
-      ),
-    }),
-    [orcamentos]
-  );
+    return () => window.clearTimeout(timeout);
+  }, [search]);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-
-    return orcamentos.filter((orcamento) => {
-      const empresa = getEmpresaNome(orcamento);
-      const osNumero = orcamento.ordem_servico?.numero || "";
-      const matchSearch =
-        !q ||
-        orcamento.numero.toLowerCase().includes(q) ||
-        (orcamento.identificador || "").toLowerCase().includes(q) ||
-        empresa.toLowerCase().includes(q) ||
-        osNumero.toLowerCase().includes(q) ||
-        tipoLabel(orcamento.tipo_orcamento).toLowerCase().includes(q) ||
-        statusLabel(orcamento.status).toLowerCase().includes(q);
-
-      const matchStatus =
-        statusFiltro === ALL || orcamento.status === statusFiltro;
-      const matchTipo =
-        tipoFilter === ALL || orcamento.tipo_orcamento === tipoFilter;
-      const matchCliente =
-        clienteFiltro === ALL || empresa === clienteFiltro;
-      const matchFormaPagamento =
-        formaPagamentoFiltro === ALL ||
-        orcamento.forma_pagamento === formaPagamentoFiltro;
-      const matchModoPagamento =
-        modoPagamentoFiltro === ALL ||
-        orcamento.modo_pagamento === modoPagamentoFiltro;
-      const matchFrete =
-        freteFiltro === ALL || orcamento.frete === freteFiltro;
-      const matchOrcamentista =
-        orcamentistaFiltro === ALL ||
-        orcamento.responsavel_orcamentista === orcamentistaFiltro;
-      const matchDataInicio =
-        !dataInicioFiltro || orcamento.data_orcamento >= dataInicioFiltro;
-      const matchDataFim =
-        !dataFimFiltro || orcamento.data_orcamento <= dataFimFiltro;
-      const valorMin = Number(valorMinFiltro);
-      const valorMax = Number(valorMaxFiltro);
-      const matchValorMin =
-        !valorMinFiltro || orcamento.valor_total >= valorMin;
-      const matchValorMax =
-        !valorMaxFiltro || orcamento.valor_total <= valorMax;
-      const matchOrigem =
-        origemFiltro === ALL ||
-        (origemFiltro === "com_os"
-          ? Boolean(orcamento.ordem_servico_id)
-          : !orcamento.ordem_servico_id || orcamento.origem === "avulso");
-
-      return (
-        matchSearch &&
-        matchStatus &&
-        matchTipo &&
-        matchCliente &&
-        matchFormaPagamento &&
-        matchModoPagamento &&
-        matchFrete &&
-        matchOrcamentista &&
-        matchDataInicio &&
-        matchDataFim &&
-        matchValorMin &&
-        matchValorMax &&
-        matchOrigem
-      );
-    });
+  useEffect(() => {
+    setPage(1);
   }, [
     clienteFiltro,
     dataFimFiltro,
     dataInicioFiltro,
+    debouncedSearch,
     formaPagamentoFiltro,
     freteFiltro,
+    listLimit,
     modoPagamentoFiltro,
     orcamentistaFiltro,
-    orcamentos,
     origemFiltro,
-    search,
+    sortDirection,
+    sortKey,
     statusFiltro,
     tipoFilter,
     valorMaxFiltro,
     valorMinFiltro,
   ]);
 
-  const sortGetters = useMemo<Record<string, (item: OrcamentoSupabase) => unknown>>(
-    () => ({
-      numero: (o) => getNumeroOrdenacao(o.numero),
-      data: (o) => o.data_orcamento || o.created_at,
-      cliente: getEmpresaNome,
-      equipamento: (o) => o.identificador || getEquipamentoLabel(o.equipamento),
-      status: (o) => o.status,
-      tipo: (o) => o.tipo_orcamento,
-      origem: (o) => o.origem,
-      os: (o) => o.ordem_servico?.numero,
-      valor_pecas: (o) => o.valor_pecas,
-      valor_servicos: (o) => o.valor_servicos,
-      valor_total: (o) => o.valor_total,
-      forma_pagamento: (o) => o.forma_pagamento,
-      orcamentista: (o) => o.responsavel_orcamentista,
-      validade: (o) => o.data_validade,
-    }),
-    []
-  );
+  const queryFilters = useMemo<ListarOrcamentosPaginadoFiltros>(() => {
+    const valorMinimo = Number(valorMinFiltro);
+    const valorMaximo = Number(valorMaxFiltro);
 
-  const sortedFiltered = useMemo(
-    () =>
-      sortByValue(
-        filtered,
-        sortGetters[sortKey] || sortGetters.data,
-        sortDirection
-      ),
-    [filtered, sortDirection, sortGetters, sortKey]
-  );
+    return {
+      termo: debouncedSearch || undefined,
+      status: statusFiltro === ALL ? undefined : statusFiltro,
+      tipo: tipoFilter === ALL ? undefined : tipoFilter,
+      clienteNome: clienteFiltro === ALL ? undefined : clienteFiltro,
+      formaPagamento:
+        formaPagamentoFiltro === ALL ? undefined : formaPagamentoFiltro,
+      modoPagamento:
+        modoPagamentoFiltro === ALL ? undefined : modoPagamentoFiltro,
+      frete: freteFiltro === ALL ? undefined : freteFiltro,
+      orcamentista:
+        orcamentistaFiltro === ALL ? undefined : orcamentistaFiltro,
+      dataInicio: dataInicioFiltro || undefined,
+      dataFim: dataFimFiltro || undefined,
+      valorMinimo:
+        valorMinFiltro && Number.isFinite(valorMinimo) ? valorMinimo : undefined,
+      valorMaximo:
+        valorMaxFiltro && Number.isFinite(valorMaximo) ? valorMaximo : undefined,
+      origem: origemFiltro === ALL ? undefined : origemFiltro,
+      page,
+      limit: listLimit,
+      sortBy: sortKey,
+      ascending: sortDirection === "asc",
+    };
+  }, [
+    clienteFiltro,
+    dataFimFiltro,
+    dataInicioFiltro,
+    debouncedSearch,
+    formaPagamentoFiltro,
+    freteFiltro,
+    listLimit,
+    modoPagamentoFiltro,
+    orcamentistaFiltro,
+    origemFiltro,
+    page,
+    sortDirection,
+    sortKey,
+    statusFiltro,
+    tipoFilter,
+    valorMaxFiltro,
+    valorMinFiltro,
+  ]);
 
   const {
-    paginatedItems: visibleOrcamentos,
-    ...orcamentosPagination
-  } = usePaginatedList(sortedFiltered, listLimit);
+    data: listagem,
+    isLoading,
+    isFetching,
+    isError,
+    error,
+    refetch,
+  } = useOrcamentosPaginados(queryFilters);
+  const orcamentos = listagem?.items || [];
+  const totalOrcamentos = listagem?.total || 0;
+  const alterarStatus = useAlterarStatusOrcamento();
+  const aplicarDesconto = useAplicarDescontoOrcamento();
+
+  const opts = listagem?.filterOptions || {
+    clientes: [],
+    formasPagamento: [],
+    modosPagamento: [],
+    fretes: [],
+    orcamentistas: [],
+  };
+  const totalPages = Math.max(1, Math.ceil(totalOrcamentos / listLimit));
+  const orcamentosPagination = {
+    page,
+    totalPages,
+    totalItems: totalOrcamentos,
+    firstVisibleIndex: totalOrcamentos ? (page - 1) * listLimit + 1 : 0,
+    lastVisibleIndex: Math.min(page * listLimit, totalOrcamentos),
+  };
 
   const handleSort = (key: string) => {
     if (sortKey === key) {
@@ -341,7 +300,7 @@ const Orcamentos = () => {
       return;
     }
 
-    setSortKey(key);
+    setSortKey(key as OrcamentosSortField);
     setSortDirection("asc");
   };
 
@@ -394,8 +353,7 @@ const Orcamentos = () => {
   };
 
   const countByStatus = (status: OrcamentoStatus) =>
-    contagemPorStatus?.[status] ??
-    orcamentos.filter((orcamento) => orcamento.status === status).length;
+    listagem?.statusCounts[status] || 0;
 
   const openCreate = () => {
     setSelected(null);
@@ -498,21 +456,21 @@ const Orcamentos = () => {
     }
 
     if (status === "reprovado") {
-      const value = window.prompt("Informe o motivo da reprovacao:", "");
+      const value = window.prompt("Informe o motivo da reprovação:", "");
       if (value === null) return;
       motivoReprovacao = value.trim() || undefined;
     }
 
     if (status === "cancelado") {
       const confirmar = window.confirm(
-        `Cancelar o orcamento nº ${orcamento.numero}?`
+        `Cancelar o orçamento nº ${orcamento.numero}?`
       );
       if (!confirmar) return;
     }
 
     if (status === "pendente" && orcamento.status !== "pendente") {
       const confirmar = window.confirm(
-        `Marcar o orcamento nº ${orcamento.numero} como pendente?`
+        `Marcar o orçamento nº ${orcamento.numero} como pendente?`
       );
       if (!confirmar) return;
     }
@@ -528,8 +486,8 @@ const Orcamentos = () => {
       });
 
       toast({
-        title: "Status do orcamento atualizado.",
-        description: `Orcamento nº ${orcamento.numero} alterado para ${statusLabel(
+        title: "Status do orçamento atualizado.",
+        description: `Orçamento nº ${orcamento.numero} alterado para ${statusLabel(
           status
         )}.${orcamento.ordem_servico_id ? " A OS vinculada foi atualizada." : ""}`,
       });
@@ -546,12 +504,12 @@ const Orcamentos = () => {
   return (
     <div className="p-6 lg:p-8">
       <PageHeader
-        title="Orcamentos"
-        description="Gerencie os orcamentos de pecas e servicos"
+        title="Orçamentos"
+        description="Gerencie os orçamentos de peças e serviços"
       >
         <Button onClick={openCreate}>
           <Plus className="w-4 h-4 mr-2" />
-          Novo Orcamento
+          Novo Orçamento
         </Button>
       </PageHeader>
 
@@ -729,10 +687,10 @@ const Orcamentos = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={ALL}>Todos os tipos</SelectItem>
-                  <SelectItem value="servico">Servico</SelectItem>
-                  <SelectItem value="pecas">Pecas</SelectItem>
+                  <SelectItem value="servico">Serviço</SelectItem>
+                  <SelectItem value="pecas">Peças</SelectItem>
                   <SelectItem value="pecas_servicos">
-                    Pecas + Servicos
+                    Peças + Serviços
                   </SelectItem>
                 </SelectContent>
               </Select>
@@ -809,7 +767,7 @@ const Orcamentos = () => {
                 type="number"
                 min={0}
                 step="0.01"
-                placeholder="Valor minimo"
+                placeholder="Valor mínimo"
                 value={valorMinFiltro}
                 onChange={(event) => setValorMinFiltro(event.target.value)}
               />
@@ -817,7 +775,7 @@ const Orcamentos = () => {
                 type="number"
                 min={0}
                 step="0.01"
-                placeholder="Valor maximo"
+                placeholder="Valor máximo"
                 value={valorMaxFiltro}
                 onChange={(event) => setValorMaxFiltro(event.target.value)}
               />
@@ -836,7 +794,7 @@ const Orcamentos = () => {
         <div className="px-5 py-4 border-b space-y-3">
           <div className="flex flex-col gap-1">
             <h2 className="text-base font-semibold">
-              Orcamentos {activeTab?.label || ""}
+              Orçamentos {activeTab?.label || ""}
             </h2>
           </div>
 
@@ -855,10 +813,14 @@ const Orcamentos = () => {
               <ListLimitSelect
                 value={listLimit}
                 onChange={setListLimit}
-                total={sortedFiltered.length}
+                total={totalOrcamentos}
               />
-              <Button variant="outline" onClick={() => refetch()}>
-                Atualizar
+              <Button
+                variant="outline"
+                disabled={isFetching}
+                onClick={() => refetch()}
+              >
+                {isFetching ? "Atualizando..." : "Atualizar"}
               </Button>
             </div>
           </div>
@@ -867,7 +829,7 @@ const Orcamentos = () => {
         {isLoading && (
           <div className="px-5 py-10 flex items-center justify-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="w-4 h-4 animate-spin" />
-            Carregando orcamentos...
+            Carregando orçamentos...
           </div>
         )}
 
@@ -877,7 +839,7 @@ const Orcamentos = () => {
               <AlertCircle className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
               <div>
                 <p className="font-medium text-destructive">
-                  Erro ao carregar orcamentos
+                  Erro ao carregar orçamentos
                 </p>
                 <p className="text-sm text-destructive/80 mt-1">
                   {error instanceof Error ? error.message : "Erro desconhecido."}
@@ -893,7 +855,7 @@ const Orcamentos = () => {
               <thead>
                 <tr className="border-b bg-muted/50">
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    <SortableTableHeader label="Numero" sortField="numero" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
+                    <SortableTableHeader label="Número" sortField="numero" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
                     <SortableTableHeader label="Tipo" sortField="tipo" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
@@ -908,16 +870,16 @@ const Orcamentos = () => {
                     <SortableTableHeader label="Solicitante" sortField="cliente" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    <SortableTableHeader label="Identificacao" sortField="equipamento" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
+                    <SortableTableHeader label="Identificação" sortField="equipamento" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
                     <SortableTableHeader label="OS" sortField="os" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    <SortableTableHeader label="Pecas" sortField="valor_pecas" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
+                    <SortableTableHeader label="Peças" sortField="valor_pecas" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    <SortableTableHeader label="Servicos" sortField="valor_servicos" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
+                    <SortableTableHeader label="Serviços" sortField="valor_servicos" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
                     <SortableTableHeader label="Total" sortField="valor_total" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
@@ -926,7 +888,7 @@ const Orcamentos = () => {
                     <SortableTableHeader label="Forma pgto." sortField="forma_pagamento" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
-                    <SortableTableHeader label="Orcamentista" sortField="orcamentista" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
+                    <SortableTableHeader label="Orçamentista" sortField="orcamentista" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
                     <SortableTableHeader label="Data" sortField="data" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
@@ -935,13 +897,13 @@ const Orcamentos = () => {
                     <SortableTableHeader label="Validade" sortField="validade" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
                   <th className="text-right px-5 py-3 font-medium text-muted-foreground">
-                    Acoes
+                    Ações
                   </th>
                 </tr>
               </thead>
 
               <tbody>
-                {visibleOrcamentos.map((orcamento) => {
+                {orcamentos.map((orcamento) => {
                   const empresa = getEmpresaNome(orcamento);
                   const identificacao =
                     orcamento.identificador ||
@@ -1070,7 +1032,7 @@ const Orcamentos = () => {
                         <div className="flex justify-end">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" title="Acoes">
+                              <Button variant="ghost" size="icon" title="Ações">
                                 <MoreHorizontal className="w-4 h-4" />
                               </Button>
                             </DropdownMenuTrigger>
@@ -1144,13 +1106,13 @@ const Orcamentos = () => {
                   );
                 })}
 
-                {filtered.length === 0 && (
+                {orcamentos.length === 0 && (
                   <tr>
                     <td
                       colSpan={15}
                       className="px-5 py-8 text-center text-sm text-muted-foreground"
                     >
-                      Nenhum orcamento encontrado.
+                      Nenhum orçamento encontrado.
                     </td>
                   </tr>
                 )}
@@ -1158,7 +1120,7 @@ const Orcamentos = () => {
             </table>
             <ListPagination
               {...orcamentosPagination}
-              onPageChange={orcamentosPagination.setPage}
+              onPageChange={setPage}
             />
           </div>
         )}

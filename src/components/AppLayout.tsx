@@ -114,10 +114,12 @@ const AppLayout = () => {
   }, [hasPermission, queryClient]);
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-dvh min-h-0 w-full overflow-hidden">
       <AppSidebar />
-      <main className="min-w-0 flex-1 overflow-auto">
-        <Outlet />
+      <main className="h-full min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
+        <div className="min-h-full w-full">
+          <Outlet />
+        </div>
       </main>
     </div>
   );

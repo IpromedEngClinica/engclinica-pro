@@ -1,7 +1,6 @@
 import aciLogo from "@/assets/aci-logo-hd.png";
 import type { RelatorioVisitaExternaDados } from "@/services/relatoriosService";
 import { imageToDataUrl } from "@/utils/pdfImageUtils";
-import { renderHtmlToPdf } from "@/utils/pdfHtmlRenderer";
 import { renderHtmlToPdfWithPrintToPdf } from "@/utils/printToPdfRenderer";
 import { buildVisitaExternaHtml } from "@/utils/visitaExternaPdfTemplate";
 
@@ -35,12 +34,7 @@ export const gerarPdfVisitaExterna = async (
 
   if (printToPdf) return printToPdf;
 
-  return renderHtmlToPdf({
-    html,
-    fileName,
-    save,
-    orientation: "l",
-    marginMm: 5,
-    fontScale: 1,
-  });
+  throw new Error(
+    "O renderizador profissional de PDF nao esta disponivel. Tente novamente em alguns instantes."
+  );
 };

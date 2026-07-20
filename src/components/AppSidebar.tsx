@@ -277,7 +277,7 @@ const AppSidebar = () => {
     <aside
       className={`flex flex-col bg-sidebar text-sidebar-foreground transition-all duration-300 ${
         collapsed ? "w-16" : "w-64"
-      } h-screen shrink-0`}
+      } h-full min-h-0 shrink-0 overflow-hidden`}
     >
       <div className="flex items-center gap-3 px-4 py-6 border-b border-sidebar-border">
         <div className="w-9 h-9 rounded-lg bg-sidebar-primary flex items-center justify-center shrink-0">

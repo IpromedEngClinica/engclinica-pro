@@ -213,7 +213,7 @@ const parseCadastroRapidoEmpresa = (texto: string): Partial<EmpresaFormInput> =>
     cpfCnpj: cpfCnpj ? formatCpfCnpj(cpfCnpj) : "",
     tipoCliente:
       documentoDigits.length === 14
-        ? "Pessoa JurÃ­dica"
+        ? "Pessoa Jurídica"
         : documentoDigits.length === 11
           ? "Particular"
           : "",
