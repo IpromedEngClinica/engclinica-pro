@@ -7,6 +7,8 @@ export type OrcamentoStatus =
   | "faturado"
   | "cancelado";
 
+export type OrcamentosContagemPorStatus = Record<OrcamentoStatus, number>;
+
 export type OrcamentoItemTipo = "servico" | "peca" | "deslocamento" | "outro";
 export type OrcamentoTipo = "servico" | "pecas" | "pecas_servicos";
 export type OrcamentoOrigem = "os" | "avulso";
@@ -374,6 +376,13 @@ const selectOrcamentos = `
   )
 `;
 
+const ORCAMENTOS_RESUMO_PAGE_SIZE = 1000;
+const ITENS_SELECT_MARKER = ",\n  itens:orcamento_itens";
+const selectOrcamentosResumo = selectOrcamentos.slice(
+  0,
+  selectOrcamentos.indexOf(ITENS_SELECT_MARKER)
+);
+
 const toDatabasePayload = (input: OrcamentoFormInput) => ({
   empresa_id: input.empresaId,
   equipamento_id: input.equipamentoId || null,
@@ -584,6 +593,75 @@ const aplicarReflexoNaOS = async ({
 };
 
 export const orcamentosService = {
+  async listarResumo() {
+    const primeiraPagina = await supabase
+      .from("orcamentos")
+      .select(selectOrcamentosResumo, { count: "exact" })
+      .eq("ativo", true)
+      .order("numero", { ascending: false })
+      .order("created_at", { ascending: false })
+      .range(0, ORCAMENTOS_RESUMO_PAGE_SIZE - 1);
+
+    if (primeiraPagina.error) {
+      throw new Error(primeiraPagina.error.message);
+    }
+
+    const total = primeiraPagina.count || primeiraPagina.data?.length || 0;
+    const paginasRestantes = Math.max(
+      0,
+      Math.ceil(total / ORCAMENTOS_RESUMO_PAGE_SIZE) - 1
+    );
+    const resultadosRestantes = await Promise.all(
+      Array.from({ length: paginasRestantes }, (_, index) => {
+        const from = (index + 1) * ORCAMENTOS_RESUMO_PAGE_SIZE;
+        return supabase
+          .from("orcamentos")
+          .select(selectOrcamentosResumo)
+          .eq("ativo", true)
+          .order("numero", { ascending: false })
+          .order("created_at", { ascending: false })
+          .range(from, from + ORCAMENTOS_RESUMO_PAGE_SIZE - 1);
+      })
+    );
+
+    const orcamentos = [...(primeiraPagina.data || [])];
+    for (const resultado of resultadosRestantes) {
+      if (resultado.error) {
+        throw new Error(resultado.error.message);
+      }
+      orcamentos.push(...(resultado.data || []));
+    }
+
+    return orcamentos as unknown as OrcamentoSupabase[];
+  },
+
+  async contarPorStatus(): Promise<OrcamentosContagemPorStatus> {
+    const statuses: OrcamentoStatus[] = [
+      "pendente",
+      "aprovado",
+      "reprovado",
+      "faturado",
+      "cancelado",
+    ];
+    const resultados = await Promise.all(
+      statuses.map(async (status) => {
+        const { count, error } = await supabase
+          .from("orcamentos")
+          .select("id", { count: "exact", head: true })
+          .eq("ativo", true)
+          .eq("status", status);
+
+        if (error) {
+          throw new Error(error.message);
+        }
+
+        return [status, count || 0] as const;
+      })
+    );
+
+    return Object.fromEntries(resultados) as OrcamentosContagemPorStatus;
+  },
+
   async listar() {
     const { data, error } = await supabase
       .from("orcamentos")

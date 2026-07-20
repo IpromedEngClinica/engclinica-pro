@@ -47,7 +47,8 @@ import { toast } from "@/hooks/use-toast";
 import {
   useAplicarDescontoOrcamento,
   useAlterarStatusOrcamento,
-  useOrcamentos,
+  useOrcamentosContagemPorStatus,
+  useOrcamentosResumo,
 } from "@/hooks/useOrcamentos";
 import { usePaginatedList } from "@/hooks/usePaginatedList";
 import {
@@ -191,7 +192,8 @@ const Orcamentos = () => {
   const [ordemServicoSelecionada, setOrdemServicoSelecionada] =
     useState<OrdemServicoSupabase | null>(null);
   const { data: orcamentos = [], isLoading, isError, error, refetch } =
-    useOrcamentos();
+    useOrcamentosResumo();
+  const { data: contagemPorStatus } = useOrcamentosContagemPorStatus();
   const alterarStatus = useAlterarStatusOrcamento();
   const aplicarDesconto = useAplicarDescontoOrcamento();
 
@@ -392,6 +394,7 @@ const Orcamentos = () => {
   };
 
   const countByStatus = (status: OrcamentoStatus) =>
+    contagemPorStatus?.[status] ??
     orcamentos.filter((orcamento) => orcamento.status === status).length;
 
   const openCreate = () => {
@@ -400,15 +403,35 @@ const Orcamentos = () => {
     setFormOpen(true);
   };
 
-  const openDetails = (orcamento: OrcamentoSupabase) => {
-    setSelected(orcamento);
-    setDetalhesOpen(true);
+  const openDetails = async (orcamento: OrcamentoSupabase) => {
+    try {
+      const completo = await orcamentosService.buscarPorId(orcamento.id);
+      setSelected(completo);
+      setDetalhesOpen(true);
+    } catch (error) {
+      toast({
+        title: "Erro ao carregar orçamento",
+        description: error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const openEdit = (orcamento: OrcamentoSupabase) => {
-    setSelected(orcamento);
-    setMode("edit");
-    setFormOpen(true);
+  const openEdit = async (orcamento: OrcamentoSupabase) => {
+    try {
+      const completo = orcamento.itens
+        ? orcamento
+        : await orcamentosService.buscarPorId(orcamento.id);
+      setSelected(completo);
+      setMode("edit");
+      setFormOpen(true);
+    } catch (error) {
+      toast({
+        title: "Erro ao carregar orçamento",
+        description: error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    }
   };
 
   const abrirEmpresa = async (empresa: OrcamentoSupabase["empresa"]) => {

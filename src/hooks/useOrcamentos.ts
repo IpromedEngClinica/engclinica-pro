@@ -4,6 +4,7 @@ import {
   OrcamentoFormInput,
   OrcamentoStatus,
   OrcamentoSupabase,
+  OrcamentosContagemPorStatus,
   orcamentosService,
 } from "@/services/orcamentosService";
 
@@ -25,6 +26,25 @@ export const useOrcamentos = (options?: UseOrcamentosOptions) => {
     enabled: options?.enabled ?? true,
     staleTime: options?.staleTime ?? ORCAMENTOS_STALE_TIME,
     gcTime: options?.gcTime ?? ORCAMENTOS_GC_TIME,
+  });
+};
+
+export const useOrcamentosResumo = (options?: UseOrcamentosOptions) => {
+  return useQuery<OrcamentoSupabase[]>({
+    queryKey: [...ORCAMENTOS_QUERY_KEY, "resumo"],
+    queryFn: orcamentosService.listarResumo,
+    enabled: options?.enabled ?? true,
+    staleTime: options?.staleTime ?? ORCAMENTOS_STALE_TIME,
+    gcTime: options?.gcTime ?? ORCAMENTOS_GC_TIME,
+  });
+};
+
+export const useOrcamentosContagemPorStatus = () => {
+  return useQuery<OrcamentosContagemPorStatus>({
+    queryKey: [...ORCAMENTOS_QUERY_KEY, "contagem-por-status"],
+    queryFn: orcamentosService.contarPorStatus,
+    staleTime: ORCAMENTOS_STALE_TIME,
+    gcTime: ORCAMENTOS_GC_TIME,
   });
 };
 
