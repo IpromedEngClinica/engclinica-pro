@@ -401,7 +401,7 @@ const OrcamentoDetalhesDialog = ({
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground mb-1">
-                Detalhes do Orcamento
+                Detalhes do Orçamento
               </p>
               <TextBlock value={orcamento.detalhes_orcamento} />
             </div>

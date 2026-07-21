@@ -1,6 +1,7 @@
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
+import { existsSync } from "node:fs";
 import { componentTagger } from "lovable-tagger";
 
 const PDF_RENDER_ENDPOINT = "/api/pdf/render";
@@ -119,9 +120,19 @@ const pdfRenderPlugin = (): Plugin => {
 
   const getBrowser = async () => {
     if (!browserPromise) {
-      browserPromise = import("playwright").then(({ chromium }) =>
-        chromium.launch({ headless: true })
-      );
+      browserPromise = import("playwright").then(({ chromium }) => {
+        const executablePath = [
+          process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
+          "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+          "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+          "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+        ].find((candidate) => candidate && existsSync(candidate));
+
+        return chromium.launch({
+          headless: true,
+          ...(executablePath ? { executablePath } : {}),
+        });
+      });
     }
 
     try {
@@ -141,119 +152,124 @@ const pdfRenderPlugin = (): Plugin => {
     }
   };
 
-  type PlaywrightBrowser = {
-      close: () => Promise<void>;
-      newPage: (options: unknown) => Promise<{
-        setContent: (html: string, options: unknown) => Promise<void>;
-        emulateMedia: (options: unknown) => Promise<void>;
-        addStyleTag: (options: { content: string }) => Promise<void>;
-        pdf: (options: unknown) => Promise<Buffer>;
-        close: () => Promise<void>;
-      }>;
-    };
+  const handlePdfRequest = async (request: any, response: any) => {
+    if (request.method !== "POST") {
+      response.statusCode = 405;
+      response.setHeader("Content-Type", "application/json; charset=utf-8");
+      response.end(JSON.stringify({ error: "Metodo nao permitido." }));
+      return;
+    }
+
+    try {
+      const rawBody = await readRequestBody(request);
+      const payload = JSON.parse(rawBody) as {
+        html?: string;
+        fileName?: string;
+        orientation?: "p" | "l";
+        footerText?: string;
+        footerFontSizePx?: number;
+        marginBottomMm?: number;
+      };
+
+      if (!payload.html) {
+        response.statusCode = 400;
+        response.setHeader("Content-Type", "application/json; charset=utf-8");
+        response.end(JSON.stringify({ error: "HTML do PDF nao informado." }));
+        return;
+      }
+
+      const landscape = payload.orientation === "l";
+      const footerEnabled = Boolean(payload.footerText);
+      const browser = await getBrowser();
+      const page = await browser.newPage({
+        deviceScaleFactor: 1,
+        viewport: landscape
+          ? { width: 1588, height: 1123 }
+          : { width: 1123, height: 1588 },
+      });
+
+      try {
+        await page.setContent(payload.html, {
+          waitUntil: "networkidle",
+          timeout: 30000,
+        });
+        await page.emulateMedia({ media: "print" });
+        await page.addStyleTag({
+          content: buildPdfPrintOverrides({
+            bottomMarginMm: payload.marginBottomMm,
+            footerEnabled,
+            landscape,
+          }),
+        });
+
+        const pdfBuffer = await page.pdf({
+          format: "A4",
+          landscape,
+          printBackground: true,
+          preferCSSPageSize: true,
+          displayHeaderFooter: footerEnabled,
+          headerTemplate: "<div></div>",
+          footerTemplate: buildFooterTemplate(
+            payload.footerText,
+            payload.footerFontSizePx
+          ),
+          timeout: 45000,
+        });
+
+        response.statusCode = 200;
+        response.setHeader("Content-Type", "application/pdf");
+        response.setHeader(
+          "Content-Disposition",
+          `attachment; filename="${escapeHtml(payload.fileName || "documento.pdf")}"`
+        );
+        response.end(pdfBuffer);
+      } finally {
+        await page.close();
+      }
+    } catch (error) {
+      response.statusCode = 500;
+      response.setHeader("Content-Type", "application/json; charset=utf-8");
+      response.end(
+        JSON.stringify({
+          error:
+            error instanceof Error
+              ? error.message
+              : "Erro ao renderizar PDF com Playwright.",
+        })
+      );
+    }
+  };
+
+  const closeBrowser = async () => {
+    if (!browserPromise) return;
+
+    try {
+      const browser = (await browserPromise) as { close: () => Promise<void> };
+      await browser.close();
+    } catch {
+      // The browser may already be closed when the local server stops.
+    } finally {
+      browserPromise = null;
+    }
+  };
+
+  const registerMiddleware = (server: {
+    middlewares: { use: (route: string, handler: typeof handlePdfRequest) => void };
+    httpServer?: { once: (event: string, listener: () => void) => void } | null;
+  }) => {
+    server.middlewares.use(PDF_RENDER_ENDPOINT, handlePdfRequest);
+    server.httpServer?.once("close", () => {
+      void closeBrowser();
+    });
+  };
 
   return {
     name: "local-playwright-pdf-renderer",
-    apply: "serve",
     configureServer(server) {
-      server.middlewares.use(PDF_RENDER_ENDPOINT, async (request, response) => {
-        if (request.method !== "POST") {
-          response.statusCode = 405;
-          response.setHeader("Content-Type", "application/json; charset=utf-8");
-          response.end(JSON.stringify({ error: "Metodo nao permitido." }));
-          return;
-        }
-
-        try {
-          const rawBody = await readRequestBody(request);
-          const payload = JSON.parse(rawBody) as {
-            html?: string;
-            fileName?: string;
-            orientation?: "p" | "l";
-            footerText?: string;
-            footerFontSizePx?: number;
-            marginBottomMm?: number;
-          };
-
-          if (!payload.html) {
-            response.statusCode = 400;
-            response.setHeader("Content-Type", "application/json; charset=utf-8");
-            response.end(JSON.stringify({ error: "HTML do PDF nao informado." }));
-            return;
-          }
-
-          const landscape = payload.orientation === "l";
-          const footerEnabled = Boolean(payload.footerText);
-          const browser = await getBrowser();
-          const page = await browser.newPage({
-            deviceScaleFactor: 1,
-            viewport: landscape
-              ? { width: 1588, height: 1123 }
-              : { width: 1123, height: 1588 },
-          });
-
-          try {
-            await page.setContent(payload.html, {
-              waitUntil: "networkidle",
-              timeout: 30000,
-            });
-            await page.emulateMedia({ media: "print" });
-            await page.addStyleTag({
-              content: buildPdfPrintOverrides({
-                bottomMarginMm: payload.marginBottomMm,
-                footerEnabled,
-                landscape,
-              }),
-            });
-
-            const pdfBuffer = await page.pdf({
-              format: "A4",
-              landscape,
-              printBackground: true,
-              preferCSSPageSize: true,
-              displayHeaderFooter: footerEnabled,
-              headerTemplate: "<div></div>",
-              footerTemplate: buildFooterTemplate(
-                payload.footerText,
-                payload.footerFontSizePx
-              ),
-              timeout: 45000,
-            });
-
-            response.statusCode = 200;
-            response.setHeader("Content-Type", "application/pdf");
-            response.setHeader(
-              "Content-Disposition",
-              `attachment; filename="${escapeHtml(payload.fileName || "documento.pdf")}"`
-            );
-            response.end(pdfBuffer);
-          } finally {
-            await page.close();
-          }
-        } catch (error) {
-          response.statusCode = 500;
-          response.setHeader("Content-Type", "application/json; charset=utf-8");
-          response.end(
-            JSON.stringify({
-              error:
-                error instanceof Error
-                  ? error.message
-                  : "Erro ao renderizar PDF com Playwright.",
-            })
-          );
-        }
-      });
-
-      server.httpServer?.once("close", async () => {
-        if (!browserPromise) return;
-
-        try {
-          const browser = (await browserPromise) as { close: () => Promise<void> };
-          await browser.close();
-        } catch {
-          // No cleanup action is needed when the dev server is already closing.
-        }
-      });
+      registerMiddleware(server);
+    },
+    configurePreviewServer(server) {
+      registerMiddleware(server);
     },
   };
 };

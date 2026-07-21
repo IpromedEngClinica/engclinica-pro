@@ -27,6 +27,10 @@ import { useEstadosOS, useTiposOS } from "@/hooks/useCamposOS";
 import { usePlanoUsuarios } from "@/hooks/usePlanos";
 import PreventivaChecklistDialog from "@/components/PreventivaChecklistDialog";
 import { ordenarNomesEstadosOS } from "@/utils/ordemEstadosOS";
+import {
+  localDateTimeToIso,
+  toLocalDateTimeInput,
+} from "@/utils/planoDatas";
 
 export type DialogMode = "create" | "edit" | "view";
 
@@ -39,12 +43,14 @@ interface Props {
   initialTipoServico?: string;
 }
 
-const emptyForm: OrdemServicoFormInput = {
+const createEmptyForm = (): OrdemServicoFormInput => ({
   empresaId: "",
   equipamentoId: "",
   tipoOsId: "",
   estadoOsId: "",
   tecnicoResponsavelId: "",
+  dataAbertura: toLocalDateTimeInput(new Date().toISOString()),
+  dataFechamento: null,
   solicitanteTexto: "",
   responsavelTexto: "Ícaro Rezende",
   problemaRelatado: "",
@@ -52,7 +58,7 @@ const emptyForm: OrdemServicoFormInput = {
   descricaoServico: "",
   observacoes: "",
   statusSistema: "aberta",
-};
+});
 
 const getEmpresaLabel = (empresa: {
   nome: string;
@@ -151,7 +157,7 @@ const OrdemServicoFormDialog = ({
   const { data: estadosOS = [] } = useEstadosOS();
   const { data: usuarios = [] } = usePlanoUsuarios();
 
-  const [form, setForm] = useState<OrdemServicoFormInput>(emptyForm);
+  const [form, setForm] = useState<OrdemServicoFormInput>(createEmptyForm);
   const [acessorios, setAcessorios] = useState<AcessorioFormItem[]>([]);
   const [novoAcessorio, setNovoAcessorio] = useState("");
   const [checklistEditOpen, setChecklistEditOpen] = useState(false);
@@ -246,10 +252,15 @@ const OrdemServicoFormDialog = ({
     return estado?.nome || "";
   }, [estadosOS, form.estadoOsId]);
 
+  const selectedEstado = useMemo(
+    () => estadosOS.find((item) => item.id === form.estadoOsId) || null,
+    [estadosOS, form.estadoOsId]
+  );
+
   useEffect(() => {
     if (open) return;
 
-    setForm(emptyForm);
+    setForm(createEmptyForm());
     setAcessorios([]);
     setNovoAcessorio("");
     setChecklistEditOpen(false);
@@ -265,6 +276,8 @@ const OrdemServicoFormDialog = ({
         tipoOsId: os.tipo_os_id || "",
         estadoOsId: os.estado_os_id || "",
         tecnicoResponsavelId: os.tecnico_responsavel_id || "",
+        dataAbertura: toLocalDateTimeInput(os.data_abertura),
+        dataFechamento: toLocalDateTimeInput(os.data_fechamento) || null,
         solicitanteTexto: os.solicitante_texto || "",
         responsavelTexto: os.responsavel_texto || "",
         problemaRelatado: os.problema_relatado || "",
@@ -288,7 +301,7 @@ const OrdemServicoFormDialog = ({
       : null;
 
     setForm({
-      ...emptyForm,
+      ...createEmptyForm(),
       empresaId: fromEquipamentoEmpresaId || "",
       equipamentoId: fromEquipamentoId || "",
       tipoOsId: tipoInicial?.id || "",
@@ -340,7 +353,33 @@ const OrdemServicoFormDialog = ({
 
   const handleEstadoChange = (label: string) => {
     const estado = estadosOS.find((item) => item.nome === label);
-    update("estadoOsId", estado?.id || "");
+    if (readOnly) return;
+
+    setForm((prev) => {
+      const encerraOs = Boolean(estado?.finaliza_os || estado?.cancela_os);
+
+      return {
+        ...prev,
+        estadoOsId: estado?.id || "",
+        dataFechamento: encerraOs
+          ? prev.dataFechamento || prev.dataAbertura || toLocalDateTimeInput(new Date().toISOString())
+          : null,
+      };
+    });
+  };
+
+  const handleDataAberturaChange = (value: string) => {
+    if (readOnly) return;
+
+    setForm((prev) => ({
+      ...prev,
+      dataAbertura: value,
+      dataFechamento:
+        (selectedEstado?.finaliza_os || selectedEstado?.cancela_os) &&
+        (!prev.dataFechamento || prev.dataFechamento === prev.dataAbertura)
+          ? value
+          : prev.dataFechamento,
+    }));
   };
 
   const handleTecnicoExecutorChange = (label: string) => {
@@ -434,9 +473,48 @@ const OrdemServicoFormDialog = ({
       return;
     }
 
+    if (!form.dataAbertura) {
+      toast({
+        title: "Informe a data e hora de abertura.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const encerraOs = Boolean(
+      selectedEstado?.finaliza_os || selectedEstado?.cancela_os
+    );
+
+    if (form.dataFechamento && !encerraOs) {
+      toast({
+        title: "Selecione um estado final para informar o fechamento.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const dataFechamentoLocal = encerraOs
+      ? form.dataFechamento || form.dataAbertura
+      : null;
+
+    if (
+      dataFechamentoLocal &&
+      new Date(dataFechamentoLocal).getTime() < new Date(form.dataAbertura).getTime()
+    ) {
+      toast({
+        title: "A data de fechamento não pode ser anterior à abertura.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       const payload: OrdemServicoFormInput = {
         ...form,
+        dataAbertura: localDateTimeToIso(form.dataAbertura),
+        dataFechamento: dataFechamentoLocal
+          ? localDateTimeToIso(dataFechamentoLocal)
+          : null,
         tecnicoResponsavelId: selectedTecnicoExecutor.id,
         responsavelTexto: selectedTecnicoExecutor.nome,
         solicitanteTexto: selectedEmpresaLabel,
@@ -518,6 +596,31 @@ const OrdemServicoFormDialog = ({
                     placeholder="Selecione o estado"
                     emptyText="Nenhum estado encontrado."
                   />
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm">Data e hora de abertura *</Label>
+                <Input
+                  type="datetime-local"
+                  value={form.dataAbertura || ""}
+                  onChange={(event) => handleDataAberturaChange(event.target.value)}
+                  disabled={readOnly || saving}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm">Data e hora de fechamento</Label>
+                <Input
+                  type="datetime-local"
+                  value={form.dataFechamento || ""}
+                  onChange={(event) => update("dataFechamento", event.target.value)}
+                  disabled={readOnly || saving}
+                />
+                {!readOnly && !selectedEstado?.finaliza_os && !selectedEstado?.cancela_os && (
+                  <p className="text-xs text-muted-foreground">
+                    Selecione um estado final para preencher o fechamento.
+                  </p>
                 )}
               </div>
             </div>

@@ -56,6 +56,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   useExcluirEquipamento,
+  useEquipamentosFilterOptions,
   useEquipamentosPaginados,
 } from "@/hooks/useEquipamentos";
 import {
@@ -283,25 +284,22 @@ const Equipamentos = () => {
     refetch,
     isFetching,
   } = useEquipamentosPaginados(equipamentosQueryFiltros);
+  const { data: opcoesFiltrosEquipamentos } =
+    useEquipamentosFilterOptions(statusFiltro);
 
   const equipamentos = equipamentosResult?.items || [];
   const totalEquipamentos = equipamentosResult?.total || 0;
   const showTotalEquipamentos = equipamentosResult !== undefined;
 
-  const uniq = (arr: string[]) =>
-    Array.from(new Set(arr.filter(Boolean))).sort((a, b) =>
-      a.localeCompare(b, "pt-BR")
-    );
-
   const opts = useMemo(
     () => ({
-      estado: uniq(equipamentos.map((e) => e.status)),
-      proprietario: uniq(equipamentos.map((e) => getEmpresaNome(e))),
-      tipo: uniq(equipamentos.map((e) => getTipoEquipamento(e))),
-      fabricante: uniq(equipamentos.map((e) => e.fabricante || "")),
-      setor: uniq(equipamentos.map((e) => e.setor || "")),
+      estado: opcoesFiltrosEquipamentos?.estados || [],
+      proprietario: opcoesFiltrosEquipamentos?.proprietarios || [],
+      tipo: opcoesFiltrosEquipamentos?.tipos || [],
+      fabricante: opcoesFiltrosEquipamentos?.fabricantes || [],
+      setor: opcoesFiltrosEquipamentos?.setores || [],
     }),
-    [equipamentos]
+    [opcoesFiltrosEquipamentos]
   );
 
   const sortGetters = useMemo<

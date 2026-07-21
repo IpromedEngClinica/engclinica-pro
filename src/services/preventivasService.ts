@@ -25,6 +25,8 @@ export type ExecutarPreventivaInput = {
   procedimentoId: string;
   respostas: PreventivaRespostaInput[];
   observacoes?: string;
+  dataAbertura: string;
+  dataFechamento: string;
 };
 
 export type AtualizarChecklistPreventivaInput = {
@@ -574,9 +576,19 @@ export const preventivasService = {
     const equipamentoData = equipamento as unknown as EquipamentoSupabase;
     const tipoOS = await buscarTipoOSPreventiva();
     const estadoFechado = await buscarEstadoFechado();
-    const dataFechamento = new Date();
+    const dataAbertura = new Date(input.dataAbertura);
+    const dataFechamento = new Date(input.dataFechamento);
+
+    if (Number.isNaN(dataAbertura.getTime()) || Number.isNaN(dataFechamento.getTime())) {
+      throw new Error("Data e horário da preventiva inválidos.");
+    }
+
+    if (dataFechamento.getTime() < dataAbertura.getTime()) {
+      throw new Error("A data de fechamento não pode ser anterior à abertura.");
+    }
+
     const validadeMeses = Number(procedimento.validade_meses || 12);
-    const dataValidade = calcularDataValidadePreventiva(dataFechamento.toISOString(), validadeMeses);
+    const dataValidade = calcularDataValidadePreventiva(dataAbertura.toISOString(), validadeMeses);
 
     const { data: osCriada, error: osError } = await supabase
       .from("ordens_servico")
@@ -590,6 +602,7 @@ export const preventivasService = {
           equipamentoData.empresa?.nome || equipamentoData.empresa?.nome_fantasia ||
           null,
         responsavel_texto: "Icaro Rezende",
+        data_abertura: dataAbertura.toISOString(),
         data_fechamento: dataFechamento.toISOString(),
         problema_relatado: null,
         origem_problema: "Manutencao preventiva",
@@ -664,7 +677,7 @@ export const preventivasService = {
     await supabase
       .from("equipamentos")
       .update({
-        data_ultima_preventiva: toDateOnly(dataFechamento),
+        data_ultima_preventiva: toDateOnly(dataAbertura),
         data_proxima_preventiva: dataValidade,
       })
       .eq("id", equipamentoData.id);

@@ -306,7 +306,7 @@ function buildBudgetPayload(row, organizacaoId) {
       .filter((item) => item.tipo === "peca")
       .reduce((sum, item) => sum + item.value, 0);
   const descontoValor = normalizeMoney(row.arkmeds_desconto);
-  const cleanObservations = cleanSpreadsheetObservations(row);
+  const cleanObservations = String(row.observacoes_gerais ?? "").trim() || cleanSpreadsheetObservations(row);
   const observationsWithPending = combineNotes(
     cleanObservations,
     getSpreadsheetOsNumber(row) && !row.ordem_servico_id_resolvida
@@ -1001,16 +1001,9 @@ async function importOneBudget(client, row, organizacaoId, mode) {
 }
 
 async function adjustBudgetSequence(client) {
-  await client.query(`
-    select setval(
-      'public.orcamentos_numero_seq',
-      greatest(
-        coalesce((select max(numero::bigint) from public.orcamentos where numero ~ '^\\d+$'), 1),
-        coalesce((select last_value from public.orcamentos_numero_seq), 1)
-      ),
-      true
-    )
-  `);
+  // Numeros importados sao historicos e nao podem alterar a sequencia
+  // exclusiva dos novos orcamentos criados no Ipromed.
+  await client.query("select last_value from public.orcamentos_numero_automatico_seq");
 }
 
 function toResultRow(row, importResult, result = importResult.status, message = importResult.message) {

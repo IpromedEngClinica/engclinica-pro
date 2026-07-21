@@ -127,6 +127,36 @@ export type ReciboInput = {
   observacoes?: string | null;
 };
 
+export type ReciboEquipamentoOpcao = Pick<
+  EquipamentoSupabase,
+  | "id"
+  | "empresa_id"
+  | "tipo_texto"
+  | "fabricante"
+  | "modelo"
+  | "numero_serie"
+  | "patrimonio"
+  | "tag"
+  | "tipo_equipamento"
+>;
+
+export type ReciboOrdemServicoOpcao = Pick<
+  OrdemServicoSupabase,
+  "id" | "numero" | "empresa_id" | "equipamento_id" | "status_sistema"
+>;
+
+export type ReciboOrcamentoOpcao = Pick<
+  OrcamentoSupabase,
+  | "id"
+  | "numero"
+  | "identificador"
+  | "empresa_id"
+  | "equipamento_id"
+  | "ordem_servico_id"
+  | "valor_total"
+  | "status"
+>;
+
 export type VencimentoTipoServico = "calibracao" | "preventiva";
 
 export type VencimentosFiltro = {
@@ -648,6 +678,83 @@ export const utilitariosService = {
     if (error) throw new Error(error.message);
 
     return (data || []) as unknown as Recibo[];
+  },
+
+  async listarEquipamentosParaRecibo(
+    empresaId: string
+  ): Promise<ReciboEquipamentoOpcao[]> {
+    if (!empresaId) return [];
+
+    const { data, error } = await supabase
+      .from("equipamentos")
+      .select(
+        `
+          id,
+          empresa_id,
+          tipo_texto,
+          fabricante,
+          modelo,
+          numero_serie,
+          patrimonio,
+          tag,
+          tipo_equipamento:tipos_equipamento (id, nome)
+        `
+      )
+      .eq("ativo", true)
+      .eq("empresa_id", empresaId)
+      .order("numero_cadastro", { ascending: false });
+
+    if (error) throw new Error(error.message);
+
+    return (data || []) as unknown as ReciboEquipamentoOpcao[];
+  },
+
+  async listarOrdensServicoParaRecibo(
+    empresaId: string,
+    equipamentoId: string
+  ): Promise<ReciboOrdemServicoOpcao[]> {
+    if (!empresaId || !equipamentoId) return [];
+
+    const { data, error } = await supabase
+      .from("ordens_servico")
+      .select("id, numero, empresa_id, equipamento_id, status_sistema")
+      .eq("ativo", true)
+      .eq("oculta_operacao", false)
+      .eq("empresa_id", empresaId)
+      .eq("equipamento_id", equipamentoId)
+      .order("numero_ordem", { ascending: false });
+
+    if (error) throw new Error(error.message);
+
+    return (data || []) as ReciboOrdemServicoOpcao[];
+  },
+
+  async listarOrcamentosParaRecibo(
+    empresaId: string,
+    equipamentoId: string,
+    ordemServicoId?: string
+  ): Promise<ReciboOrcamentoOpcao[]> {
+    if (!empresaId || !equipamentoId) return [];
+
+    let query = supabase
+      .from("orcamentos")
+      .select(
+        "id, numero, identificador, empresa_id, equipamento_id, ordem_servico_id, valor_total, status"
+      )
+      .eq("ativo", true)
+      .eq("empresa_id", empresaId)
+      .eq("equipamento_id", equipamentoId)
+      .order("data_orcamento", { ascending: false });
+
+    if (ordemServicoId) {
+      query = query.eq("ordem_servico_id", ordemServicoId);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw new Error(error.message);
+
+    return (data || []) as ReciboOrcamentoOpcao[];
   },
 
   async criarRecibo(input: ReciboInput) {

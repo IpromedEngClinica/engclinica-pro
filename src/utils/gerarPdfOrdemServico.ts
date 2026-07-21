@@ -1,7 +1,6 @@
 import aciLogo from "@/assets/aci-logo-hd.png";
 import type { OrdemServicoSupabase } from "@/services/ordensServicoService";
 import { imageToDataUrl } from "@/utils/pdfImageUtils";
-import { renderHtmlToPdf } from "@/utils/pdfHtmlRenderer";
 import { renderHtmlToPdfWithPrintToPdf } from "@/utils/printToPdfRenderer";
 import {
   buildOrdemServicoHtml,
@@ -55,13 +54,11 @@ export const gerarPdfOrdemServico = async (
     footerText: ORDEM_SERVICO_FOOTER_TEXT,
   });
 
-  if (printToPdfResult) return printToPdfResult;
+  if (!printToPdfResult) {
+    throw new Error(
+      "Nao foi possivel gerar o PDF vetorial da OS. Verifique o servico de PDF e tente novamente."
+    );
+  }
 
-  return renderHtmlToPdf({
-    html,
-    fileName,
-    save,
-    footerText: ORDEM_SERVICO_FOOTER_TEXT,
-    footerHeightMm: 16,
-  });
+  return printToPdfResult;
 };

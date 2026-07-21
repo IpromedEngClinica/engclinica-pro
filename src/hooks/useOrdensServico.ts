@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ListarOrdensServicoPaginadoFiltros,
+  OrdensServicoFilterOptions,
   OrdemServicoFormInput,
   OrdensServicoPaginadoResult,
   OrdemServicoSupabase,
@@ -63,6 +64,16 @@ export const useOrdensServicoPaginadas = (
     placeholderData: (previousData) => previousData,
     staleTime: ORDENS_SERVICO_STALE_TIME,
     gcTime: ORDENS_SERVICO_GC_TIME,
+    refetchOnWindowFocus: false,
+  });
+};
+
+export const useOrdensServicoFilterOptions = () => {
+  return useQuery<OrdensServicoFilterOptions>({
+    queryKey: [...ORDENS_SERVICO_QUERY_KEY, "opcoes-filtros"],
+    queryFn: ordensServicoService.listarOpcoesFiltros,
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
 };

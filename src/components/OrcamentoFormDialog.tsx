@@ -105,6 +105,7 @@ type ServicoRelacaoForm = {
   calibracao: boolean;
   segurancaEletrica: boolean;
   descricao: string;
+  relacaoEquipamentos: string;
   quantidade: number;
   valorUnitario: number;
   garantia: string;
@@ -187,6 +188,7 @@ const emptyServicoRelacao = (): ServicoRelacaoForm => ({
   calibracao: false,
   segurancaEletrica: false,
   descricao: "",
+  relacaoEquipamentos: "",
   quantidade: 1,
   valorUnitario: 0,
   garantia: "",
@@ -235,11 +237,45 @@ const isServicoRelacaoItem = (item: { tipo?: string | null; descricao?: string |
   item.tipo === "servico" &&
   !item.tipo_servico_id &&
   !item.tipo_equipamento_id &&
-  (item.descricao || "")
+  /preventiva|calibra|seguran/i.test(item.descricao || "");
+
+const getTipoEquipamentosRelacao = (item: {
+  descricao?: string | null;
+  observacoes?: string | null;
+}) => {
+  const descricao = item.descricao || "";
+  const legacy = descricao.match(/conforme rela[cç][aã]o fornecida\s*:?\s*(.+)$/i);
+  if (legacy?.[1]) return legacy[1].trim();
+
+  const tipoEquipamentos = descricao
+    .replace(
+      /^(?:preventiva|calibra[cç][aã]o|seguran[cç]a el[eé]trica)(?:\s*\/\s*(?:preventiva|calibra[cç][aã]o|seguran[cç]a el[eé]trica))*\s*-\s*/i,
+      ""
+    )
+    .trim();
+
+  return tipoEquipamentos || item.observacoes?.trim() || "";
+};
+
+const normalizarTextoRelacao = (value?: string | null) =>
+  (value || "")
+    .trim()
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .includes("relacao fornecida");
+    .replace(/[\u0300-\u036f]/g, "");
+
+const getEscopoEquipamentosRelacao = (item: {
+  descricao?: string | null;
+  observacoes?: string | null;
+}) => {
+  const observacoes = item.observacoes?.trim() || "";
+  const tipoEquipamentos = getTipoEquipamentosRelacao(item);
+
+  return normalizarTextoRelacao(observacoes) ===
+    normalizarTextoRelacao(tipoEquipamentos)
+    ? ""
+    : observacoes;
+};
 
 const getServicosRelacaoLabels = (servico: ServicoRelacaoForm) =>
   [
@@ -570,10 +606,9 @@ const OrcamentoFormDialog = ({
               preventiva: /preventiva/i.test(servicoRelacaoBanco.descricao || ""),
               calibracao: /calibra/i.test(servicoRelacaoBanco.descricao || ""),
               segurancaEletrica: /seguran/i.test(servicoRelacaoBanco.descricao || ""),
-              descricao:
-                servicoRelacaoBanco.observacoes ||
-                servicoRelacaoBanco.descricao ||
-                "",
+              descricao: getTipoEquipamentosRelacao(servicoRelacaoBanco),
+              relacaoEquipamentos:
+                getEscopoEquipamentosRelacao(servicoRelacaoBanco),
               quantidade: Number(servicoRelacaoBanco.quantidade || 1),
               valorUnitario: Number(servicoRelacaoBanco.valor_unitario || 0),
               garantia: servicoRelacaoBanco.garantia || "",
@@ -810,7 +845,7 @@ const OrcamentoFormDialog = ({
     if (servicoRelacao.ativo && !servicoRelacaoValido) {
       toast({
         title:
-          "Selecione ao menos um serviço e informe o descritivo da relação.",
+          "Selecione ao menos um serviço e informe o tipo de equipamentos.",
         variant: "destructive",
       });
       return false;
@@ -963,8 +998,9 @@ const OrcamentoFormDialog = ({
                   tipo: "servico" as const,
                   descricao: `${getServicosRelacaoLabels(servicoRelacao).join(
                     " / "
-                  )} - Conforme relação fornecida: ${servicoRelacao.descricao.trim()}`,
-                  observacoes: servicoRelacao.descricao.trim(),
+                  )} - ${servicoRelacao.descricao.trim()}`,
+                  observacoes:
+                    servicoRelacao.relacaoEquipamentos.trim() || undefined,
                   quantidade: Number(servicoRelacao.quantidade || 1),
                   valorUnitario: Number(servicoRelacao.valorUnitario || 0),
                   garantia: servicoRelacao.garantia.trim(),
@@ -1588,7 +1624,7 @@ const OrcamentoFormDialog = ({
             <div className="flex items-center justify-between gap-3">
               <SectionTitle
                 title="Serviços"
-                description="Mão de obra, serviços por relação de equipamentos e custos de atendimento."
+                description="Mão de obra, serviços por grupos de equipamentos e custos de atendimento."
               />
               <Button
                 type="button"
@@ -1622,7 +1658,7 @@ const OrcamentoFormDialog = ({
                         }))
                       }
                     />
-                    Serviço por relação de equipamentos
+                    Serviço por grupo de equipamentos
                   </label>
 
                   {servicoRelacao.ativo && (
@@ -1670,16 +1706,33 @@ const OrcamentoFormDialog = ({
                       </div>
 
                       <div className="space-y-2">
-                        <Label>Descritivo da relação fornecida</Label>
-                        <Textarea
-                          rows={4}
-                          placeholder="Ex: Serviços conforme relação de equipamentos enviada pelo cliente."
+                        <Label>Tipo de equipamentos</Label>
+                        <Input
+                          placeholder="Ex: Equipamentos de fisioterapia"
                           value={servicoRelacao.descricao}
                           disabled={isView}
                           onChange={(event) =>
                             setServicoRelacao((current) => ({
                               ...current,
                               descricao: event.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>
+                          Relação de equipamentos / escopo (opcional)
+                        </Label>
+                        <Textarea
+                          placeholder="Ex: 2 ultrassons, 1 TENS e 1 laserterapia"
+                          value={servicoRelacao.relacaoEquipamentos}
+                          disabled={isView}
+                          rows={3}
+                          onChange={(event) =>
+                            setServicoRelacao((current) => ({
+                              ...current,
+                              relacaoEquipamentos: event.target.value,
                             }))
                           }
                         />

@@ -172,6 +172,31 @@ export function inferOrcamentoEditPath(tipoTexto, arkmedsId) {
   return `/orcamento/servicos/${arkmedsId}/`;
 }
 
+function decodeArkmedsJsString(value) {
+  return String(value ?? "")
+    .replace(/\\u([0-9a-f]{4})/gi, (_, hex) => String.fromCodePoint(Number.parseInt(hex, 16)))
+    .replace(/\\x([0-9a-f]{2})/gi, (_, hex) => String.fromCodePoint(Number.parseInt(hex, 16)))
+    .replace(/\\r/g, "\r")
+    .replace(/\\n/g, "\n")
+    .replace(/\\t/g, "\t")
+    .replace(/\\'/g, "'")
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, "\\");
+}
+
+export function extractArkmedsMoreInformation(html) {
+  const source = String(html ?? "");
+  const singleQuoted = [
+    ...source.matchAll(/\$\(["']#mais-informacoes["']\)\.val\('((?:\\.|[^'])*)'\)/g),
+  ];
+  const doubleQuoted = [
+    ...source.matchAll(/\$\(["']#mais-informacoes["']\)\.val\("((?:\\.|[^"])*)"\)/g),
+  ];
+  const raw = singleQuoted.at(-1)?.[1] ?? doubleQuoted.at(-1)?.[1];
+  const decoded = raw == null ? "" : decodeArkmedsJsString(raw);
+  return decoded.replace(/\r\n?/g, "\n").trim() || null;
+}
+
 export function isMixedBudget(tipoTexto) {
   const text = normalizeKindText(tipoTexto);
   return text.includes("peca") && text.includes("servico");

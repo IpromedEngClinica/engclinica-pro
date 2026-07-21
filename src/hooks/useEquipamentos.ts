@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   EquipamentosPaginadoResult,
+  EquipamentosFilterOptions,
   EquipamentoFormInput,
   equipamentosService,
   EquipamentoSupabase,
@@ -53,6 +54,18 @@ export const useEquipamentosPaginados = (
     placeholderData: (previousData) => previousData,
     staleTime: EQUIPAMENTOS_STALE_TIME,
     gcTime: EQUIPAMENTOS_GC_TIME,
+  });
+};
+
+export const useEquipamentosFilterOptions = (
+  statusFiltro: ListarEquipamentosFiltros["statusFiltro"] = "ativos"
+) => {
+  return useQuery<EquipamentosFilterOptions>({
+    queryKey: [...EQUIPAMENTOS_QUERY_KEY, "opcoes-filtros", statusFiltro],
+    queryFn: () => equipamentosService.listarOpcoesFiltros(statusFiltro),
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 };
 

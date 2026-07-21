@@ -36,6 +36,7 @@ import { useSearchParams } from "react-router-dom";
 import {
   useAlterarEstadoOrdemServico,
   useExcluirOrdemServico,
+  useOrdensServicoFilterOptions,
   useOrdensServicoPaginadas,
 } from "@/hooks/useOrdensServico";
 import { useEstadosOS } from "@/hooks/useCamposOS";
@@ -185,6 +186,7 @@ const OrdensServico = () => {
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const { data: estadosOS = [] } = useEstadosOS();
+  const { data: opcoesFiltrosOS } = useOrdensServicoFilterOptions();
   const alterarEstadoOS = useAlterarEstadoOrdemServico();
   const excluirOS = useExcluirOrdemServico();
 
@@ -259,18 +261,13 @@ const OrdensServico = () => {
   const ordensServico = ordensServicoResult?.items || [];
   const totalOrdensServico = ordensServicoResult?.total || 0;
 
-  const uniq = (arr: string[]) =>
-    Array.from(new Set(arr.filter(Boolean))).sort((a, b) =>
-      a.localeCompare(b, "pt-BR")
-    );
-
   const opts = useMemo(
     () => ({
-      estado: uniq(ordensServico.map((os) => getEstado(os))),
-      solicitante: uniq(ordensServico.map((os) => getEmpresaNome(os))),
-      tipoServico: uniq(ordensServico.map((os) => getTipoServico(os))),
+      estado: opcoesFiltrosOS?.estados || [],
+      solicitante: opcoesFiltrosOS?.solicitantes || [],
+      tipoServico: opcoesFiltrosOS?.tiposServico || [],
     }),
-    [ordensServico]
+    [opcoesFiltrosOS]
   );
 
   const estadoOptions = useMemo(

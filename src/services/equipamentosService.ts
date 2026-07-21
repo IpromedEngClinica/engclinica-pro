@@ -93,6 +93,14 @@ export type EquipamentosPaginadoResult = {
   total: number;
 };
 
+export type EquipamentosFilterOptions = {
+  estados: string[];
+  proprietarios: string[];
+  tipos: string[];
+  fabricantes: string[];
+  setores: string[];
+};
+
 const selectEquipamentos = `
   id,
   numero_cadastro,
@@ -547,6 +555,35 @@ const carregarEmpresasDaPagina = async (
 };
 
 export const equipamentosService = {
+  async listarOpcoesFiltros(
+    statusFiltro: StatusEquipamentoFiltro = "ativos"
+  ): Promise<EquipamentosFilterOptions> {
+    const { data, error } = await supabase.rpc(
+      "listar_opcoes_filtros_equipamentos",
+      { p_status_filtro: statusFiltro }
+    );
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const result = (data || {}) as {
+      estados?: string[];
+      proprietarios?: string[];
+      tipos?: string[];
+      fabricantes?: string[];
+      setores?: string[];
+    };
+
+    return {
+      estados: result.estados || [],
+      proprietarios: result.proprietarios || [],
+      tipos: result.tipos || [],
+      fabricantes: result.fabricantes || [],
+      setores: result.setores || [],
+    };
+  },
+
   async listar(filtros?: ListarEquipamentosFiltros) {
     const equipamentos: EquipamentoSupabase[] = [];
 

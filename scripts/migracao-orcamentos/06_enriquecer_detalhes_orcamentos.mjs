@@ -4,6 +4,7 @@ import { JSDOM } from "jsdom";
 import {
   cleanText,
   ensureOutputDir,
+  extractArkmedsMoreInformation,
   extractEquipmentFromText,
   extractFirstMatch,
   fetchArkmedsText,
@@ -101,8 +102,7 @@ function selectOptionText(document, id, value) {
 function structuredEditDetails(html) {
   if (!html) return {};
   const document = new JSDOM(html).window.document;
-  const rawInformacoes = lastJsInputValue(html, "mais-informacoes");
-  const informacoes = String(rawInformacoes ?? "").trim() || null;
+  const informacoes = extractArkmedsMoreInformation(html);
   const equipmentLine = informacoes?.match(/(?:^|\n)\s*(?:equipamento|instrumento)\s*:\s*([^\n]+)/i)?.[1]?.trim();
   const equipamentoTexto = equipmentLine && !/^proposta\b/i.test(equipmentLine)
     ? equipmentLine

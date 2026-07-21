@@ -27,6 +27,10 @@ import {
   procedimentosPreventivaService,
 } from "@/services/procedimentosPreventivaService";
 import { marcarChecklistCompletoComoConforme } from "@/utils/checklistPreventiva";
+import {
+  localDateTimeToIso,
+  toLocalDateTimeInput,
+} from "@/utils/planoDatas";
 
 type PreventivaChecklistDialogProps = {
   open: boolean;
@@ -100,6 +104,16 @@ const PreventivaChecklistDialog = ({
   const procedimento = usarOsExistente ? procedimentoOs : procedimentoProp;
   const [respostas, setRespostas] = useState<Record<string, RespostaItem>>({});
   const [observacoes, setObservacoes] = useState("");
+  const [dataAbertura, setDataAbertura] = useState("");
+  const [dataFechamento, setDataFechamento] = useState("");
+
+  useEffect(() => {
+    if (!open || usarOsExistente) return;
+
+    const agora = toLocalDateTimeInput(new Date().toISOString());
+    setDataAbertura(agora);
+    setDataFechamento(agora);
+  }, [open, usarOsExistente]);
 
   useEffect(() => {
     if (!open || !usarOsExistente || !osExistente) return;
@@ -286,10 +300,28 @@ const PreventivaChecklistDialog = ({
       }
 
       if (!procedimento) throw new Error("Procedimento preventivo nao encontrado.");
+      if (!dataAbertura || !dataFechamento) {
+        toast({
+          title: "Informe as datas de abertura e fechamento.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (new Date(dataFechamento).getTime() < new Date(dataAbertura).getTime()) {
+        toast({
+          title: "A data de fechamento não pode ser anterior à abertura.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const os = await executarPreventiva.mutateAsync({
         equipamentoId: equipamento.id,
         empresaId: equipamento.empresa_id,
         procedimentoId: procedimento.id,
+        dataAbertura: localDateTimeToIso(dataAbertura),
+        dataFechamento: localDateTimeToIso(dataFechamento),
         observacoes,
         respostas: montarRespostas().map((item) => ({
           ...item,
@@ -327,6 +359,33 @@ const PreventivaChecklistDialog = ({
             <div><p className="text-muted-foreground">OS</p><p className="font-medium">{osExistente?.numero || "Sera criada ao concluir"}</p></div>
             <div><p className="text-muted-foreground">Procedimento</p><p className="font-medium">{procedimento?.titulo || checklist?.titulo_procedimento || "Nao encontrado"}</p></div>
           </div>
+
+          {!usarOsExistente && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 rounded-md border p-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Data e hora de abertura *</label>
+                <Input
+                  type="datetime-local"
+                  value={dataAbertura}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setDataAbertura(value);
+                    setDataFechamento(value);
+                  }}
+                  disabled={saving}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Data e hora de fechamento *</label>
+                <Input
+                  type="datetime-local"
+                  value={dataFechamento}
+                  onChange={(event) => setDataFechamento(event.target.value)}
+                  disabled={saving}
+                />
+              </div>
+            </div>
+          )}
 
           {semProcedimento ? (
             <div className="rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">

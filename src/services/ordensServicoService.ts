@@ -109,6 +109,7 @@ export type OrdemServicoFormInput = {
   estadoOsId?: string;
   tecnicoResponsavelId?: string;
   dataAbertura?: string;
+  dataFechamento?: string | null;
   solicitanteTexto?: string;
   responsavelTexto?: string;
   problemaRelatado?: string;
@@ -146,6 +147,12 @@ export type ListarOrdensServicoPaginadoFiltros = ListarOrdensServicoFiltros & {
 export type OrdensServicoPaginadoResult = {
   items: OrdemServicoSupabase[];
   total: number;
+};
+
+export type OrdensServicoFilterOptions = {
+  estados: string[];
+  solicitantes: string[];
+  tiposServico: string[];
 };
 
 const selectOrdensServico = `
@@ -582,6 +589,7 @@ const toDatabasePayload = async (
 
   if (estado?.finaliza_os || estado?.cancela_os) {
     const fechamento =
+      input.dataFechamento ||
       options.dataFechamentoFallback ||
       dataAbertura ||
       new Date().toISOString();
@@ -1082,6 +1090,28 @@ const aplicarFiltrosOrdensServico = async <T>(
 };
 
 export const ordensServicoService = {
+  async listarOpcoesFiltros(): Promise<OrdensServicoFilterOptions> {
+    const { data, error } = await supabase.rpc(
+      "listar_opcoes_filtros_ordens_servico"
+    );
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const result = (data || {}) as {
+      estados?: string[];
+      solicitantes?: string[];
+      tipos_servico?: string[];
+    };
+
+    return {
+      estados: result.estados || [],
+      solicitantes: result.solicitantes || [],
+      tiposServico: result.tipos_servico || [],
+    };
+  },
+
   async buscarPorId(id: string) {
     return buscarOrdemServicoPorId(id);
   },

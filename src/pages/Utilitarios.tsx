@@ -67,12 +67,13 @@ import {
   useAtualizarStatusTermoLocacao,
   useCriarRecibo,
   useCriarTermoLocacao,
+  useReciboEquipamentos,
+  useReciboOrcamentos,
+  useReciboOrdensServico,
   useRecibos,
   useTermosLocacao,
   useVencimentosUtilitarios,
 } from "@/hooks/useUtilitarios";
-import { useOrcamentos } from "@/hooks/useOrcamentos";
-import { useOrdensServico } from "@/hooks/useOrdensServico";
 import type { EmpresaSupabase } from "@/services/empresasService";
 import type { EquipamentoSupabase } from "@/services/equipamentosService";
 import type {
@@ -215,7 +216,12 @@ const isEmpresaPrincipalAci = (empresa?: EmpresaSupabase | null) =>
   empresa?.tipo_cliente === "Principal" ||
   onlyDigits(empresa?.cpf_cnpj) === "71208094000137";
 
-const getTipoEquipamento = (equipamento?: EquipamentoSupabase | null) =>
+const getTipoEquipamento = (
+  equipamento?: Pick<
+    EquipamentoSupabase,
+    "tipo_equipamento" | "tipo_texto"
+  > | null
+) =>
   equipamento?.tipo_equipamento?.nome ||
   equipamento?.tipo_texto ||
   "Equipamento";
@@ -454,13 +460,40 @@ const Utilitarios = () => {
     { statusFiltro: "ativas" },
     { enabled: carregarCadastrosAuxiliares }
   );
-  const { data: equipamentos = [] } = useEquipamentos({
+  const { data: equipamentosTermos = [] } = useEquipamentos({
     statusFiltro: "ativos",
-  }, { enabled: isTermosLocacao || isRecibos });
-  const { data: ordensServico = [] } = useOrdensServico({
-    enabled: isRecibos,
-  });
-  const { data: orcamentos = [] } = useOrcamentos({ enabled: isRecibos });
+  }, { enabled: isTermosLocacao });
+  const {
+    data: reciboEquipamentos = [],
+    isLoading: reciboEquipamentosLoading,
+  } = useReciboEquipamentos(
+    reciboForm.empresaId,
+    {
+      enabled:
+        isRecibos && reciboDialogOpen && Boolean(reciboForm.empresaId),
+    }
+  );
+  const {
+    data: reciboOrdensServico = [],
+    isLoading: reciboOrdensServicoLoading,
+  } = useReciboOrdensServico(
+    reciboForm.empresaId,
+    reciboForm.equipamentoId,
+    {
+      enabled: isRecibos && reciboDialogOpen,
+    }
+  );
+  const {
+    data: reciboOrcamentos = [],
+    isLoading: reciboOrcamentosLoading,
+  } = useReciboOrcamentos(
+    reciboForm.empresaId,
+    reciboForm.equipamentoId,
+    reciboForm.ordemServicoId,
+    {
+      enabled: isRecibos && reciboDialogOpen,
+    }
+  );
   const { data: termos = [], isLoading, refetch, isFetching } = useTermosLocacao({
     enabled: isTermosLocacao,
   });
@@ -513,7 +546,7 @@ const Utilitarios = () => {
 
   const equipamentoOptions = useMemo(
     () =>
-      equipamentos
+      equipamentosTermos
         .filter((equipamento) => equipamento.empresa_id === empresaAci?.id)
         .map((equipamento) => ({
           value: equipamento.id,
@@ -530,23 +563,18 @@ const Utilitarios = () => {
             .join(" | "),
         }))
         .sort((a, b) => a.label.localeCompare(b.label, "pt-BR")),
-    [empresaAci?.id, equipamentos]
+    [empresaAci?.id, equipamentosTermos]
   );
 
   const reciboEquipamentoOptions = useMemo(
     () =>
-      equipamentos
-        .filter(
-          (equipamento) =>
-            !reciboForm.empresaId || equipamento.empresa_id === reciboForm.empresaId
-        )
+      reciboEquipamentos
         .map((equipamento) => ({
           value: equipamento.id,
           label: `${getTipoEquipamento(equipamento)} - ${
             equipamento.modelo || equipamento.fabricante || "sem identificacao"
           }`,
           description: [
-            getEmpresaNome(equipamento.empresa),
             equipamento.numero_serie ? `Serie: ${equipamento.numero_serie}` : null,
             equipamento.patrimonio ? `Patrimonio: ${equipamento.patrimonio}` : null,
             equipamento.tag ? `TAG: ${equipamento.tag}` : null,
@@ -555,49 +583,32 @@ const Utilitarios = () => {
             .join(" | "),
         }))
         .sort((a, b) => a.label.localeCompare(b.label, "pt-BR")),
-    [equipamentos, reciboForm.empresaId]
+    [reciboEquipamentos]
   );
 
   const reciboOsOptions = useMemo(
     () =>
-      ordensServico
-        .filter(
-          (os) =>
-            (!reciboForm.empresaId || os.empresa_id === reciboForm.empresaId) &&
-            (!reciboForm.equipamentoId ||
-              os.equipamento_id === reciboForm.equipamentoId)
-        )
+      reciboOrdensServico
         .map((os) => ({
           value: os.id,
           label: `OS ${os.numero}`,
           description: [
-            getEmpresaNome(os.empresa),
-            os.equipamento ? getTipoEquipamento(os.equipamento) : null,
             os.status_sistema,
           ]
             .filter(Boolean)
             .join(" | "),
         })),
-    [ordensServico, reciboForm.equipamentoId, reciboForm.empresaId]
+    [reciboOrdensServico]
   );
 
   const reciboOrcamentoOptions = useMemo(
     () =>
-      orcamentos
-        .filter(
-          (orcamento) =>
-            (!reciboForm.empresaId || orcamento.empresa_id === reciboForm.empresaId) &&
-            (!reciboForm.equipamentoId ||
-              orcamento.equipamento_id === reciboForm.equipamentoId) &&
-            (!reciboForm.ordemServicoId ||
-              orcamento.ordem_servico_id === reciboForm.ordemServicoId)
-        )
+      reciboOrcamentos
         .map((orcamento) => ({
           value: orcamento.id,
           label: `Orcamento ${orcamento.numero}`,
           description: [
             orcamento.identificador,
-            getEmpresaNome(orcamento.empresa),
             formatCurrency(orcamento.valor_total),
             orcamento.status,
           ]
@@ -605,10 +616,7 @@ const Utilitarios = () => {
             .join(" | "),
         })),
     [
-      orcamentos,
-      reciboForm.equipamentoId,
-      reciboForm.empresaId,
-      reciboForm.ordemServicoId,
+      reciboOrcamentos,
     ]
   );
 
@@ -981,12 +989,7 @@ const Utilitarios = () => {
                         setReciboForm((current) => ({
                           ...current,
                           empresaId: value,
-                          equipamentoId:
-                            current.equipamentoId &&
-                            equipamentos.find((item) => item.id === current.equipamentoId)
-                              ?.empresa_id === value
-                              ? current.equipamentoId
-                              : "",
+                          equipamentoId: "",
                           ordemServicoId: "",
                           orcamentoId: "",
                         }))
@@ -999,8 +1002,21 @@ const Utilitarios = () => {
                     <ObjectSearchSelect
                       value={reciboForm.equipamentoId}
                       options={reciboEquipamentoOptions}
-                      placeholder="Selecione o equipamento"
-                      emptyText="Nenhum equipamento encontrado."
+                      disabled={
+                        !reciboForm.empresaId || reciboEquipamentosLoading
+                      }
+                      placeholder={
+                        !reciboForm.empresaId
+                          ? "Selecione um cliente primeiro"
+                          : reciboEquipamentosLoading
+                            ? "Carregando equipamentos..."
+                            : "Selecione o equipamento"
+                      }
+                      emptyText={
+                        reciboEquipamentosLoading
+                          ? "Carregando equipamentos..."
+                          : "Nenhum equipamento encontrado."
+                      }
                       onChange={(value) =>
                         setReciboForm((current) => ({
                           ...current,
@@ -1068,8 +1084,22 @@ const Utilitarios = () => {
                     <ObjectSearchSelect
                       value={reciboForm.ordemServicoId}
                       options={reciboOsOptions}
-                      placeholder="Sem OS vinculada"
-                      emptyText="Nenhuma OS encontrada."
+                      disabled={
+                        !reciboForm.equipamentoId ||
+                        reciboOrdensServicoLoading
+                      }
+                      placeholder={
+                        !reciboForm.equipamentoId
+                          ? "Selecione um equipamento primeiro"
+                          : reciboOrdensServicoLoading
+                            ? "Carregando ordens de serviço..."
+                            : "Sem OS vinculada"
+                      }
+                      emptyText={
+                        reciboOrdensServicoLoading
+                          ? "Carregando ordens de serviço..."
+                          : "Nenhuma OS encontrada."
+                      }
                       onChange={(value) =>
                         setReciboForm((current) => ({
                           ...current,
@@ -1085,8 +1115,21 @@ const Utilitarios = () => {
                     <ObjectSearchSelect
                       value={reciboForm.orcamentoId}
                       options={reciboOrcamentoOptions}
-                      placeholder="Sem orçamento vinculado"
-                      emptyText="Nenhum orçamento encontrado."
+                      disabled={
+                        !reciboForm.equipamentoId || reciboOrcamentosLoading
+                      }
+                      placeholder={
+                        !reciboForm.equipamentoId
+                          ? "Selecione um equipamento primeiro"
+                          : reciboOrcamentosLoading
+                            ? "Carregando orçamentos..."
+                            : "Sem orçamento vinculado"
+                      }
+                      emptyText={
+                        reciboOrcamentosLoading
+                          ? "Carregando orçamentos..."
+                          : "Nenhum orçamento encontrado."
+                      }
                       onChange={(value) => updateReciboForm("orcamentoId", value)}
                     />
                   </div>

@@ -6,7 +6,6 @@ import {
   ORCAMENTO_FOOTER_TEXT,
 } from "@/utils/orcamentoPdfTemplate";
 import { imageToDataUrl } from "@/utils/pdfImageUtils";
-import { renderHtmlToPdf } from "@/utils/pdfHtmlRenderer";
 import { renderHtmlToPdfWithPrintToPdf } from "@/utils/printToPdfRenderer";
 
 const sanitizeFileNameSegment = (value?: string | number | null) =>
@@ -56,12 +55,9 @@ export const gerarPdfOrcamento = async (orcamento: OrcamentoSupabase) => {
     footerText: ORCAMENTO_FOOTER_TEXT,
   });
 
-  if (printToPdfResult) return;
-
-  await renderHtmlToPdf({
-    html,
-    fileName,
-    footerText: ORCAMENTO_FOOTER_TEXT,
-    footerHeightMm: 16,
-  });
+  if (!printToPdfResult) {
+    throw new Error(
+      "Nao foi possivel gerar o PDF vetorial do orcamento. Verifique o servico de PDF e tente novamente."
+    );
+  }
 };

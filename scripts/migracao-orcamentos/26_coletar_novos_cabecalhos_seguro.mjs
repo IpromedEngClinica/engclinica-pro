@@ -6,8 +6,11 @@ import {
   asBoolean,
   asTextOrNull,
   buildIdentifier,
+  extractArkmedsMoreInformation,
   fetchArkmedsJson,
+  fetchArkmedsText,
   groupConfigs,
+  inferOrcamentoEditPath,
   normalizarNumeroBaseOrcamento,
   normalizeArkmedsStatusGroup,
   outputDir,
@@ -134,6 +137,11 @@ async function main() {
       throw new Error(`Cabecalho ${target.arkmeds_orcamento_id}/${target.numero} nao localizado de forma unica.`);
     }
     const header = normalizeHeader(matches[0], group, requestPath);
+    const editPath = inferOrcamentoEditPath(header.arkmeds_tipo_texto, header.arkmeds_orcamento_id);
+    const editPage = await fetchArkmedsText(editPath);
+    header.observacoes_gerais = extractArkmedsMoreInformation(editPage.text);
+    header.detalhes_atualizado_em = new Date().toISOString();
+    header.parametros_coleta_json.edit_path = editPath;
     const { error } = await supabase.from("staging_arkmeds_orcamentos").insert(header);
     if (error) throw new Error(`Erro ao inserir ${header.arkmeds_orcamento_id}: ${error.message}`);
     inserted.push({

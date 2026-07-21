@@ -269,6 +269,7 @@ const Orcamentos = () => {
     data: listagem,
     isLoading,
     isFetching,
+    isPlaceholderData,
     isError,
     error,
     refetch,
@@ -304,7 +305,15 @@ const Orcamentos = () => {
     setSortDirection("asc");
   };
 
+  const handleStatusChange = (
+    status: OrcamentoStatus | typeof ALL
+  ) => {
+    setPage(1);
+    setStatusFiltro(status);
+  };
+
   const activeTab = statusTabs.find((tab) => tab.value === statusFiltro);
+  const tableIsTransitioning = isLoading || isPlaceholderData;
 
   const activeFiltersCount = useMemo(() => {
     let count = 0;
@@ -615,7 +624,7 @@ const Orcamentos = () => {
             <button
               key={tab.value}
               type="button"
-              onClick={() => setStatusFiltro(tab.value)}
+              onClick={() => handleStatusChange(tab.value)}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                 active
                   ? "border-primary text-primary"
@@ -665,7 +674,7 @@ const Orcamentos = () => {
               <Select
                 value={statusFiltro}
                 onValueChange={(value) =>
-                  setStatusFiltro(value as OrcamentoStatus | typeof ALL)
+                  handleStatusChange(value as OrcamentoStatus | typeof ALL)
                 }
               >
                 <SelectTrigger>
@@ -826,10 +835,10 @@ const Orcamentos = () => {
           </div>
         </div>
 
-        {isLoading && (
+        {tableIsTransitioning && (
           <div className="px-5 py-10 flex items-center justify-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="w-4 h-4 animate-spin" />
-            Carregando orçamentos...
+            Carregando {activeTab?.label.toLowerCase() || "orçamentos"}...
           </div>
         )}
 
@@ -849,7 +858,7 @@ const Orcamentos = () => {
           </div>
         )}
 
-        {!isLoading && !isError && (
+        {!tableIsTransitioning && !isError && (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>

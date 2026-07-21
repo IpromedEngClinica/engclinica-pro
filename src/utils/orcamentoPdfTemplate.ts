@@ -7,6 +7,14 @@ import { PDF_DOCUMENT_BASE_CSS } from "@/utils/pdfDocumentStyles";
 
 const EMPTY = "-";
 
+const isMeaningful = (value?: string | number | null) => {
+  if (value === null || value === undefined) return false;
+  if (typeof value === "number") return Number.isFinite(value) && value !== 0;
+
+  const normalized = value.trim().toLowerCase();
+  return Boolean(normalized) && normalized !== "-" && normalized !== "r$ 0,00";
+};
+
 export const ORCAMENTO_FOOTER_TEXT =
   "ACI Comercio LTDA - Assistencia Tecnica Hospitalar e Engenharia Clinica - Rua Jose Martins da Silva, 215 - Ceramica - Juiz de Fora - MG Cep 36.080-370 - Pabx 32 3221-7944 - E-mail: acicomercio@yahoo.com.br - CNPJ: 71.208.094/0001-37";
 
@@ -131,8 +139,69 @@ const getEquipamentoTipo = (orcamento: OrcamentoSupabase) =>
   orcamento.equipamento?.tipo_texto ||
   "";
 
-const getItemServico = (item: OrcamentoItemSupabase) =>
-  item.tipo_servico?.nome || item.descricao || formatLabel(item.tipo);
+const stripLegacyRelationDetails = (value?: string | null) => {
+  if (!value) return "";
+
+  return value
+    .replace(/\s*-?\s*conforme rela[cç][aã]o fornecida\s*:?\s*.*/i, "")
+    .trim();
+};
+
+const joinServiceLabels = (labels: string[]) => {
+  if (labels.length <= 1) return labels[0] || "";
+  if (labels.length === 2) return `${labels[0]} e ${labels[1]}`;
+  return `${labels.slice(0, -1).join(", ")} e ${labels.at(-1)}`;
+};
+
+const formatRelationService = (
+  value?: string | null,
+  equipmentTypeFallback?: string | null
+) => {
+  const legacyEquipmentType = value
+    ?.match(/conforme rela[cç][aã]o fornecida\s*:?\s*(.+)$/i)?.[1]
+    ?.trim();
+  const cleanValue = stripLegacyRelationDetails(value);
+  const [servicesPart, ...equipmentParts] = cleanValue.split(/\s+-\s+/);
+  const equipmentType =
+    equipmentParts.join(" - ").trim() ||
+    legacyEquipmentType ||
+    equipmentTypeFallback?.trim() ||
+    "";
+  const serviceLabels = servicesPart
+    .split(/\s*\/\s*/)
+    .map((label) => label.trim())
+    .filter(Boolean);
+  const supportedServices = serviceLabels.every((label) =>
+    ["preventiva", "calibracao", "seguranca_eletrica"].includes(normalizar(label))
+  );
+
+  if (!equipmentType || !supportedServices) return cleanValue;
+  return `${joinServiceLabels(serviceLabels)} em ${equipmentType}`;
+};
+
+const getItemServico = (item: OrcamentoItemSupabase) => {
+  const tipoServico = item.tipo_servico?.nome?.trim();
+  const tipoEquipamento = item.tipo_equipamento?.nome?.trim();
+  const descricao = item.descricao?.trim();
+
+  if (tipoServico && tipoEquipamento) {
+    return `${tipoServico} em ${tipoEquipamento}`;
+  }
+
+  if (/conforme rela[cç][aã]o fornecida/i.test(descricao || "")) {
+    return formatRelationService(descricao, item.observacoes);
+  }
+
+  if (tipoServico && /^(?:em|e)\s+/i.test(descricao || "")) {
+    return `${tipoServico} ${descricao}`;
+  }
+
+  return (
+    tipoServico ||
+    formatRelationService(descricao, item.observacoes) ||
+    formatLabel(item.tipo)
+  );
+};
 
 const getItemPeca = (item: OrcamentoItemSupabase) =>
   item.peca_nome || item.peca?.nome || item.descricao || "Peca";
@@ -155,10 +224,58 @@ const getItensOrdenados = (orcamento: OrcamentoSupabase) =>
     (a, b) => Number(a.ordem || 0) - Number(b.ordem || 0)
   );
 
+const itemLabelNormalizado = (item: OrcamentoItemSupabase) =>
+  normalizar(item.peca_nome || item.descricao || "");
+
+const isFreteItem = (item: OrcamentoItemSupabase) =>
+  item.tipo === "peca" && itemLabelNormalizado(item) === "frete";
+
+const isDeslocamentoItem = (item: OrcamentoItemSupabase) =>
+  item.tipo === "deslocamento" || itemLabelNormalizado(item).includes("deslocamento");
+
+const isDespesaViagemItem = (item: OrcamentoItemSupabase) =>
+  item.tipo === "outro" && itemLabelNormalizado(item).includes("viagem");
+
+const sumItems = (items: OrcamentoItemSupabase[]) =>
+  items.reduce((sum, item) => sum + Number(item.valor_total || 0), 0);
+
+const getRelationEquipmentType = (item: OrcamentoItemSupabase) => {
+  const descricao = item.descricao || "";
+  const legacy = descricao.match(
+    /conforme rela[cç][aã]o fornecida\s*:?\s*(.+)$/i
+  );
+  if (legacy?.[1]) return legacy[1].trim();
+
+  const [servicesPart, ...equipmentParts] = descricao.split(/\s+-\s+/);
+  const serviceLabels = servicesPart
+    .split(/\s*\/\s*/)
+    .map((label) => normalizar(label))
+    .filter(Boolean);
+  const supportedServices = serviceLabels.every((label) =>
+    ["preventiva", "calibracao", "seguranca_eletrica"].includes(label)
+  );
+
+  return supportedServices ? equipmentParts.join(" - ").trim() : "";
+};
+
+const getLegacyRelationDetails = (item: OrcamentoItemSupabase) => {
+  if (item.tipo !== "servico" || item.tipo_servico_id || item.tipo_equipamento_id) {
+    return "";
+  }
+
+  const observacoes = item.observacoes?.trim() || "";
+  const tipoEquipamentos = getRelationEquipmentType(item);
+
+  if (!isMeaningful(observacoes)) return "";
+  return normalizar(observacoes) === normalizar(tipoEquipamentos)
+    ? ""
+    : observacoes;
+};
+
 const formatFormaPagamento = (forma?: string | null) => {
   const map: Record<string, string> = {
     dinheiro: "Dinheiro",
-    cartao: "Cartao",
+    cartao: "Cartão",
     boleto: "Boleto",
     pix: "Pix",
     pagamento_faturado: "Pagamento faturado",
@@ -170,9 +287,9 @@ const formatFormaPagamento = (forma?: string | null) => {
 
 const formatModoPagamento = (modo?: string | null) => {
   const map: Record<string, string> = {
-    avista: "A vista",
-    a_vista: "A vista",
-    vista: "A vista",
+    avista: "À vista",
+    a_vista: "À vista",
+    vista: "À vista",
     parcelado: "Parcelado",
     entrada_parcelas: "Entrada + parcelas",
     entrada_mais_parcelas: "Entrada + parcelas",
@@ -186,7 +303,7 @@ const buildField = (
   label: string,
   value?: string | number | null,
   className = ""
-) => `
+) => !isMeaningful(value) ? "" : `
   <div class="field ${className}">
     <span>${label}:</span>
     <strong>${escapeHtml(value)}</strong>
@@ -206,6 +323,11 @@ const buildFinanceItem = (label: string, value?: string | number | null) => `
     <strong class="value">${escapeHtml(value)}</strong>
   </div>
 `;
+
+const buildOptionalFinanceItem = (
+  label: string,
+  value?: string | number | null
+) => (isMeaningful(value) ? buildFinanceItem(label, value) : "");
 
 const buildSectionTitle = (number: string, title: string) => `
   <div class="section-title"><strong>${number}- ${title}</strong></div>
@@ -234,7 +356,6 @@ const buildServicesTable = (items: OrcamentoItemSupabase[]) => {
           <tr>
             <th>Item</th>
             <th>Servi&ccedil;o</th>
-            <th>Garantia</th>
             <th>Qtde</th>
             <th>Valor Unit.</th>
             <th>Total</th>
@@ -248,13 +369,7 @@ const buildServicesTable = (items: OrcamentoItemSupabase[]) => {
                   <td class="center">${index + 1}</td>
                   <td class="description-cell">
                     <strong>${escapeHtml(getItemServico(item))}</strong>
-                    ${
-                      item.observacoes
-                        ? `<span>${escapeHtml(item.observacoes)}</span>`
-                        : ""
-                    }
                   </td>
-                  <td class="center">${escapeHtml(item.garantia)}</td>
                   <td class="center">${escapeHtml(formatQuantity(item.quantidade))}</td>
                   <td class="right">${escapeHtml(formatCurrency(item.valor_unitario))}</td>
                   <td class="right strong">${escapeHtml(formatCurrency(item.valor_total))}</td>
@@ -265,7 +380,7 @@ const buildServicesTable = (items: OrcamentoItemSupabase[]) => {
         </tbody>
         <tfoot>
           <tr>
-            <td colspan="5" class="right strong">Subtotal servi&ccedil;os</td>
+            <td colspan="4" class="right strong">Subtotal servi&ccedil;os</td>
             <td class="right strong">${escapeHtml(
               formatCurrency(
                 items.reduce((sum, item) => sum + Number(item.valor_total || 0), 0)
@@ -304,11 +419,6 @@ const buildPartsTable = (items: OrcamentoItemSupabase[]) => {
                   <td class="center">${index + 1}</td>
                   <td class="description-cell">
                     <strong>${escapeHtml(getItemPeca(item))}</strong>
-                    ${
-                      item.garantia
-                        ? `<span>Garantia: ${escapeHtml(item.garantia)}</span>`
-                        : ""
-                    }
                   </td>
                   <td class="center">un</td>
                   <td>${escapeHtml(getModeloFabricantePeca(item))}</td>
@@ -335,38 +445,67 @@ const buildPartsTable = (items: OrcamentoItemSupabase[]) => {
   `;
 };
 
-const buildPaymentSummary = (orcamento: OrcamentoSupabase) => {
-  const parcelas =
-    orcamento.modo_pagamento === "avista"
-      ? EMPTY
-      : orcamento.numero_parcelas
-        ? `${orcamento.numero_parcelas}x`
-        : EMPTY;
+const getFormaPagamentoConsolidada = (orcamento: OrcamentoSupabase) => {
+  const partes = [
+    formatFormaPagamento(orcamento.forma_pagamento),
+    formatModoPagamento(orcamento.modo_pagamento),
+  ].filter(isMeaningful);
+
+  return partes.join(" ").replace(/\s+/g, " ").trim();
+};
+
+const getGarantias = (
+  orcamento: OrcamentoSupabase,
+  items: OrcamentoItemSupabase[]
+) => {
+  const garantias = [orcamento.garantia, ...items.map((item) => item.garantia)]
+    .filter(isMeaningful)
+    .map((value) => String(value).trim());
+
+  return [...new Set(garantias)].join(" / ");
+};
+
+const buildCommercialConditions = (
+  orcamento: OrcamentoSupabase,
+  items: OrcamentoItemSupabase[]
+) => {
+  const numeroParcelas = Number(orcamento.numero_parcelas || 0);
+  const prazo = orcamento.prazo_entrega || orcamento.prazo_execucao;
+  const formaPagamento = getFormaPagamentoConsolidada(orcamento);
 
   return `
-    <div class="payment-grid">
-      ${buildField("Forma de pagamento", formatFormaPagamento(orcamento.forma_pagamento))}
-      ${buildField("Modo de pagamento", formatModoPagamento(orcamento.modo_pagamento))}
-      ${buildField("Condi&ccedil;&otilde;es", orcamento.condicoes_pagamento)}
-      ${buildField("Valor total", formatCurrency(orcamento.valor_total))}
-      ${buildField("Entrada", orcamento.valor_entrada ? formatCurrency(orcamento.valor_entrada) : EMPTY)}
-      ${buildField("Parcelas", parcelas)}
-      ${buildField("Valor da parcela", orcamento.valor_parcela ? formatCurrency(orcamento.valor_parcela) : EMPTY)}
-      ${buildField("Intervalo", orcamento.dias_entre_parcelas ? `${orcamento.dias_entre_parcelas} dias` : EMPTY)}
-    </div>
+    ${buildOptionalFinanceItem("Forma de pagamento", formaPagamento)}
+    ${buildOptionalFinanceItem("Prazo para execu&ccedil;&atilde;o/entrega", prazo)}
+    ${buildOptionalFinanceItem("Validade da proposta", formatDate(orcamento.data_validade))}
+    ${buildOptionalFinanceItem("Garantia", getGarantias(orcamento, items))}
+    ${buildOptionalFinanceItem("Entrada", Number(orcamento.valor_entrada || 0) > 0 ? formatCurrency(orcamento.valor_entrada) : "")}
+    ${buildOptionalFinanceItem("Parcelas", numeroParcelas > 0 ? `${numeroParcelas}x` : "")}
+    ${buildOptionalFinanceItem("Valor da parcela", Number(orcamento.valor_parcela || 0) > 0 ? formatCurrency(orcamento.valor_parcela) : "")}
+    ${buildOptionalFinanceItem("Intervalo", Number(orcamento.dias_entre_parcelas || 0) > 0 ? `${orcamento.dias_entre_parcelas} dias` : "")}
+    ${
+      isMeaningful(orcamento.condicoes_pagamento) &&
+      normalizar(orcamento.condicoes_pagamento) !== normalizar(formaPagamento)
+        ? buildOptionalFinanceItem("Condi&ccedil;&otilde;es adicionais", orcamento.condicoes_pagamento)
+        : ""
+    }
   `;
 };
 
-const buildTechnicalSection = (orcamento: OrcamentoSupabase) => {
+const buildTechnicalSection = (
+  orcamento: OrcamentoSupabase,
+  sectionNumber: string,
+  relationDetails: string[]
+) => {
   const hasEquipment = Boolean(orcamento.equipamento);
   const hasDetails = Boolean(orcamento.detalhes_orcamento?.trim());
   const hasObservacoes = Boolean(orcamento.observacoes?.trim());
+  const detalhesRelacao = [...new Set(relationDetails.filter(isMeaningful))];
 
-  if (!hasEquipment && !hasDetails && !hasObservacoes) return "";
+  if (!hasEquipment && !hasDetails && !hasObservacoes && !detalhesRelacao.length) return "";
 
   return `
     <section class="section">
-      ${buildSectionTitle("5", "Informa&ccedil;&otilde;es T&eacute;cnicas")}
+      ${buildSectionTitle(sectionNumber, "Informa&ccedil;&otilde;es T&eacute;cnicas")}
       <div class="card-soft technical-box">
         ${
           hasEquipment
@@ -389,6 +528,16 @@ const buildTechnicalSection = (orcamento: OrcamentoSupabase) => {
               <div class="text-box">
                 <span>Servi&ccedil;os e informa&ccedil;&otilde;es t&eacute;cnicas</span>
                 <p>${escapeHtml(orcamento.detalhes_orcamento)}</p>
+              </div>
+            `
+            : ""
+        }
+        ${
+          detalhesRelacao.length
+            ? `
+              <div class="text-box">
+                <span>Rela&ccedil;&atilde;o de equipamentos / escopo informado</span>
+                <p>${escapeHtml(detalhesRelacao.join("\n"))}</p>
               </div>
             `
             : ""
@@ -847,9 +996,23 @@ const BASE_CSS = `
 
   .payment-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 4px 14px;
-    padding: 4px 8px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px 20px;
+    padding: 5px 8px;
+  }
+
+  .payment-grid .field {
+    display: block;
+  }
+
+  .payment-grid .field span,
+  .payment-grid .field strong {
+    display: block;
+    white-space: normal;
+  }
+
+  .payment-grid .wide {
+    grid-column: 1 / -1;
   }
 
   .terms-box {
@@ -965,10 +1128,20 @@ export const buildOrcamentoHtml = (
   assinaturas: AssinaturasDocumento = {}
 ) => {
   const itens = getItensOrdenados(orcamento);
-  const servicos = itens.filter((item) =>
-    ["servico", "deslocamento", "outro"].includes(item.tipo)
+  const fretes = itens.filter(isFreteItem);
+  const deslocamentos = itens.filter(isDeslocamentoItem);
+  const despesasViagem = itens.filter(isDespesaViagemItem);
+  const servicos = itens.filter(
+    (item) =>
+      ["servico", "outro"].includes(item.tipo) &&
+      !isDeslocamentoItem(item) &&
+      !isDespesaViagemItem(item)
   );
-  const pecas = itens.filter((item) => item.tipo === "peca");
+  const pecas = itens.filter((item) => item.tipo === "peca" && !isFreteItem(item));
+  const totalDeslocamento = sumItems(deslocamentos);
+  const totalDespesasViagem = sumItems(despesasViagem);
+  const totalFrete = sumItems(fretes);
+  const relationDetails = itens.map(getLegacyRelationDetails).filter(Boolean);
   const assinaturaOrcamentista = assinaturas.tecnico || assinaturas.responsavel;
   const assinaturaAprovacao = assinaturas.solicitante;
   const nomeOrcamentista =
@@ -993,11 +1166,6 @@ export const buildOrcamentoHtml = (
         <h1>Or&ccedil;amento N&ordm; ${escapeHtml(orcamento.numero)}</h1>
         <div class="document-meta meta">
           <div>Data: ${escapeHtml(formatDate(orcamento.data_orcamento))}</div>
-          ${
-            orcamento.data_validade
-              ? `<div>Validade da proposta: ${escapeHtml(formatDate(orcamento.data_validade))}</div>`
-              : ""
-          }
         </div>
       </div>
     </header>
@@ -1010,7 +1178,11 @@ export const buildOrcamentoHtml = (
         ${buildField("Endere&ccedil;o", getEnderecoEmpresa(orcamento), "wide")}
         ${buildField("Contato", getEmpresaCampo(orcamento, ["contato", "celular", "telefone"]))}
         ${buildField("E-mail", getEmpresaCampo(orcamento, ["email", "e_mail"]))}
-        ${buildField("Nome fantasia", orcamento.empresa?.nome_fantasia)}
+        ${
+          normalizar(orcamento.empresa?.nome_fantasia) !== normalizar(getEmpresaNome(orcamento))
+            ? buildField("Nome fantasia", orcamento.empresa?.nome_fantasia)
+            : ""
+        }
         ${buildField(
           "Cidade/Estado",
           [orcamento.empresa?.cidade, orcamento.empresa?.estado].filter(Boolean).join(" - ")
@@ -1030,7 +1202,7 @@ export const buildOrcamentoHtml = (
     </section>
 
     <section class="section">
-      ${buildSectionTitle("3", "Informa&ccedil;&otilde;es Financeiras")}
+      ${buildSectionTitle("3", "Resumo Financeiro")}
       <div class="finance-grid">
         <div class="total-card">
           <span class="label">Total geral</span>
@@ -1038,15 +1210,21 @@ export const buildOrcamentoHtml = (
         </div>
 
         <div class="finance-details">
-          ${buildFinanceItem("Total pe&ccedil;as", formatCurrency(orcamento.valor_pecas))}
-          ${buildFinanceItem("Total servi&ccedil;os", formatCurrency(orcamento.valor_servicos))}
-          ${buildFinanceItem(
-            "Valor antes do desconto",
-            formatCurrency(
-              Number(orcamento.valor_pecas || 0) +
-                Number(orcamento.valor_servicos || 0)
-            )
-          )}
+          ${buildCommercialConditions(orcamento, itens)}
+          ${buildOptionalFinanceItem("Deslocamento", totalDeslocamento > 0 ? formatCurrency(totalDeslocamento) : "")}
+          ${buildOptionalFinanceItem("Despesas de viagem", totalDespesasViagem > 0 ? formatCurrency(totalDespesasViagem) : "")}
+          ${buildOptionalFinanceItem("Frete", totalFrete > 0 ? formatCurrency(totalFrete) : "")}
+          ${
+            Number(orcamento.desconto_aplicado || 0) > 0
+              ? buildFinanceItem(
+                  "Valor antes do desconto",
+                  formatCurrency(
+                    Number(orcamento.valor_total || 0) +
+                      Number(orcamento.desconto_aplicado || 0)
+                  )
+                )
+              : ""
+          }
           ${
             Number(orcamento.desconto_aplicado || 0) > 0
               ? buildFinanceItem(
@@ -1055,56 +1233,18 @@ export const buildOrcamentoHtml = (
                 )
               : ""
           }
-          ${buildFinanceItem("Frete", formatLabel(orcamento.frete))}
-          ${buildFinanceItem("Forma de pagamento", formatFormaPagamento(orcamento.forma_pagamento))}
-          ${buildFinanceItem("Modo de pagamento", formatModoPagamento(orcamento.modo_pagamento))}
-          ${buildFinanceItem("Prazo de entrega", orcamento.prazo_entrega)}
-          ${buildFinanceItem("Validade", formatDate(orcamento.data_validade))}
         </div>
       </div>
     </section>
 
-    <section class="section">
-      ${buildSectionTitle("4", "Dados do Or&ccedil;amento")}
-      <div class="card budget-grid grid grid-3">
-        ${buildField("Respons&aacute;vel", orcamento.responsavel_orcamentista)}
-        ${buildField("Respons&aacute;vel or&ccedil;amentista", nomeOrcamentista)}
-        ${buildField("Prazo de entrega", orcamento.prazo_entrega || orcamento.prazo_execucao)}
-        ${buildField("Frete", formatLabel(orcamento.frete))}
-        ${buildRawField("Estado", buildStatusBadge(orcamento.status))}
-        ${buildField("Data", formatDate(orcamento.data_orcamento))}
-        ${buildField("Validade", formatDate(orcamento.data_validade))}
-        ${buildField("OS vinculada", orcamento.ordem_servico?.numero ? `OS ${orcamento.ordem_servico.numero}` : EMPTY)}
-        ${buildField("Identifica&ccedil;&atilde;o", orcamento.identificador)}
-      </div>
-    </section>
-
-    ${buildTechnicalSection(orcamento)}
+    ${buildTechnicalSection(orcamento, "4", relationDetails)}
 
     <section class="section">
-      ${buildSectionTitle("6", "Pagamento")}
-      <div class="card">
-        ${buildPaymentSummary(orcamento)}
-      </div>
-    </section>
-
-    <section class="section">
-      ${buildSectionTitle("7", "Termos e Garantia")}
+      ${buildSectionTitle("5", "Termos")}
       <div class="terms-box">
         <ul class="terms-list">
-          <li>A garantia nao cobre pe&ccedil;as nao substituidas, mau uso e servi&ccedil;os nao executados.</li>
-          <li>Pe&ccedil;as, deslocamento, frete e despesas adicionais seguem os itens e condi&ccedil;&otilde;es descritos nesta proposta.</li>
-          <li>A execu&ccedil;&atilde;o do servi&ccedil;o fica condicionada &agrave; aprova&ccedil;&atilde;o da proposta dentro do prazo de validade informado.</li>
-          ${
-            orcamento.garantia
-              ? `<li>Garantia informada: ${escapeHtml(orcamento.garantia)}.</li>`
-              : ""
-          }
-          ${
-            orcamento.condicoes_pagamento
-              ? `<li>Condi&ccedil;&otilde;es de pagamento: ${escapeHtml(orcamento.condicoes_pagamento)}.</li>`
-              : ""
-          }
+          <li>Servi&ccedil;os, pe&ccedil;as ou fornecimentos adicionais depender&atilde;o de aprova&ccedil;&atilde;o pr&eacute;via da contratante.</li>
+          <li>Interven&ccedil;&otilde;es n&atilde;o descritas nesta proposta ser&atilde;o apresentadas em documento complementar.</li>
         </ul>
       </div>
     </section>

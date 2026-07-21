@@ -11,6 +11,7 @@ import {
 
 export const TERMOS_LOCACAO_QUERY_KEY = ["utilitarios", "termos-locacao"];
 export const RECIBOS_QUERY_KEY = ["utilitarios", "recibos"];
+export const RECIBO_VINCULOS_QUERY_KEY = ["utilitarios", "recibo-vinculos"];
 export const VENCIMENTOS_QUERY_KEY = ["utilitarios", "vencimentos"];
 export const UTILITARIOS_STALE_TIME = 5 * 60 * 1000;
 export const UTILITARIOS_GC_TIME = 20 * 60 * 1000;
@@ -53,6 +54,77 @@ export const useRecibos = (options?: UseUtilitariosQueryOptions) => {
     enabled: options?.enabled ?? true,
     staleTime: UTILITARIOS_STALE_TIME,
     gcTime: UTILITARIOS_GC_TIME,
+  });
+};
+
+export const useReciboEquipamentos = (
+  empresaId: string,
+  options?: UseUtilitariosQueryOptions
+) => {
+  return useQuery({
+    queryKey: [
+      ...RECIBO_VINCULOS_QUERY_KEY,
+      "equipamentos",
+      empresaId,
+    ],
+    queryFn: () => utilitariosService.listarEquipamentosParaRecibo(empresaId),
+    enabled: (options?.enabled ?? true) && Boolean(empresaId),
+    staleTime: UTILITARIOS_STALE_TIME,
+    gcTime: UTILITARIOS_GC_TIME,
+    refetchOnWindowFocus: false,
+  });
+};
+
+export const useReciboOrdensServico = (
+  empresaId: string,
+  equipamentoId: string,
+  options?: UseUtilitariosQueryOptions
+) => {
+  return useQuery({
+    queryKey: [
+      ...RECIBO_VINCULOS_QUERY_KEY,
+      "ordens-servico",
+      empresaId,
+      equipamentoId,
+    ],
+    queryFn: () =>
+      utilitariosService.listarOrdensServicoParaRecibo(
+        empresaId,
+        equipamentoId
+      ),
+    enabled:
+      (options?.enabled ?? true) && Boolean(empresaId && equipamentoId),
+    staleTime: UTILITARIOS_STALE_TIME,
+    gcTime: UTILITARIOS_GC_TIME,
+    refetchOnWindowFocus: false,
+  });
+};
+
+export const useReciboOrcamentos = (
+  empresaId: string,
+  equipamentoId: string,
+  ordemServicoId: string,
+  options?: UseUtilitariosQueryOptions
+) => {
+  return useQuery({
+    queryKey: [
+      ...RECIBO_VINCULOS_QUERY_KEY,
+      "orcamentos",
+      empresaId,
+      equipamentoId,
+      ordemServicoId || "todos",
+    ],
+    queryFn: () =>
+      utilitariosService.listarOrcamentosParaRecibo(
+        empresaId,
+        equipamentoId,
+        ordemServicoId || undefined
+      ),
+    enabled:
+      (options?.enabled ?? true) && Boolean(empresaId && equipamentoId),
+    staleTime: UTILITARIOS_STALE_TIME,
+    gcTime: UTILITARIOS_GC_TIME,
+    refetchOnWindowFocus: false,
   });
 };
 
