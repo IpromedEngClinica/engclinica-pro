@@ -26,7 +26,8 @@ const destinationByGroup = {
   reprovados_em_curso: "reprovado",
   faturados: "faturado",
   cancelados: "cancelado",
-  recusados: "recusado",
+  // O Ipromed unifica todos os tipos de reprovacao do ArkMeds.
+  recusados: "reprovado",
 };
 
 function databaseUrl() {
@@ -70,6 +71,7 @@ async function loadStored(client) {
 function buildPlan(snapshot, storedById) {
   return snapshot.map((live) => {
     const id = Number(live.arkmeds_orcamento_id);
+    const existsInStaging = storedById.has(id);
     const stored = storedById.get(id) || {};
     const destination = destinationByGroup[live.status_grupo] || null;
     return {
@@ -81,7 +83,8 @@ function buildPlan(snapshot, storedById) {
       status_ipromed_anterior: stored.status_ipromed || null,
       status_ipromed_novo: destination,
       importado_ipromed: stored.orcamento_ipromed_id ? "sim" : "nao",
-      atualizar_staging: stored.arkmeds_status_grupo !== live.status_grupo ? "sim" : "nao",
+      atualizar_staging:
+        existsInStaging && stored.arkmeds_status_grupo !== live.status_grupo ? "sim" : "nao",
       atualizar_ipromed:
         stored.orcamento_ipromed_id && destination && stored.status_ipromed !== destination
           ? "sim"

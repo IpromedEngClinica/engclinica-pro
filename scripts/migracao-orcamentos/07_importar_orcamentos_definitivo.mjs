@@ -10,9 +10,11 @@ import {
   writeCsv,
 } from "./lib.mjs";
 import {
+  budgetBaseNumber,
   buildMigrationIdentifier,
   getSpreadsheetOsNumber,
   identifierNeedsReview,
+  isStandaloneBudgetByNumber,
   isSpreadsheetAvulso,
 } from "./regras_orcamentos.mjs";
 import {
@@ -39,6 +41,34 @@ const LOTE_PATHS = new Map([
   ["lote_1", path.join(outputDir, "lote_1_importacao_segura.csv")],
   ["lote_2", path.join(outputDir, "lote_2_importacao_segura.csv")],
   ["lote_3", path.join(outputDir, "lote_3_importacao_segura.csv")],
+  ["avulsos_1400", path.join(outputDir, "avulsos_menor_1400.csv")],
+  ["pendentes_reconciliados", path.join(outputDir, "lote_pendentes_reconciliados.csv")],
+  ["resolucoes_manuais_2026_07_20", path.join(outputDir, "lote_resolucoes_manuais_2026_07_20.csv")],
+  ["resolucoes_finais_2026_07_20", path.join(outputDir, "lote_resolucoes_finais_2026_07_20.csv")],
+  ["cancelados_avulsos_seguros", path.join(outputDir, "lote_cancelados_avulsos_seguros.csv")],
+  ["cancelados_resolvidos_2026_07_21", path.join(outputDir, "lote_cancelados_resolvidos_2026_07_21.csv")],
+  ["cancelados_finais_resolvidos_2026_07_21", path.join(outputDir, "lote_cancelados_finais_resolvidos_2026_07_21.csv")],
+  ["novos_2026_07_21", path.join(outputDir, "lote_novos_2026_07_21.csv")],
+]);
+
+const MANUAL_STANDALONE_MARKER = "AVULSO_CONFIRMADO_PELO_USUARIO";
+const MANUAL_COMPANY_OVERRIDE_MARKER = "CLIENTE_CONFIRMADO_PELO_USUARIO_DIVERGE_DA_OS";
+
+function isManuallyConfirmedStandalone(row) {
+  return row.classificacao_vinculo_os === "sem_os_avulso" &&
+    (row.motivos_associacao_os || []).includes(MANUAL_STANDALONE_MARKER);
+}
+
+function hasManualCompanyOverride(row) {
+  return (row.motivos_associacao_os || []).includes(MANUAL_COMPANY_OVERRIDE_MARKER);
+}
+
+const COMPANY_ALIASES = new Map([
+  [normalizeComparableText("Clínica Infantil Querubim"), "59cd0e13-07d1-4784-95b2-a601af7d6754"],
+  [normalizeComparableText("Dra. Lívia Moreira"), "838706da-2512-4753-a9d6-d955e9a3d4a7"],
+  [normalizeComparableText("Hospital São Sebastião de Viçosa"), "da1eaa9a-77a3-4061-b439-f516811e49dd"],
+  [normalizeComparableText("Asilo São Vicente de Paula"), "bb73c191-6fa9-44e8-8dea-5db4ceb8f7b5"],
+  [normalizeComparableText("Santa Casa de Misericórdia de Estiva"), "04e0efc8-2cbe-4772-b5c5-b92f91e7cdfd"],
 ]);
 
 const resultColumns = [
@@ -224,7 +254,7 @@ function mapBudgetType(row) {
 }
 
 function mapOrigin(row) {
-  return getSpreadsheetOsNumber(row) ? "os" : "avulso";
+  return isStandaloneBudgetByNumber(row) ? "avulso" : getSpreadsheetOsNumber(row) ? "os" : "avulso";
 }
 
 function splitModelManufacturer(value) {
@@ -259,7 +289,9 @@ function buildBudgetPayload(row, organizacaoId) {
   const importPolicy = effectiveStatusPolicy(row);
   const sheet = spreadsheetData(row);
   const payment = parseSpreadsheetPayment(row);
-  const additionalCosts = buildAdditionalCostDefinitions(row, row.__items);
+  const additionalCosts = row.__skipAdditionalCosts
+    ? []
+    : buildAdditionalCostDefinitions(row, row.__items);
   const total = normalizeMoney(row.arkmeds_valor_total);
   const servicesValue = row.__items
     .filter((item) => item.tipo_item === "servico")
@@ -288,8 +320,8 @@ function buildBudgetPayload(row, organizacaoId) {
     organizacao_id: organizacaoId,
     numero: cleanText(row.arkmeds_orcamento_numero_original || row.arkmeds_orcamento_numero),
     empresa_id: row.empresa_id_resolvida,
-    equipamento_id: row.equipamento_id_resolvido || null,
-    ordem_servico_id: row.ordem_servico_id_resolvida || null,
+    equipamento_id: isStandaloneBudgetByNumber(row) ? null : row.equipamento_id_resolvido || null,
+    ordem_servico_id: isStandaloneBudgetByNumber(row) ? null : row.ordem_servico_id_resolvida || null,
     data_orcamento: row.arkmeds_data_criacao || new Date().toISOString(),
     data_validade: row.arkmeds_data_validade || null,
     status,
@@ -330,7 +362,7 @@ function buildBudgetPayload(row, organizacaoId) {
     status_normalizado_importacao: normalizedStatus,
     politica_importacao_status: importPolicy,
     arkmeds_tipo_texto: row.arkmeds_tipo_texto || null,
-    arkmeds_ordem_servico_numero: getSpreadsheetOsNumber(row),
+    arkmeds_ordem_servico_numero: isStandaloneBudgetByNumber(row) ? null : getSpreadsheetOsNumber(row),
     pdf_original_url: row.pdf_original_url || null,
     soma_itens_migracao: normalizeMoney(row.soma_itens),
     classificacao_vinculo_os: row.classificacao_vinculo_os || null,
@@ -348,6 +380,8 @@ function buildBudgetPayload(row, organizacaoId) {
       politica_importacao_status: importPolicy,
       arkmeds_status_planilha: row.arkmeds_status_planilha,
       classificacao_vinculo_os: row.classificacao_vinculo_os,
+      regra_avulso_numero: isStandaloneBudgetByNumber(row) ? "numero_base_menor_1400" : null,
+      numero_base_regra_avulso: budgetBaseNumber(row),
       classificacao_cliente: row.classificacao_cliente,
       score_cliente: row.score_cliente,
       score_os: row.score_os,
@@ -510,6 +544,56 @@ async function loadBatchRows(client, ids) {
 
   for (const row of rows) {
     row.__items = itemsByBudget.get(row.arkmeds_orcamento_id) || [];
+    if (isStandaloneBudgetByNumber(row)) {
+      row.arkmeds_ordem_servico_id = null;
+      row.arkmeds_ordem_servico_numero = null;
+      row.os_candidata_id = null;
+      row.os_candidata_numero = null;
+      row.ordem_servico_id_resolvida = null;
+      row.equipamento_id_resolvido = null;
+      row.classificacao_vinculo_os = "sem_os_avulso";
+      row.motivos_bloqueantes = (row.motivos_bloqueantes || []).filter(
+        (reason) => ![
+          "OS_AMBIGUA",
+          "POSSIVEL_OS_POR_NUMERO",
+          "SEM_ITENS",
+          "SEM_ITENS_RETORNADOS",
+          "ITENS_NAO_PRESERVADOS",
+          "TIPO_MISTO_ENDPOINT_INCOMPLETO",
+        ].includes(reason)
+      );
+
+      if (!row.__items.length && normalizeMoney(row.arkmeds_valor_total) === 0) {
+        const pieceDescription = cleanText(row.dados_planilha_json?.pecas);
+        row.__items = [{
+          id: null,
+          arkmeds_orcamento_id: row.arkmeds_orcamento_id,
+          arkmeds_item_id: null,
+          tipo_item: pieceDescription ? "peca" : "outro",
+          descricao: pieceDescription || "Registro historico cancelado sem itens",
+          quantidade: 1,
+          garantia: null,
+          valor_unitario: 0,
+          valor_total_calculado: 0,
+          observacoes: "Item historico criado para preservar o orcamento ArkMeds sem itens retornados.",
+          dados_brutos_json: { sintetico: true, regra: "avulso_numero_menor_1400" },
+        }];
+        row.__syntheticHistoricalItem = true;
+        row.__skipAdditionalCosts = true;
+        row.tem_itens_preservados = true;
+        row.status_preservacao_itens = "itens_preservados";
+        row.soma_itens = 0;
+        row.diferenca_valor = 0;
+        row.arkmeds_desconto = 0;
+        row.arkmeds_desconto_tipo = "valor";
+      }
+
+      if (["pendente_os", "pendente_itens"].includes(row.status_validacao) && !row.motivos_bloqueantes.length) {
+        row.status_validacao = row.__syntheticHistoricalItem
+          ? "historico_consulta"
+          : "ok_para_importar_com_detalhes_parciais";
+      }
+    }
   }
 
   const [{ rows: serviceTypes }, { rows: equipmentTypes }] = await Promise.all([
@@ -538,6 +622,10 @@ async function loadBatchRows(client, ids) {
   const sourceArkmedsIds = [...new Set(rows
     .map((row) => Number.parseInt(row.arkmeds_ordem_servico_id, 10))
     .filter(Number.isInteger))];
+  const resolvedOrderIds = [...new Set(rows
+    .filter((row) => row.classificacao_vinculo_os === "com_os_confirmada")
+    .map((row) => cleanText(row.ordem_servico_id_resolvida))
+    .filter(Boolean))];
   const { rows: exactOrders } = sourceNumbers.length
     ? await client.query(
         `select os.id, os.numero, os.arkmeds_os_id, os.empresa_id, os.equipamento_id,
@@ -546,23 +634,27 @@ async function loadBatchRows(client, ids) {
          left join public.equipamentos e on e.id = os.equipamento_id
          left join public.tipos_equipamento te on te.id = e.tipo_equipamento_id
          where os.numero = any($1::text[])
-            or os.arkmeds_os_id = any($2::bigint[])`,
-        [sourceNumbers, sourceArkmedsIds]
+            or os.arkmeds_os_id = any($2::bigint[])
+            or os.id = any($3::uuid[])`,
+        [sourceNumbers, sourceArkmedsIds, resolvedOrderIds]
       )
-    : sourceArkmedsIds.length
+    : sourceArkmedsIds.length || resolvedOrderIds.length
       ? await client.query(
           `select os.id, os.numero, os.arkmeds_os_id, os.empresa_id, os.equipamento_id,
                   coalesce(te.nome, e.tipo_texto) as os_tipo_equipamento
            from public.ordens_servico os
            left join public.equipamentos e on e.id = os.equipamento_id
            left join public.tipos_equipamento te on te.id = e.tipo_equipamento_id
-           where os.arkmeds_os_id = any($1::bigint[])`,
-          [sourceArkmedsIds]
+           where os.arkmeds_os_id = any($1::bigint[])
+              or os.id = any($2::uuid[])`,
+          [sourceArkmedsIds, resolvedOrderIds]
         )
       : { rows: [] };
   const ordersByNumber = new Map();
   const ordersByArkmedsId = new Map();
+  const ordersById = new Map();
   for (const order of exactOrders) {
+    ordersById.set(order.id, order);
     if (!ordersByNumber.has(order.numero)) ordersByNumber.set(order.numero, []);
     ordersByNumber.get(order.numero).push(order);
     if (order.arkmeds_os_id != null) {
@@ -572,22 +664,35 @@ async function loadBatchRows(client, ids) {
     }
   }
   for (const row of rows) {
+    if (isManuallyConfirmedStandalone(row)) {
+      row.arkmeds_ordem_servico_id = null;
+      row.arkmeds_ordem_servico_numero = null;
+      row.ordem_servico_id_resolvida = null;
+      row.equipamento_id_resolvido = null;
+      continue;
+    }
+
     const sourceOs = getSpreadsheetOsNumber(row) || cleanText(row.arkmeds_ordem_servico_numero);
     const sourceArkmedsId = cleanText(row.arkmeds_ordem_servico_id);
+    const confirmedOrder = row.classificacao_vinculo_os === "com_os_confirmada"
+      ? ordersById.get(cleanText(row.ordem_servico_id_resolvida))
+      : null;
     const directCandidates = sourceArkmedsId ? ordersByArkmedsId.get(sourceArkmedsId) || [] : [];
     const globalNumberCandidates = ordersByNumber.get(sourceOs) || [];
     const numberCandidates = globalNumberCandidates.filter(
       (order) => order.empresa_id === row.empresa_id_resolvida
     );
-    const exactOrder = directCandidates.length === 1
+    const exactOrder = confirmedOrder || (directCandidates.length === 1
       ? directCandidates[0]
-      : selectUniqueSourceOrder(numberCandidates) || selectUniqueSourceOrder(globalNumberCandidates);
+      : selectUniqueSourceOrder(numberCandidates) || selectUniqueSourceOrder(globalNumberCandidates));
     row.arkmeds_ordem_servico_numero = sourceOs;
     row.ordem_servico_id_resolvida = exactOrder?.id || null;
     row.equipamento_id_resolvido = exactOrder?.equipamento_id || null;
     row.os_tipo_equipamento = exactOrder?.os_tipo_equipamento || row.os_tipo_equipamento || null;
     if (exactOrder) {
-      row.empresa_id_resolvida = exactOrder.empresa_id;
+      if (!hasManualCompanyOverride(row)) {
+        row.empresa_id_resolvida = exactOrder.empresa_id;
+      }
       row.classificacao_vinculo_os = "com_os_confirmada";
       row.motivos_bloqueantes = (row.motivos_bloqueantes || []).filter(
         (reason) => !["OS_AMBIGUA", "POSSIVEL_OS_POR_NUMERO"].includes(reason)
@@ -702,6 +807,12 @@ async function resolveCompaniesByUniqueName(client, rows) {
   }
 
   for (const row of unresolved) {
+    const aliasId = COMPANY_ALIASES.get(normalizeComparableText(row.arkmeds_solicitante));
+    if (aliasId && companies.some((company) => company.id === aliasId)) {
+      row.empresa_id_resolvida = aliasId;
+      row.__empresa_resolvida_por = "alias_migracao_avulsos";
+      continue;
+    }
     const legalMatches = companiesByLegalName.get(
       normalizeExactCompanyName(row.arkmeds_solicitante)
     ) || [];
@@ -732,7 +843,7 @@ async function resolveCompaniesByUniqueName(client, rows) {
 }
 
 function validateLote1Row(row) {
-  const blockingReasons = row.motivos_bloqueantes || [];
+  const rawBlockingReasons = row.motivos_bloqueantes || [];
   const normalizedStatus = effectiveNormalizedStatus(row);
   const isRejectedHistorical =
     row.status_validacao === "historico_consulta" &&
@@ -740,21 +851,28 @@ function validateLote1Row(row) {
   const isCancelledHistorical =
     row.status_validacao === "historico_consulta" &&
     normalizedStatus === "cancelado";
-  const allowedValidation =
-    ["ok_para_importar", "ok_para_importar_com_detalhes_parciais"].includes(row.status_validacao) ||
-    isRejectedHistorical ||
-    isCancelledHistorical;
-  const allowedStatus = ["pendente", "aprovado_em_curso", "faturado", "reprovado_em_curso", "cancelado"].includes(normalizedStatus);
+  const allowedStatus = ["pendente", "aprovado_em_curso", "faturado", "reprovado_em_curso", "cancelado", "recusado_ignorado"].includes(normalizedStatus);
   const safeAssociation = ["com_os_confirmada", "sem_os_avulso", "provavel_avulso_numero_baixo"].includes(row.classificacao_vinculo_os);
-  const explicitOsReference = cleanText(row.arkmeds_ordem_servico_id) || getSpreadsheetOsNumber(row) || cleanText(row.arkmeds_ordem_servico_numero);
+  const explicitOsReference = isStandaloneBudgetByNumber(row) || isManuallyConfirmedStandalone(row)
+    ? ""
+    : cleanText(row.arkmeds_ordem_servico_id) || getSpreadsheetOsNumber(row) || cleanText(row.arkmeds_ordem_servico_numero);
   const diferencaValor = Number(row.diferenca_valor || 0);
   const descontoValor = normalizeMoney(row.arkmeds_desconto);
-  const additionalCostsValue = buildAdditionalCostDefinitions(row, row.__items)
+  const additionalCostsValue = (row.__skipAdditionalCosts ? [] : buildAdditionalCostDefinitions(row, row.__items))
     .reduce((sum, item) => sum + item.value, 0);
   const coherentValue =
     Math.abs(diferencaValor) <= 0.05 ||
     (descontoValor > 0 && Math.abs(diferencaValor + descontoValor) <= 0.05) ||
     Math.abs(diferencaValor - additionalCostsValue + descontoValor) <= 0.05;
+  const blockingReasons = rawBlockingReasons.filter(
+    (reason) => !(coherentValue && reason === "DIVERGENCIA_VALOR")
+  );
+  const allowedValidation =
+    ["ok_para_importar", "ok_para_importar_com_detalhes_parciais"].includes(row.status_validacao) ||
+    (row.status_validacao === "pendente_valor" && coherentValue) ||
+    (row.status_validacao === "ignorar" && normalizedStatus === "recusado_ignorado") ||
+    isRejectedHistorical ||
+    isCancelledHistorical;
   const identifier = buildMigrationIdentifier(row);
 
   if (!allowedValidation) throw new Error(`Status de validacao fora do Lote 1: ${row.status_validacao || "-"}`);
@@ -849,7 +967,7 @@ async function importOneBudget(client, row, organizacaoId, mode) {
 
     const orcamentoId = rows[0].id;
     const itemPayloads = row.__items.map((item, index) => buildItemPayload(item, orcamentoId, index + 1));
-    const additionalCosts = buildAdditionalCostDefinitions(row, row.__items).map((definition, index) =>
+    const additionalCosts = (row.__skipAdditionalCosts ? [] : buildAdditionalCostDefinitions(row, row.__items)).map((definition, index) =>
       buildAdditionalCostPayload(definition, orcamentoId, itemPayloads.length + index + 1)
     );
     itemPayloads.push(...additionalCosts);

@@ -42,7 +42,7 @@ const LIVE_STATUS_DESTINATION = {
   reprovado_em_curso: "reprovado",
   faturado: "faturado",
   cancelado: "cancelado",
-  recusado_ignorado: "recusado",
+  recusado_ignorado: "reprovado",
 };
 
 export function currentArkmedsStatus(row) {
@@ -87,6 +87,7 @@ export function destinationStatus(row) {
   if (normalized === "faturado") return "faturado";
   if (normalized === "pendente") return "pendente";
   if (normalized === "reprovado_em_curso") return "reprovado";
+  if (normalized === "recusado_ignorado") return "reprovado";
   return null;
 }
 

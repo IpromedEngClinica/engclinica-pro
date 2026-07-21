@@ -47,6 +47,16 @@ const EQUIPMENT_NAMES = new Map([
   ["detector fetal", "Detector Fetal"],
 ]);
 
+const OS_NUMBER_OVERRIDES_BY_ARKMEDS_ID = new Map([
+  [4604, "55549"],
+  [4609, "56369"],
+  [4636, "56366"],
+]);
+
+const IDENTIFIER_OVERRIDES_BY_ARKMEDS_ID = new Map([
+  [3081, "Peças Sugador"],
+]);
+
 export function normalizeMigrationService(value) {
   const normalized = normalizeKindText(value);
   if (!normalized) return "";
@@ -89,6 +99,31 @@ export function parseSpreadsheetServiceEntries(value) {
     .filter(Boolean);
 }
 
+export function budgetBaseNumber(row) {
+  const candidates = [
+    row?.arkmeds_orcamento_numero_base,
+    row?.arkmeds_orcamento_numero_original,
+    row?.arkmeds_orcamento_numero,
+    row?.numero,
+  ];
+
+  for (const candidate of candidates) {
+    const text = cleanText(candidate);
+    if (!text) continue;
+    const match = text.match(/^(\d+)/);
+    if (!match) continue;
+    const parsed = Number.parseInt(match[1], 10);
+    if (Number.isSafeInteger(parsed)) return parsed;
+  }
+
+  return null;
+}
+
+export function isStandaloneBudgetByNumber(row, maxExclusive = 1400) {
+  const baseNumber = budgetBaseNumber(row);
+  return baseNumber != null && baseNumber < maxExclusive;
+}
+
 function inferGroup(text) {
   const normalized = normalizeKindText(text);
   if (!normalized) return "";
@@ -116,11 +151,17 @@ function selectPredominantService(entries) {
 }
 
 export function getSpreadsheetOsNumber(row) {
+  if (isStandaloneBudgetByNumber(row)) return null;
+  const override = OS_NUMBER_OVERRIDES_BY_ARKMEDS_ID.get(
+    Number(row?.arkmeds_orcamento_id)
+  );
+  if (override) return override;
   const raw = row?.dados_planilha_json?.ordens_de_servico;
   return cleanText(raw) || null;
 }
 
 export function isSpreadsheetAvulso(row) {
+  if (isStandaloneBudgetByNumber(row)) return true;
   const explicitOs = getSpreadsheetOsNumber(row) ||
     cleanText(row?.arkmeds_ordem_servico_numero) ||
     cleanText(row?.arkmeds_ordem_servico_id);
@@ -242,6 +283,11 @@ function inferEquipmentFromObservation(value) {
 }
 
 export function buildMigrationIdentifier(row) {
+  const override = IDENTIFIER_OVERRIDES_BY_ARKMEDS_ID.get(
+    Number(row?.arkmeds_orcamento_id)
+  );
+  if (override) return override;
+
   const sheet = row.dados_planilha_json || {};
   const entries = parseSpreadsheetServiceEntries(sheet.servicos);
   const observations = [sheet.observacoes, row.arkmeds_observacoes_planilha, row.observacoes_gerais]
@@ -250,8 +296,19 @@ export function buildMigrationIdentifier(row) {
     .join(" ");
   const group = inferGroup(`${sheet.servicos || ""} ${observations}`);
 
+  const stagingItems = Array.isArray(row.__items) ? row.__items : [];
+  const stagingServiceItems = stagingItems.filter((item) => item.tipo_item === "servico");
+  const stagingPartItems = stagingItems.filter((item) => item.tipo_item === "peca");
+  const stagingEquipments = [...new Set(stagingServiceItems
+    .map((item) => sanitizeEquipmentCandidate(item.descricao))
+    .filter(Boolean))];
+
   let service = selectPredominantService(entries);
   if (!service && cleanText(sheet.pecas)) service = "Troca de Peças";
+  if (!service && stagingPartItems.length && !stagingServiceItems.length) service = "Troca de Peças";
+  if (!service && normalizeKindText(observations).includes("prevent")) service = normalizeMigrationService("preventiva");
+  if (!service && normalizeKindText(observations).includes("calibr")) service = normalizeMigrationService("calibracao");
+  if (!service && normalizeKindText(observations).includes("corret")) service = normalizeMigrationService("corretiva");
   if (!service) service = normalizeMigrationService(row.arkmeds_tipo_texto) || "Serviço";
 
   const equipments = [...new Set(entries.map((entry) => entry.equipment).filter(Boolean))];
@@ -265,6 +322,8 @@ export function buildMigrationIdentifier(row) {
   else if (group) equipment = group;
   else if (equipments.length === 1) equipment = equipments[0];
   else if (equipments.length > 1) equipment = "Equipamentos";
+  else if (stagingEquipments.length === 1) equipment = stagingEquipments[0];
+  else if (stagingEquipments.length > 1) equipment = "Equipamentos";
   else if (spreadsheetEquipment) equipment = spreadsheetEquipment;
   else {
     equipment = sanitizeEquipmentCandidate(
@@ -272,6 +331,11 @@ export function buildMigrationIdentifier(row) {
       row.equipamento_texto ||
       row.descricao_equipamento
     );
+  }
+
+  if (!equipment && isPartsBudget) {
+    const firstSpreadsheetPart = cleanText(sheet.pecas).split(/\s+\/\s+/)[0]?.split(/\s+\+\s+/)[0];
+    equipment = sanitizeEquipmentCandidate(firstSpreadsheetPart || stagingPartItems[0]?.descricao);
   }
 
   if (!equipment && service !== "Troca de Peças") equipment = "Equipamentos";
