@@ -1,5 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
+import {
+  CATALOG_CACHE_STALE_TIME,
+  SESSION_CACHE_GC_TIME,
+} from "@/lib/queryClient";
 
 export type TipoOSSupabase = {
   id: string;
@@ -22,6 +26,34 @@ export type EstadoOSSupabase = {
 
 export const TIPOS_OS_QUERY_KEY = ["tipos-os"];
 export const ESTADOS_OS_QUERY_KEY = ["estados-os"];
+
+export const listarTiposOS = async () => {
+  const { data, error } = await supabase
+    .from("tipos_os")
+    .select("id, nome, descricao, exige_equipamento, gera_orcamento, ativo")
+    .eq("ativo", true)
+    .order("nome", { ascending: true });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data as TipoOSSupabase[];
+};
+
+export const listarEstadosOS = async () => {
+  const { data, error } = await supabase
+    .from("estados_os")
+    .select("id, nome, descricao, finaliza_os, cancela_os, ordem, ativo")
+    .eq("ativo", true)
+    .order("ordem", { ascending: true });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data as EstadoOSSupabase[];
+};
 
 const getOrganizacaoId = async () => {
   const { data, error } = await supabase.rpc("current_organizacao_id");
@@ -72,38 +104,18 @@ const invalidateEstadosOS = (queryClient: ReturnType<typeof useQueryClient>) => 
 export const useTiposOS = () => {
   return useQuery<TipoOSSupabase[]>({
     queryKey: TIPOS_OS_QUERY_KEY,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("tipos_os")
-        .select("id, nome, descricao, exige_equipamento, gera_orcamento, ativo")
-        .eq("ativo", true)
-        .order("nome", { ascending: true });
-
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      return data as TipoOSSupabase[];
-    },
+    queryFn: listarTiposOS,
+    staleTime: CATALOG_CACHE_STALE_TIME,
+    gcTime: SESSION_CACHE_GC_TIME,
   });
 };
 
 export const useEstadosOS = () => {
   return useQuery<EstadoOSSupabase[]>({
     queryKey: ESTADOS_OS_QUERY_KEY,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("estados_os")
-        .select("id, nome, descricao, finaliza_os, cancela_os, ordem, ativo")
-        .eq("ativo", true)
-        .order("ordem", { ascending: true });
-
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      return data as EstadoOSSupabase[];
-    },
+    queryFn: listarEstadosOS,
+    staleTime: CATALOG_CACHE_STALE_TIME,
+    gcTime: SESSION_CACHE_GC_TIME,
   });
 };
 

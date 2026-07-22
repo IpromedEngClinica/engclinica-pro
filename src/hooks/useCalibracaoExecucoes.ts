@@ -7,11 +7,15 @@ import {
 import { EQUIPAMENTO_HISTORICO_QUERY_KEY } from "@/hooks/useEquipamentoHistorico";
 import { EQUIPAMENTOS_QUERY_KEY } from "@/hooks/useEquipamentos";
 import { gerarPdfCalibracaoCertificado } from "@/utils/gerarPdfCalibracaoCertificado";
+import {
+  SESSION_CACHE_GC_TIME,
+  SESSION_CACHE_STALE_TIME,
+} from "@/lib/queryClient";
 
 export const CALIBRACAO_EXECUCOES_QUERY_KEY = ["calibracao-execucoes"];
 export const CALIBRACAO_EXECUCAO_QUERY_KEY = ["calibracao-execucao"];
-export const CALIBRACAO_EXECUCOES_STALE_TIME = 5 * 60 * 1000;
-export const CALIBRACAO_EXECUCOES_GC_TIME = 20 * 60 * 1000;
+export const CALIBRACAO_EXECUCOES_STALE_TIME = SESSION_CACHE_STALE_TIME;
+export const CALIBRACAO_EXECUCOES_GC_TIME = SESSION_CACHE_GC_TIME;
 export const CALIBRACAO_EXECUCOES_DEFAULT_PAGINADO_FILTROS: ListarCalibracaoExecucoesFiltros =
   {
     termo: "",

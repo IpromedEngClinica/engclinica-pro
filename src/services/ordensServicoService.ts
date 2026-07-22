@@ -120,6 +120,22 @@ export type OrdemServicoFormInput = {
   acessorios?: OrdemServicoAcessorioFormInput[];
 };
 
+export type OrdemServicoPrioridade = "baixa" | "normal" | "alta" | "urgente";
+
+export type OrdemServicoCamposEdicaoLote = {
+  estadoOsId?: string;
+  tipoOsId?: string;
+  tecnicoResponsavelId?: string;
+  responsavelTexto?: string;
+  problemaRelatado?: string;
+  origemProblema?: string;
+  descricaoServico?: string;
+  observacoes?: string;
+  prioridade?: OrdemServicoPrioridade;
+  dataAbertura?: string;
+  dataFechamento?: string;
+};
+
 export type OrdensServicoSortField =
   | "numero"
   | "numero_ordem"
@@ -135,6 +151,10 @@ export type ListarOrdensServicoFiltros = {
   tipoServicoNome?: string;
   responsavelTecnico?: string;
   numero?: string;
+  dataAberturaDe?: string;
+  dataAberturaAte?: string;
+  dataFechamentoDe?: string;
+  dataFechamentoAte?: string;
 };
 
 export type ListarOrdensServicoPaginadoFiltros = ListarOrdensServicoFiltros & {
@@ -1153,6 +1173,10 @@ export const ordensServicoService = {
       p_limit: limit,
       p_sort_by: sortBy,
       p_ascending: filtros.ascending ?? false,
+      p_data_abertura_de: filtros.dataAberturaDe || null,
+      p_data_abertura_ate: filtros.dataAberturaAte || null,
+      p_data_fechamento_de: filtros.dataFechamentoDe || null,
+      p_data_fechamento_ate: filtros.dataFechamentoAte || null,
     });
 
     if (error) {
@@ -1413,6 +1437,53 @@ export const ordensServicoService = {
     await recalcularStatusEquipamentoPorOS(data.equipamento_id);
 
     return data as unknown as OrdemServicoSupabase;
+  },
+
+  async atualizarEmLote(
+    ids: string[],
+    campos: OrdemServicoCamposEdicaoLote
+  ): Promise<number> {
+    const payload: Record<string, string> = {};
+
+    if (campos.estadoOsId !== undefined) payload.estado_os_id = campos.estadoOsId;
+    if (campos.tipoOsId !== undefined) payload.tipo_os_id = campos.tipoOsId;
+    if (campos.tecnicoResponsavelId !== undefined) {
+      payload.tecnico_responsavel_id = campos.tecnicoResponsavelId;
+    }
+    if (campos.responsavelTexto !== undefined) {
+      payload.responsavel_texto = campos.responsavelTexto;
+    }
+    if (campos.problemaRelatado !== undefined) {
+      payload.problema_relatado = campos.problemaRelatado;
+    }
+    if (campos.origemProblema !== undefined) {
+      payload.origem_problema = campos.origemProblema;
+    }
+    if (campos.descricaoServico !== undefined) {
+      payload.descricao_servico = campos.descricaoServico;
+    }
+    if (campos.observacoes !== undefined) payload.observacoes = campos.observacoes;
+    if (campos.prioridade !== undefined) payload.prioridade = campos.prioridade;
+    if (campos.dataAbertura !== undefined) {
+      payload.data_abertura = campos.dataAbertura;
+    }
+    if (campos.dataFechamento !== undefined) {
+      payload.data_fechamento = campos.dataFechamento;
+    }
+
+    const { data, error } = await supabase.rpc(
+      "atualizar_ordens_servico_em_lote",
+      {
+        p_ordens_ids: ids,
+        p_campos: payload,
+      }
+    );
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return Number(data || 0);
   },
 
   async excluir(id: string) {

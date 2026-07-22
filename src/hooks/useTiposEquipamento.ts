@@ -1,5 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
+import {
+  CATALOG_CACHE_STALE_TIME,
+  SESSION_CACHE_GC_TIME,
+} from "@/lib/queryClient";
 
 export type TipoEquipamentoSupabase = {
   id: string;
@@ -9,6 +13,20 @@ export type TipoEquipamentoSupabase = {
 };
 
 export const TIPOS_EQUIPAMENTO_QUERY_KEY = ["tipos-equipamento"];
+
+export const listarTiposEquipamento = async () => {
+  const { data, error } = await supabase
+    .from("tipos_equipamento")
+    .select("id, nome, descricao, ativo")
+    .eq("ativo", true)
+    .order("nome", { ascending: true });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data as TipoEquipamentoSupabase[];
+};
 
 const getOrganizacaoId = async () => {
   const { data, error } = await supabase.rpc("current_organizacao_id");
@@ -55,19 +73,9 @@ const invalidateTiposEquipamento = (queryClient: ReturnType<typeof useQueryClien
 export const useTiposEquipamento = () => {
   return useQuery<TipoEquipamentoSupabase[]>({
     queryKey: TIPOS_EQUIPAMENTO_QUERY_KEY,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("tipos_equipamento")
-        .select("id, nome, descricao, ativo")
-        .eq("ativo", true)
-        .order("nome", { ascending: true });
-
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      return data as TipoEquipamentoSupabase[];
-    },
+    queryFn: listarTiposEquipamento,
+    staleTime: CATALOG_CACHE_STALE_TIME,
+    gcTime: SESSION_CACHE_GC_TIME,
   });
 };
 

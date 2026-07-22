@@ -222,6 +222,10 @@ export type OrcamentoSupabase = {
     numero: string;
     status_sistema: string;
     ativo: boolean;
+    tipo_os?: {
+      id: string;
+      nome: string;
+    } | null;
   } | null;
 
   itens?: OrcamentoItemSupabase[];
@@ -371,7 +375,11 @@ const selectOrcamentos = `
     id,
     numero,
     status_sistema,
-    ativo
+    ativo,
+    tipo_os:tipos_os (
+      id,
+      nome
+    )
   ),
   itens:orcamento_itens (
     id,

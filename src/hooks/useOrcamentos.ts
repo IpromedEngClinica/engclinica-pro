@@ -9,6 +9,10 @@ import {
   OrcamentosPaginadoResult,
   orcamentosService,
 } from "@/services/orcamentosService";
+import {
+  SESSION_CACHE_GC_TIME,
+  SESSION_CACHE_STALE_TIME,
+} from "@/lib/queryClient";
 
 export const ORCAMENTOS_QUERY_KEY = ["orcamentos"];
 
@@ -18,8 +22,27 @@ type UseOrcamentosOptions = {
   gcTime?: number;
 };
 
-export const ORCAMENTOS_STALE_TIME = 5 * 60 * 1000;
-export const ORCAMENTOS_GC_TIME = 20 * 60 * 1000;
+export const ORCAMENTOS_STALE_TIME = SESSION_CACHE_STALE_TIME;
+export const ORCAMENTOS_GC_TIME = SESSION_CACHE_GC_TIME;
+export const ORCAMENTOS_DEFAULT_PAGINADO_FILTROS: ListarOrcamentosPaginadoFiltros = {
+  termo: undefined,
+  status: "pendente",
+  tipo: undefined,
+  clienteNome: undefined,
+  formaPagamento: undefined,
+  modoPagamento: undefined,
+  frete: undefined,
+  orcamentista: undefined,
+  dataInicio: undefined,
+  dataFim: undefined,
+  valorMinimo: undefined,
+  valorMaximo: undefined,
+  origem: undefined,
+  page: 1,
+  limit: 25,
+  sortBy: "data",
+  ascending: false,
+};
 
 export const useOrcamentos = (options?: UseOrcamentosOptions) => {
   return useQuery<OrcamentoSupabase[]>({

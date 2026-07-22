@@ -112,6 +112,72 @@ export function resolveCatalogItem(index, name) {
   return matches.length === 1 ? matches[0] : null;
 }
 
+const EQUIPMENT_DESCRIPTION_ALIASES = new Map([
+  ["aparelho de aferir pressao digital", "Aparelho de Pressao Digital"],
+  ["aspirador de secrecao", "Aspirador"],
+  ["autoclave de bancada", "Autoclave"],
+  ["balanca de precisao", "Balanca de Precisao / Semi-analitica"],
+  ["bioimpedancia", "Balanca com Bioimpedancia"],
+  ["bomba de infusao", "Bomba de Infusao"],
+  ["camara de conservacao de vacinas", "Camara de Conservacao"],
+  ["caneta laser 658 nm", "Caneta Laser"],
+  ["corretiva em aparelho de peeling", "Aparelho de Peeling"],
+  ["cabo paciente ecg", "Cabo Paciente"],
+  ["de modulo dea em cardioversor cardiomax", "Cardioversor"],
+  ["dea", "Desfibrilador Externo Automatico DEA"],
+  ["dinamometro digital", "Dinamometro"],
+  ["e calibracao em carrinho de anestesia", "Carrinho de Anestesia"],
+  ["eeg", "Eletroencefalograma"],
+  ["endermoterapia", "Aparelho de Endermoterapia Vibratoria"],
+  ["foco cirurgico de teto", "Foco Cirurgico"],
+  ["foco de teto", "Foco Cirurgico"],
+  ["geladeira / frigobar", "Geladeira"],
+  ["infravermelho", "Infra Vermelho"],
+  ["imitanciometro", "Aparelho de imitanciometria"],
+  ["lipocavitacao", "Aparelho de Lipocavitacao"],
+  ["manometro de valvula reguladora de pressao", "Manometro"],
+  ["manopla de criolipolise", "Manopla de Crio lipolise"],
+  ["mensal em camaras de conservacao elber", "Camara de Conservacao"],
+  ["de bateira e manutencao preventiva em camara", "Camara de Conservacao"],
+  ["micro-ondas fisioterapico", "Microondas"],
+  ["monitor miultiparametro", "Monitor Multiparametro"],
+  ["mufla", "Forno Mufla"],
+  ["para desfibrilador externo automatico - dea", "Desfibrilador Externo Automatico DEA"],
+  ["para desmanche de raio x", "Raio X"],
+  ["phmetro", "Medidor de pH - pHmetro"],
+  ["pipeta automatica", "Pipeta"],
+  ["pipeta automatica (8 canais)", "Pipeta"],
+  ["pipeta automatica (12 canais)", "Pipeta"],
+  ["pipeta de volume variavel", "Pipeta"],
+  ["reguladora de pressao fixa para oxigenio", "Regulador de Pressao Fixa Oxigenio"],
+  ["respirador (ventilador pulmonar)", "Ventilador Pulmonar"],
+  ["termo-higrometro analitico", "Termohigrometro"],
+  ["termometro analitico", "Termometro"],
+  ["termoreator", "Termo Reator"],
+  ["testes de aceitacao e controle em ultrassom", "Ultrassom"],
+  ["ultrafreezer", "Freezer"],
+  ["qualificacao termica em autoclave", "Autoclave"],
+  ["montagem em consultorio odontologico", "Consultorio Odontologico"],
+]);
+
+export function equipmentNameFromServiceDescription(value) {
+  const equipment = cleanText(value)
+    .replace(/^[-–—]\s*/, "")
+    .replace(/^em\s+/i, "")
+    .replace(/[.;:,]+$/g, "")
+    .trim();
+  if (!equipment) return null;
+
+  return EQUIPMENT_DESCRIPTION_ALIASES.get(normalizeKindText(equipment)) || equipment;
+}
+
+export function resolveEquipmentFromServiceDescription(index, description) {
+  return resolveCatalogItem(
+    index,
+    equipmentNameFromServiceDescription(description)
+  );
+}
+
 export function matchSpreadsheetServices(items, row) {
   const entries = parseSpreadsheetServiceEntries(spreadsheetData(row).servicos);
   const available = entries.map((entry, index) => ({ ...entry, index, used: false }));

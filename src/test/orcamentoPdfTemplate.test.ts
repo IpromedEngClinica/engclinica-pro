@@ -208,4 +208,98 @@ describe("orcamentoPdfTemplate", () => {
     );
     expect(html).toContain("2 ultrassons, 1 TENS e 1 laserterapia");
   });
+
+  it("recupera o tipo de servico de um orcamento legado importado", () => {
+    const html = buildOrcamentoHtml(
+      {
+        numero: "1386",
+        data_orcamento: "2026-07-14T12:00:00",
+        identificador: "Manutenção Corretiva Autoclave",
+        detalhes_orcamento:
+          "Proposta para Manutenção Corretiva em Autoclave Digitale",
+        valor_total: 804,
+        empresa: { nome: "Climar - Clínica de Medicina" },
+        itens: [
+          {
+            tipo: "servico",
+            descricao: "Em Autoclave Vertical",
+            quantidade: 1,
+            valor_unitario: 160,
+            valor_total: 160,
+            tipo_servico_id: null,
+            tipo_equipamento_id: null,
+          },
+        ],
+      } as OrcamentoSupabase,
+      "data:image/png;base64,logo"
+    );
+
+    expect(html).toContain("Manutenção Corretiva Em Autoclave Vertical");
+    expect(html).not.toContain(">Em Autoclave Vertical</strong>");
+  });
+
+  it("preserva a descricao especifica mesmo com tipos estruturados", () => {
+    const html = buildOrcamentoHtml(
+      {
+        numero: "1386",
+        data_orcamento: "2026-07-14T12:00:00",
+        valor_total: 804,
+        empresa: { nome: "Climar - Clínica de Medicina" },
+        itens: [
+          {
+            tipo: "servico",
+            descricao: "Manutenção Corretiva - Autoclave Vertical",
+            quantidade: 1,
+            valor_unitario: 160,
+            valor_total: 160,
+            tipo_servico: {
+              id: "tipo-servico-1",
+              nome: "Manutenção Corretiva",
+            },
+            tipo_equipamento: {
+              id: "tipo-equipamento-1",
+              nome: "Autoclave",
+            },
+          },
+        ],
+      } as OrcamentoSupabase,
+      "data:image/png;base64,logo"
+    );
+
+    expect(html).toContain("Manutenção Corretiva Em Autoclave Vertical");
+    expect(html).not.toContain("Manutenção Corretiva em Autoclave</strong>");
+  });
+
+  it("prioriza o tipo da OS vinculada em dados legados conflitantes", () => {
+    const html = buildOrcamentoHtml(
+      {
+        numero: "56369",
+        data_orcamento: "2026-07-14T12:00:00",
+        identificador: "Calibração",
+        detalhes_orcamento: "Proposta para calibração do equipamento",
+        valor_total: 500,
+        empresa: { nome: "Cliente Teste" },
+        ordem_servico: {
+          id: "os-1",
+          numero: "56369",
+          status_sistema: "aberta",
+          ativo: true,
+          tipo_os: { id: "tipo-os-1", nome: "Manutenção Corretiva" },
+        },
+        itens: [
+          {
+            tipo: "servico",
+            descricao: "Em Incubadora",
+            quantidade: 1,
+            valor_unitario: 500,
+            valor_total: 500,
+          },
+        ],
+      } as OrcamentoSupabase,
+      "data:image/png;base64,logo"
+    );
+
+    expect(html).toContain("Manutenção Corretiva Em Incubadora");
+    expect(html).not.toContain("Calibração Em Incubadora");
+  });
 });

@@ -6,6 +6,10 @@ import {
   EmpresaSupabase,
   ListarEmpresasFiltros,
 } from "@/services/empresasService";
+import {
+  SESSION_CACHE_GC_TIME,
+  SESSION_CACHE_STALE_TIME,
+} from "@/lib/queryClient";
 
 export const EMPRESAS_QUERY_KEY = ["empresas"];
 const DASHBOARD_QUERY_KEY = ["dashboard-operacional"];
@@ -16,16 +20,18 @@ type UseEmpresasOptions = {
   gcTime?: number;
 };
 
-export const EMPRESAS_STALE_TIME = 5 * 60 * 1000;
-export const EMPRESAS_GC_TIME = 20 * 60 * 1000;
+export const EMPRESAS_STALE_TIME = SESSION_CACHE_STALE_TIME;
+export const EMPRESAS_GC_TIME = SESSION_CACHE_GC_TIME;
 
 export const useEmpresas = (
   filtros?: ListarEmpresasFiltros,
   options?: UseEmpresasOptions
 ) => {
+  const statusFiltro = filtros?.statusFiltro || "ativas";
+
   return useQuery<EmpresaSupabase[]>({
-    queryKey: [...EMPRESAS_QUERY_KEY, filtros],
-    queryFn: () => empresasService.listar(filtros),
+    queryKey: [...EMPRESAS_QUERY_KEY, "lista", statusFiltro],
+    queryFn: () => empresasService.listar({ statusFiltro }),
     enabled: options?.enabled ?? true,
     staleTime: options?.staleTime ?? EMPRESAS_STALE_TIME,
     gcTime: options?.gcTime ?? EMPRESAS_GC_TIME,

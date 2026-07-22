@@ -1,124 +1,104 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { LoaderCircle } from "lucide-react";
+import { Suspense, useEffect, useState } from "react";
 import { Outlet } from "react-router-dom";
 import AppSidebar from "./AppSidebar";
 import { useAuth } from "@/contexts/AuthContext";
-import {
-  ORDENS_SERVICO_DEFAULT_PAGINADO_FILTROS,
-  ORDENS_SERVICO_GC_TIME,
-  ORDENS_SERVICO_QUERY_KEY,
-  ORDENS_SERVICO_STALE_TIME,
-} from "@/hooks/useOrdensServico";
-import { ordensServicoService } from "@/services/ordensServicoService";
-import {
-  EQUIPAMENTOS_DEFAULT_PAGINADO_FILTROS,
-  EQUIPAMENTOS_GC_TIME,
-  EQUIPAMENTOS_QUERY_KEY,
-  EQUIPAMENTOS_STALE_TIME,
-} from "@/hooks/useEquipamentos";
-import { equipamentosService } from "@/services/equipamentosService";
-import {
-  UTILITARIOS_GC_TIME,
-  UTILITARIOS_STALE_TIME,
-  VENCIMENTOS_QUERY_KEY,
-} from "@/hooks/useUtilitarios";
-import { utilitariosService } from "@/services/utilitariosService";
-import {
-  CALIBRACAO_EXECUCOES_DEFAULT_PAGINADO_FILTROS,
-  CALIBRACAO_EXECUCOES_GC_TIME,
-  CALIBRACAO_EXECUCOES_QUERY_KEY,
-  CALIBRACAO_EXECUCOES_STALE_TIME,
-} from "@/hooks/useCalibracaoExecucoes";
-import { calibracaoExecucoesService } from "@/services/calibracaoExecucoesService";
+
+type IdleBrowserWindow = Window & {
+  requestIdleCallback?: (
+    callback: () => void,
+    options?: { timeout: number }
+  ) => number;
+  cancelIdleCallback?: (handle: number) => void;
+};
+
+const scheduleIdleTask = (callback: () => void) => {
+  const idleWindow = window as IdleBrowserWindow;
+
+  if (idleWindow.requestIdleCallback) {
+    const handle = idleWindow.requestIdleCallback(callback, { timeout: 1800 });
+    return () => idleWindow.cancelIdleCallback?.(handle);
+  }
+
+  const handle = window.setTimeout(callback, 900);
+  return () => window.clearTimeout(handle);
+};
+
+const wait = (duration: number) =>
+  new Promise<void>((resolve) => window.setTimeout(resolve, duration));
+
+const ModuleFallback = () => (
+  <div className="flex min-h-40 items-center justify-center gap-2 text-sm text-muted-foreground">
+    <LoaderCircle className="h-4 w-4 animate-spin" />
+    Carregando...
+  </div>
+);
 
 const AppLayout = () => {
   const queryClient = useQueryClient();
-  const { hasPermission } = useAuth();
+  const { hasPermission, usuario, usuarioLoading } = useAuth();
+  const [isBackgroundSyncing, setIsBackgroundSyncing] = useState(false);
 
   useEffect(() => {
-    if (!hasPermission("os.visualizar")) return;
+    if (!usuario?.id || usuarioLoading) return;
 
-    queryClient.prefetchQuery({
-      queryKey: [
-        ...ORDENS_SERVICO_QUERY_KEY,
-        "paginado",
-        ORDENS_SERVICO_DEFAULT_PAGINADO_FILTROS,
-      ],
-      queryFn: () =>
-        ordensServicoService.listarPaginado(
-          ORDENS_SERVICO_DEFAULT_PAGINADO_FILTROS
-        ),
-      staleTime: ORDENS_SERVICO_STALE_TIME,
-      gcTime: ORDENS_SERVICO_GC_TIME,
+    let cancelled = false;
+    const cancelIdleTask = scheduleIdleTask(() => {
+      void (async () => {
+        for (let attempt = 0; attempt < 24 && !cancelled; attempt += 1) {
+          if (!queryClient.isFetching({ queryKey: ["dashboard-operacional"] })) {
+            break;
+          }
+          await wait(250);
+        }
+
+        if (cancelled) return;
+        setIsBackgroundSyncing(true);
+
+        try {
+          const { sincronizarDadosSessao } = await import(
+            "@/services/backgroundSyncService"
+          );
+          await sincronizarDadosSessao({
+            queryClient,
+            hasPermission,
+            shouldContinue: () => !cancelled,
+          });
+        } catch (error) {
+          console.warn("Falha ao iniciar sincronizacao em segundo plano:", error);
+        } finally {
+          if (!cancelled) {
+            setIsBackgroundSyncing(false);
+          }
+        }
+      })();
     });
-  }, [hasPermission, queryClient]);
 
-  useEffect(() => {
-    if (!hasPermission("equipamentos.visualizar")) return;
-
-    queryClient.prefetchQuery({
-      queryKey: [
-        ...EQUIPAMENTOS_QUERY_KEY,
-        "paginado",
-        EQUIPAMENTOS_DEFAULT_PAGINADO_FILTROS,
-      ],
-      queryFn: () =>
-        equipamentosService.listarPaginado(
-          EQUIPAMENTOS_DEFAULT_PAGINADO_FILTROS
-        ),
-      staleTime: EQUIPAMENTOS_STALE_TIME,
-      gcTime: EQUIPAMENTOS_GC_TIME,
-    });
-  }, [hasPermission, queryClient]);
-
-  useEffect(() => {
-    if (!hasPermission("utilitarios.visualizar")) return;
-
-    const filtro = {
-      ano: new Date().getFullYear(),
-      incluirCalibracao: true,
-      incluirPreventiva: true,
+    return () => {
+      cancelled = true;
+      cancelIdleTask();
     };
-
-    queryClient.prefetchQuery({
-      queryKey: [...VENCIMENTOS_QUERY_KEY, filtro],
-      queryFn: () => utilitariosService.gerarRelatorioVencimentos(filtro),
-      staleTime: UTILITARIOS_STALE_TIME,
-      gcTime: UTILITARIOS_GC_TIME,
-    });
-  }, [hasPermission, queryClient]);
-
-  useEffect(() => {
-    if (!hasPermission("calibracao.visualizar")) return;
-
-    queryClient.prefetchQuery({
-      queryKey: [
-        ...CALIBRACAO_EXECUCOES_QUERY_KEY,
-        "paginado",
-        CALIBRACAO_EXECUCOES_DEFAULT_PAGINADO_FILTROS,
-      ],
-      queryFn: () =>
-        calibracaoExecucoesService.listarExecucoesPaginadas(
-          CALIBRACAO_EXECUCOES_DEFAULT_PAGINADO_FILTROS
-        ),
-      staleTime: CALIBRACAO_EXECUCOES_STALE_TIME,
-      gcTime: CALIBRACAO_EXECUCOES_GC_TIME,
-    });
-
-    queryClient.prefetchQuery({
-      queryKey: [...CALIBRACAO_EXECUCOES_QUERY_KEY, "filtros"],
-      queryFn: () => calibracaoExecucoesService.listarExecucoesFiltros(),
-      staleTime: CALIBRACAO_EXECUCOES_STALE_TIME,
-      gcTime: CALIBRACAO_EXECUCOES_GC_TIME,
-    });
-  }, [hasPermission, queryClient]);
+  }, [hasPermission, queryClient, usuario?.id, usuarioLoading]);
 
   return (
     <div className="flex h-dvh min-h-0 w-full overflow-hidden">
       <AppSidebar />
-      <main className="h-full min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
+      <main className="relative h-full min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
+        {isBackgroundSyncing && (
+          <div
+            className="fixed right-4 top-4 z-50 flex items-center gap-2 rounded border bg-background/95 px-3 py-2 text-xs text-muted-foreground shadow-sm"
+            role="status"
+            aria-live="polite"
+          >
+            <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+            Sincronizando dados...
+          </div>
+        )}
         <div className="min-h-full w-full">
-          <Outlet />
+          <Suspense fallback={<ModuleFallback />}>
+            <Outlet />
+          </Suspense>
         </div>
       </main>
     </div>

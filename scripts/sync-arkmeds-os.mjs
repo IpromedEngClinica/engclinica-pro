@@ -295,6 +295,8 @@ async function main() {
     cookie: await cookieHeader(),
     cacheDir: detailsCacheDir,
     concurrency: 8,
+    // Não reutiliza detalhes vazios quando a OS foi complementada na ArkMeds.
+    maxAgeMs: 0,
   });
 
   const missingEquipmentIds = [...new Set(

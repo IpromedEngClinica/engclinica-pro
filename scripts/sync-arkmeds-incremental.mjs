@@ -590,6 +590,8 @@ async function main() {
     cookie: await cookieHeader(),
     cacheDir: detailsCacheDir,
     concurrency: 8,
+    // A OS pode receber diagnóstico e descrição depois da primeira importação.
+    maxAgeMs: 0,
   });
   context.osDetailsByArkmedsId = osDetailsResult.detailsById;
 

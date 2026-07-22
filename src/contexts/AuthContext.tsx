@@ -10,6 +10,7 @@ import {
 } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
+import { queryClient } from "@/lib/queryClient";
 
 type AuthUsuario = {
   id: string;
@@ -139,7 +140,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
 
       const initialSession = data.session ?? null;
-      sessionUserIdRef.current = initialSession?.user.id ?? null;
+      const previousUserId = sessionUserIdRef.current;
+      const nextUserId = initialSession?.user.id ?? null;
+
+      if (previousUserId && previousUserId !== nextUserId) {
+        queryClient.clear();
+      }
+      sessionUserIdRef.current = nextUserId;
       setSession(initialSession);
       setUsuarioLoading(Boolean(initialSession?.user));
       setLoading(false);
@@ -150,11 +157,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const { data: listener } = supabase.auth.onAuthStateChange(
       (_event, newSession) => {
+        const previousUserId = sessionUserIdRef.current;
+        const nextUserId = newSession?.user.id ?? null;
         const sameUser = Boolean(
           newSession?.user && usuarioRef.current?.id === newSession.user.id
         );
 
-        sessionUserIdRef.current = newSession?.user.id ?? null;
+        if (previousUserId && previousUserId !== nextUserId) {
+          queryClient.clear();
+        }
+
+        sessionUserIdRef.current = nextUserId;
         setSession(newSession);
         setUsuarioLoading(Boolean(newSession?.user) && !sameUser);
         setLoading(false);
@@ -185,6 +198,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    queryClient.clear();
     usuarioRef.current = null;
     sessionUserIdRef.current = null;
     setUsuario(null);

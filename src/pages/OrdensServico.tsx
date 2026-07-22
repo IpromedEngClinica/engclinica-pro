@@ -16,6 +16,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
@@ -25,6 +26,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import SearchableSelect from "@/components/SearchableSelect";
+import DateRangeFilter from "@/components/DateRangeFilter";
 import SortableTableHeader from "@/components/SortableTableHeader";
 import ListPagination from "@/components/ListPagination";
 import ListLimitSelect, {
@@ -57,6 +59,7 @@ import { toast } from "@/hooks/use-toast";
 import OrdemServicoFormDialog, {
   DialogMode,
 } from "@/components/OrdemServicoFormDialog";
+import OrdemServicoEdicaoLoteDialog from "@/components/OrdemServicoEdicaoLoteDialog";
 import OrdemServicoDetalhesDialog from "@/components/OrdemServicoDetalhesDialog";
 import PreventivaChecklistDialog from "@/components/PreventivaChecklistDialog";
 import EmpresaDetalhesDialog from "@/components/EmpresaDetalhesDialog";
@@ -69,6 +72,13 @@ import { sortByValue, type SortDirection } from "@/utils/sortUtils";
 import { useAuth } from "@/contexts/AuthContext";
 
 const ALL = "__all__";
+
+const dateFilterBoundary = (value: string, nextDay = false) => {
+  if (!value) return undefined;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(year, month - 1, day + (nextDay ? 1 : 0));
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+};
 
 const getEmpresaNome = (os: OrdemServicoSupabase) => {
   return os.empresa?.nome || os.empresa?.nome_fantasia || "Não informado";
@@ -181,6 +191,10 @@ const OrdensServico = () => {
   const [editingEstadoId, setEditingEstadoId] = useState<string | null>(null);
   const [checklistOpen, setChecklistOpen] = useState(false);
   const [osChecklist, setOsChecklist] = useState<OrdemServicoSupabase | null>(null);
+  const [ordensSelecionadas, setOrdensSelecionadas] = useState<Set<string>>(
+    () => new Set()
+  );
+  const [edicaoLoteOpen, setEdicaoLoteOpen] = useState(false);
 
   const [hideClosed, setHideClosed] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -196,6 +210,10 @@ const OrdensServico = () => {
     tipoServico: ALL,
     responsavelTecnico: "",
     numero: "",
+    dataAberturaDe: "",
+    dataAberturaAte: "",
+    dataFechamentoDe: "",
+    dataFechamentoAte: "",
   };
 
   const [filters, setFilters] = useState(emptyFilters);
@@ -233,6 +251,10 @@ const OrdensServico = () => {
         filters.tipoServico === ALL ? undefined : filters.tipoServico,
       responsavelTecnico: filters.responsavelTecnico,
       numero: filters.numero,
+      dataAberturaDe: dateFilterBoundary(filters.dataAberturaDe),
+      dataAberturaAte: dateFilterBoundary(filters.dataAberturaAte, true),
+      dataFechamentoDe: dateFilterBoundary(filters.dataFechamentoDe),
+      dataFechamentoAte: dateFilterBoundary(filters.dataFechamentoAte, true),
       page,
       limit: listLimit,
       sortBy: sortByServerField as OrdensServicoSortField,
@@ -298,6 +320,41 @@ const OrdensServico = () => {
     [ordensServico, sortDirection, sortGetters, sortKey]
   );
 
+  const podeEditarEmLote = ["admin", "gestor", "tecnico"].includes(
+    usuario?.perfil || ""
+  );
+  const idsVisiveis = useMemo(
+    () => visibleOrdensServico.map((os) => os.id),
+    [visibleOrdensServico]
+  );
+  const quantidadeVisivelSelecionada = idsVisiveis.filter((id) =>
+    ordensSelecionadas.has(id)
+  ).length;
+  const todasVisiveisSelecionadas =
+    idsVisiveis.length > 0 && quantidadeVisivelSelecionada === idsVisiveis.length;
+  const algumasVisiveisSelecionadas =
+    quantidadeVisivelSelecionada > 0 && !todasVisiveisSelecionadas;
+
+  const alternarSelecao = (id: string, checked: boolean) => {
+    setOrdensSelecionadas((atuais) => {
+      const proximas = new Set(atuais);
+      if (checked) proximas.add(id);
+      else proximas.delete(id);
+      return proximas;
+    });
+  };
+
+  const alternarSelecaoPagina = (checked: boolean) => {
+    setOrdensSelecionadas((atuais) => {
+      const proximas = new Set(atuais);
+      idsVisiveis.forEach((id) => {
+        if (checked) proximas.add(id);
+        else proximas.delete(id);
+      });
+      return proximas;
+    });
+  };
+
   const totalPages = Math.max(1, Math.ceil(totalOrdensServico / listLimit));
   const firstVisibleIndex = totalOrdensServico
     ? (page - 1) * listLimit + 1
@@ -322,6 +379,8 @@ const OrdensServico = () => {
     if (filters.tipoServico !== ALL) n++;
     if (filters.responsavelTecnico.trim()) n++;
     if (filters.numero.trim()) n++;
+    if (filters.dataAberturaDe || filters.dataAberturaAte) n++;
+    if (filters.dataFechamentoDe || filters.dataFechamentoAte) n++;
 
     return n;
   }, [filters]);
@@ -334,6 +393,10 @@ const OrdensServico = () => {
       "tipoServico",
       "responsavelTecnico",
       "numero",
+      "dataAberturaDe",
+      "dataAberturaAte",
+      "dataFechamentoDe",
+      "dataFechamentoAte",
       "hideClosed",
       "q",
     ].some((key) => params.has(key));
@@ -347,6 +410,10 @@ const OrdensServico = () => {
       tipoServico: params.get("tipoServico") || ALL,
       responsavelTecnico: params.get("responsavelTecnico") || "",
       numero: params.get("numero") || "",
+      dataAberturaDe: params.get("dataAberturaDe") || "",
+      dataAberturaAte: params.get("dataAberturaAte") || "",
+      dataFechamentoDe: params.get("dataFechamentoDe") || "",
+      dataFechamentoAte: params.get("dataFechamentoAte") || "",
     }));
 
     if (hasUrlFilters) {
@@ -604,6 +671,13 @@ const OrdensServico = () => {
         os={selected}
       />
 
+      <OrdemServicoEdicaoLoteDialog
+        open={edicaoLoteOpen}
+        onOpenChange={setEdicaoLoteOpen}
+        ordemIds={Array.from(ordensSelecionadas)}
+        onSuccess={() => setOrdensSelecionadas(new Set())}
+      />
+
       <OrdemServicoDetalhesDialog
         open={detalhesOpen}
         onOpenChange={(value) => {
@@ -750,11 +824,37 @@ const OrdensServico = () => {
                   }))
                 }
               />
+
+              <DateRangeFilter
+                label="Abertura"
+                from={filters.dataAberturaDe}
+                to={filters.dataAberturaAte}
+                onChange={(range) =>
+                  setFilters((current) => ({
+                    ...current,
+                    dataAberturaDe: range.from,
+                    dataAberturaAte: range.to,
+                  }))
+                }
+              />
+
+              <DateRangeFilter
+                label="Fechamento"
+                from={filters.dataFechamentoDe}
+                to={filters.dataFechamentoAte}
+                onChange={(range) =>
+                  setFilters((current) => ({
+                    ...current,
+                    dataFechamentoDe: range.from,
+                    dataFechamentoAte: range.to,
+                  }))
+                }
+              />
             </div>
 
             <div className="flex justify-end">
               <Button
-                variant="outline"
+                variant="destructive"
                 size="sm"
                 onClick={() => setFilters(emptyFilters)}
               >
@@ -767,14 +867,35 @@ const OrdensServico = () => {
 
       <div className="bg-card rounded-xl border">
         <div className="px-5 py-4 border-b flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar OS, equipamento ou solicitante..."
-              className="pl-9"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+          <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative w-full max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar OS, equipamento ou solicitante..."
+                className="pl-9"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+
+            {podeEditarEmLote && ordensSelecionadas.size > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="whitespace-nowrap text-sm font-medium text-primary">
+                  {ordensSelecionadas.size} selecionada(s)
+                </span>
+                <Button size="sm" onClick={() => setEdicaoLoteOpen(true)}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Edição rápida
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setOrdensSelecionadas(new Set())}
+                >
+                  Limpar
+                </Button>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -827,6 +948,23 @@ const OrdensServico = () => {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/50">
+                  {podeEditarEmLote && (
+                    <th className="w-12 px-5 py-3 text-left">
+                      <Checkbox
+                        checked={
+                          todasVisiveisSelecionadas
+                            ? true
+                            : algumasVisiveisSelecionadas
+                              ? "indeterminate"
+                              : false
+                        }
+                        onCheckedChange={(value) =>
+                          alternarSelecaoPagina(value === true)
+                        }
+                        aria-label="Selecionar todas as OS desta página"
+                      />
+                    </th>
+                  )}
                   <th className="text-left px-5 py-3 font-medium text-muted-foreground">
                     <SortableTableHeader label="Numero" sortField="numero" sortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} />
                   </th>
@@ -866,8 +1004,21 @@ const OrdensServico = () => {
                   return (
                     <tr
                       key={os.id}
-                      className="border-b last:border-0 hover:bg-muted/30 transition-colors"
+                      className={`border-b last:border-0 transition-colors hover:bg-muted/30 ${
+                        ordensSelecionadas.has(os.id) ? "bg-primary/[0.04]" : ""
+                      }`}
                     >
+                      {podeEditarEmLote && (
+                        <td className="w-12 px-5 py-3">
+                          <Checkbox
+                            checked={ordensSelecionadas.has(os.id)}
+                            onCheckedChange={(value) =>
+                              alternarSelecao(os.id, value === true)
+                            }
+                            aria-label={`Selecionar OS ${os.numero}`}
+                          />
+                        </td>
+                      )}
                       <td className="px-5 py-3 font-medium">
                         <button
                           type="button"
@@ -1017,7 +1168,7 @@ const OrdensServico = () => {
                 {visibleOrdensServico.length === 0 && (
                   <tr>
                     <td
-                      colSpan={8}
+                      colSpan={podeEditarEmLote ? 9 : 8}
                       className="px-5 py-8 text-center text-sm text-muted-foreground"
                     >
                       Nenhuma ordem de serviço cadastrada no Supabase.

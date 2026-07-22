@@ -7,6 +7,10 @@ import {
   UploadContratoDocumentoInput,
   contratosService,
 } from "@/services/contratosService";
+import {
+  SESSION_CACHE_GC_TIME,
+  SESSION_CACHE_STALE_TIME,
+} from "@/lib/queryClient";
 
 export const CONTRATOS_QUERY_KEY = ["contratos"];
 export const CONTRATO_DOCUMENTOS_QUERY_KEY = ["contrato-documentos"];
@@ -20,6 +24,8 @@ export const useContratos = (filtros?: ListarContratosFiltros) => {
   return useQuery<ContratoSupabase[]>({
     queryKey: [...CONTRATOS_QUERY_KEY, filtros],
     queryFn: () => contratosService.listar(filtros),
+    staleTime: SESSION_CACHE_STALE_TIME,
+    gcTime: SESSION_CACHE_GC_TIME,
   });
 };
 

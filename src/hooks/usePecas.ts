@@ -1,5 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
+import {
+  CATALOG_CACHE_STALE_TIME,
+  SESSION_CACHE_GC_TIME,
+} from "@/lib/queryClient";
 
 export type PecaFabricanteSupabase = {
   id: string;
@@ -238,22 +242,26 @@ export const getPrecoSugeridoPeca = (
   return null;
 };
 
+export const listarPecas = async () => {
+  const { data, error } = await supabase
+    .from("pecas")
+    .select(selectPecas)
+    .eq("ativo", true)
+    .order("nome", { ascending: true });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data as unknown as PecaSupabase[];
+};
+
 export const usePecas = () => {
   return useQuery<PecaSupabase[]>({
     queryKey: PECAS_QUERY_KEY,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("pecas")
-        .select(selectPecas)
-        .eq("ativo", true)
-        .order("nome", { ascending: true });
-
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      return data as PecaSupabase[];
-    },
+    queryFn: listarPecas,
+    staleTime: CATALOG_CACHE_STALE_TIME,
+    gcTime: SESSION_CACHE_GC_TIME,
   });
 };
 

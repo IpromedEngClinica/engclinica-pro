@@ -2,8 +2,16 @@ import { JSDOM } from "jsdom";
 import fs from "node:fs/promises";
 import path from "node:path";
 
+const fixMojibake = (value) => {
+  const text = String(value ?? "");
+  if (!/[ÃƒÃ‚]/.test(text)) return text;
+
+  const fixed = Buffer.from(text, "latin1").toString("utf8");
+  return fixed.includes("ï¿½") || fixed.includes("�") ? text : fixed;
+};
+
 const clean = (value) => {
-  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  const text = fixMojibake(value).replace(/\s+/g, " ").trim();
   return !text || /^-+$/.test(text) ? "" : text;
 };
 

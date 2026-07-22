@@ -289,7 +289,25 @@ const Pecas = () => {
               </TableHeader>
               <TableBody>
                 {pecas.map((peca) => (
-                  <TableRow key={peca.id}>
+                  <TableRow
+                    key={peca.id}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Editar peca ${peca.nome}`}
+                    aria-selected={selectedId === peca.id}
+                    data-state={selectedId === peca.id ? "selected" : undefined}
+                    className="cursor-pointer"
+                    onClick={() => handleSelect(peca)}
+                    onKeyDown={(event) => {
+                      if (
+                        event.target === event.currentTarget &&
+                        (event.key === "Enter" || event.key === " ")
+                      ) {
+                        event.preventDefault();
+                        handleSelect(peca);
+                      }
+                    }}
+                  >
                     <TableCell>
                       <div className="font-medium">{peca.nome}</div>
                       {peca.descricao && (
@@ -320,7 +338,10 @@ const Pecas = () => {
                           type="button"
                           variant="ghost"
                           size="icon"
-                          onClick={() => handleSelect(peca)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleSelect(peca);
+                          }}
                           title="Editar peca"
                         >
                           <Pencil className="w-4 h-4" />
@@ -330,7 +351,10 @@ const Pecas = () => {
                           variant="ghost"
                           size="icon"
                           className="text-destructive"
-                          onClick={() => handleDesativar(peca)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleDesativar(peca);
+                          }}
                           title="Desativar peca"
                         >
                           <Trash2 className="w-4 h-4" />

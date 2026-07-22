@@ -21,6 +21,7 @@ import {
   buildAdditionalCostDefinitions,
   classifyAdditionalCostItem,
   buildCatalogIndex,
+  resolveEquipmentFromServiceDescription,
   cleanSpreadsheetObservations,
   destinationStatus,
   effectiveNormalizedStatus,
@@ -451,6 +452,8 @@ function buildItemPayload(item, orcamentoId, order) {
       unidade_medida: item.unidade_medida,
       peca_tipo_descricao: item.peca_tipo_descricao,
       modelo_fabricante: item.modelo_fabricante,
+      tipo_servico_origem: item.__tipo_servico_source || null,
+      tipo_equipamento_origem: item.__tipo_equipamento_source || null,
       dados_brutos_json: item.dados_brutos_json,
     },
   };
@@ -596,21 +599,74 @@ async function loadBatchRows(client, ids) {
     }
   }
 
-  const [{ rows: serviceTypes }, { rows: equipmentTypes }] = await Promise.all([
+  const [
+    { rows: serviceTypes },
+    { rows: equipmentTypes },
+    { rows: serviceTypesByArkmedsId },
+    { rows: equipmentTypesByArkmedsId },
+  ] = await Promise.all([
     client.query("select id, nome from public.tipos_os where ativo = true"),
     client.query("select id, nome from public.tipos_equipamento where ativo = true"),
+    client.query(`
+      select arkmeds_servico_id, min(tipo_servico_id::text)::uuid as tipo_servico_id
+      from public.orcamento_itens
+      where origem_migracao = 'arkmeds'
+        and tipo = 'servico'
+        and arkmeds_servico_id is not null
+        and tipo_servico_id is not null
+      group by arkmeds_servico_id
+      having count(distinct tipo_servico_id) = 1
+    `),
+    client.query(`
+      select arkmeds_servico_id, min(tipo_equipamento_id::text)::uuid as tipo_equipamento_id
+      from public.orcamento_itens
+      where origem_migracao = 'arkmeds'
+        and tipo = 'servico'
+        and arkmeds_servico_id is not null
+        and tipo_equipamento_id is not null
+      group by arkmeds_servico_id
+      having count(distinct tipo_equipamento_id) = 1
+    `),
   ]);
   const serviceTypeIndex = buildCatalogIndex(serviceTypes);
   const equipmentTypeIndex = buildCatalogIndex(equipmentTypes);
+  const serviceTypeByArkmedsId = new Map(
+    serviceTypesByArkmedsId.map((item) => [String(item.arkmeds_servico_id), item.tipo_servico_id])
+  );
+  const equipmentTypeByArkmedsId = new Map(
+    equipmentTypesByArkmedsId.map((item) => [String(item.arkmeds_servico_id), item.tipo_equipamento_id])
+  );
 
   for (const row of rows) {
     const serviceItems = row.__items.filter((item) => item.tipo_item === "servico");
     const matches = matchSpreadsheetServices(serviceItems, row);
     serviceItems.forEach((item, index) => {
       const match = matches[index];
+      const arkmedsServiceKey = cleanText(item.arkmeds_servico_id);
+      const spreadsheetServiceType = resolveCatalogItem(serviceTypeIndex, match?.service)?.id || null;
+      const spreadsheetEquipmentType = resolveCatalogItem(equipmentTypeIndex, match?.equipment)?.id || null;
+      const descriptionEquipmentType = resolveEquipmentFromServiceDescription(
+        equipmentTypeIndex,
+        item.descricao
+      )?.id || null;
       item.__sheet_entry = match || null;
-      item.__tipo_servico_id = resolveCatalogItem(serviceTypeIndex, match?.service)?.id || null;
-      item.__tipo_equipamento_id = resolveCatalogItem(equipmentTypeIndex, match?.equipment)?.id || null;
+      item.__tipo_servico_id = spreadsheetServiceType || serviceTypeByArkmedsId.get(arkmedsServiceKey) || null;
+      item.__tipo_servico_source = spreadsheetServiceType
+        ? "planilha"
+        : item.__tipo_servico_id
+          ? "arkmeds_servico_id"
+          : null;
+      item.__tipo_equipamento_id = spreadsheetEquipmentType
+        || descriptionEquipmentType
+        || equipmentTypeByArkmedsId.get(arkmedsServiceKey)
+        || null;
+      item.__tipo_equipamento_source = spreadsheetEquipmentType
+        ? "planilha"
+        : descriptionEquipmentType
+          ? "descricao_item"
+          : item.__tipo_equipamento_id
+            ? "arkmeds_servico_id"
+            : null;
     });
   }
 
@@ -629,6 +685,7 @@ async function loadBatchRows(client, ids) {
   const { rows: exactOrders } = sourceNumbers.length
     ? await client.query(
         `select os.id, os.numero, os.arkmeds_os_id, os.empresa_id, os.equipamento_id,
+                os.tipo_os_id,
                 coalesce(te.nome, e.tipo_texto) as os_tipo_equipamento
          from public.ordens_servico os
          left join public.equipamentos e on e.id = os.equipamento_id
@@ -641,6 +698,7 @@ async function loadBatchRows(client, ids) {
     : sourceArkmedsIds.length || resolvedOrderIds.length
       ? await client.query(
           `select os.id, os.numero, os.arkmeds_os_id, os.empresa_id, os.equipamento_id,
+                  os.tipo_os_id,
                   coalesce(te.nome, e.tipo_texto) as os_tipo_equipamento
            from public.ordens_servico os
            left join public.equipamentos e on e.id = os.equipamento_id
@@ -690,6 +748,11 @@ async function loadBatchRows(client, ids) {
     row.equipamento_id_resolvido = exactOrder?.equipamento_id || null;
     row.os_tipo_equipamento = exactOrder?.os_tipo_equipamento || row.os_tipo_equipamento || null;
     if (exactOrder) {
+      const serviceItems = row.__items.filter((item) => item.tipo_item === "servico");
+      if (serviceItems.length === 1 && !serviceItems[0].__tipo_servico_id && exactOrder.tipo_os_id) {
+        serviceItems[0].__tipo_servico_id = exactOrder.tipo_os_id;
+        serviceItems[0].__tipo_servico_source = "ordem_servico_vinculada";
+      }
       if (!hasManualCompanyOverride(row)) {
         row.empresa_id_resolvida = exactOrder.empresa_id;
       }

@@ -1,50 +1,42 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { lazy } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import AppLayout from "./components/AppLayout";
-import Dashboard from "./pages/Dashboard";
-import Empresas from "./pages/Empresas";
-import Equipamentos from "./pages/Equipamentos";
-import Contratos from "./pages/Contratos";
-import Planos from "./pages/Planos";
-import PlanoDetalhes from "./pages/PlanoDetalhes";
-import OrdensServico from "./pages/OrdensServico";
-import Orcamentos from "./pages/Orcamentos";
-import TiposEquipamento from "./pages/TiposEquipamento";
-import TiposOS from "./pages/TiposOS";
-import EstadosOS from "./pages/EstadosOS";
-import Pecas from "./pages/Pecas";
-import OrganizarSetores from "./pages/OrganizarSetores";
-import Protocolos from "./pages/Protocolos";
-import Procedimentos from "./pages/Procedimentos";
-import LaudosObsolescencia from "./pages/LaudosObsolescencia";
-import Calibracao from "./pages/Calibracao";
-import SegurancaEletrica from "./pages/SegurancaEletrica";
-import Relatorios from "./pages/Relatorios";
-import Utilitarios from "./pages/Utilitarios";
-import Auditoria from "./pages/Auditoria";
-import UsuariosPermissoes from "./pages/UsuariosPermissoes";
 import ConviteCadastro from "./pages/ConviteCadastro";
 import NotFound from "./pages/NotFound";
 import { DataProvider } from "./contexts/DataContext";
-import SupabaseTest from "./pages/SupabaseTest";
 import Login from "./pages/Login";
 import ProtectedRoute from "./components/ProtectedRoute";
 import PermissionRoute from "./components/PermissionRoute";
 import { AuthProvider } from "./contexts/AuthContext";
+import { queryClient } from "./lib/queryClient";
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 60 * 1000,
-      gcTime: 10 * 60 * 1000,
-      refetchOnWindowFocus: false,
-      retry: 1,
-    },
-  },
-});
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Empresas = lazy(() => import("./pages/Empresas"));
+const Equipamentos = lazy(() => import("./pages/Equipamentos"));
+const Contratos = lazy(() => import("./pages/Contratos"));
+const Planos = lazy(() => import("./pages/Planos"));
+const PlanoDetalhes = lazy(() => import("./pages/PlanoDetalhes"));
+const OrdensServico = lazy(() => import("./pages/OrdensServico"));
+const Orcamentos = lazy(() => import("./pages/Orcamentos"));
+const TiposEquipamento = lazy(() => import("./pages/TiposEquipamento"));
+const TiposOS = lazy(() => import("./pages/TiposOS"));
+const EstadosOS = lazy(() => import("./pages/EstadosOS"));
+const Pecas = lazy(() => import("./pages/Pecas"));
+const OrganizarSetores = lazy(() => import("./pages/OrganizarSetores"));
+const Protocolos = lazy(() => import("./pages/Protocolos"));
+const Procedimentos = lazy(() => import("./pages/Procedimentos"));
+const LaudosObsolescencia = lazy(() => import("./pages/LaudosObsolescencia"));
+const Calibracao = lazy(() => import("./pages/Calibracao"));
+const SegurancaEletrica = lazy(() => import("./pages/SegurancaEletrica"));
+const Relatorios = lazy(() => import("./pages/Relatorios"));
+const Utilitarios = lazy(() => import("./pages/Utilitarios"));
+const Auditoria = lazy(() => import("./pages/Auditoria"));
+const UsuariosPermissoes = lazy(() => import("./pages/UsuariosPermissoes"));
+const SupabaseTest = lazy(() => import("./pages/SupabaseTest"));
 
 const App = () => (
   <QueryClientProvider client={queryClient}>

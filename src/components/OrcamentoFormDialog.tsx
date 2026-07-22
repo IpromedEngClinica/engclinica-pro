@@ -62,6 +62,7 @@ import {
   getEquipamentoLabel as formatEquipamentoLabel,
   getIdentificadorEquipamento,
 } from "@/utils/equipamentoDisplay";
+import { getDescricaoComplementarServico } from "@/utils/orcamentoServico";
 
 export type OrcamentoDialogMode = "create" | "edit" | "view";
 export type DialogMode = OrcamentoDialogMode;
@@ -94,6 +95,7 @@ type ServicoForm = {
   tipoServicoId: string;
   tipoEquipamentoId: string;
   descricao: string;
+  descricaoPersistida: string;
   quantidade: number;
   valorUnitario: number;
   garantia: string;
@@ -177,6 +179,7 @@ const emptyServico = (): ServicoForm => ({
   tipoServicoId: "",
   tipoEquipamentoId: "",
   descricao: "",
+  descricaoPersistida: "",
   quantidade: 1,
   valorUnitario: 0,
   garantia: "",
@@ -579,7 +582,8 @@ const OrcamentoFormDialog = ({
         .map((item) => ({
           tipoServicoId: item.tipo_servico_id || "",
           tipoEquipamentoId: item.tipo_equipamento_id || "",
-          descricao: item.observacoes || item.descricao || "",
+          descricao: getDescricaoComplementarServico(item),
+          descricaoPersistida: item.descricao || "",
           quantidade: Number(item.quantidade || 1),
           valorUnitario: Number(item.valor_unitario || 0),
           garantia: item.garantia || "",
@@ -1015,6 +1019,7 @@ const OrcamentoFormDialog = ({
                   );
                   const descricao =
                     item.descricao.trim() ||
+                    item.descricaoPersistida.trim() ||
                     [tipoServicoNome, tipoEquipamentoNome].filter(Boolean).join(" - ") ||
                     "Servico";
 

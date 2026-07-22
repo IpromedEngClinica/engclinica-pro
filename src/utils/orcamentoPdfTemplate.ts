@@ -179,20 +179,97 @@ const formatRelationService = (
   return `${joinServiceLabels(serviceLabels)} em ${equipmentType}`;
 };
 
-const getItemServico = (item: OrcamentoItemSupabase) => {
+const SERVICE_TYPE_LABELS = [
+  "Teste de Segurança Elétrica",
+  "Laudo de Obsolescência",
+  "Manutenção Corretiva",
+  "Manutenção Preventiva",
+  "Qualificação Térmica",
+  "Garantia de Fábrica",
+  "Garantia de Serviço",
+  "Visita Técnica",
+  "Certificação",
+  "Calibração",
+  "Instalação",
+  "Orçamentar",
+];
+
+const findServiceTypeInText = (value?: string | null) => {
+  const normalizedValue = normalizar(value);
+  if (!normalizedValue) return "";
+
+  return (
+    SERVICE_TYPE_LABELS.find((label) =>
+      normalizedValue.includes(normalizar(label))
+    ) || ""
+  );
+};
+
+const getLegacyServiceTypeFallback = (orcamento: OrcamentoSupabase) => {
+  const linkedOrderServiceType = orcamento.ordem_servico?.tipo_os?.nome?.trim();
+  if (linkedOrderServiceType) return linkedOrderServiceType;
+
+  const firstDetailsLine = orcamento.detalhes_orcamento
+    ?.split(/\r?\n/)
+    .find((line) => line.trim());
+
+  return (
+    findServiceTypeInText(orcamento.identificador) ||
+    findServiceTypeInText(firstDetailsLine) ||
+    findServiceTypeInText(orcamento.detalhes_orcamento) ||
+    findServiceTypeInText(orcamento.observacoes)
+  );
+};
+
+const getExplicitEquipmentDescription = (
+  description?: string | null,
+  serviceType?: string | null
+) => {
+  const value = description?.trim();
+  if (!value) return "";
+
+  if (/^em\s+/i.test(value)) return value;
+  if (!serviceType) return "";
+
+  const [descriptionServiceType, ...equipmentParts] = value.split(/\s+-\s+/);
+  const equipment = equipmentParts.join(" - ").trim();
+
+  if (
+    equipment &&
+    normalizar(descriptionServiceType) === normalizar(serviceType)
+  ) {
+    return `Em ${equipment}`;
+  }
+
+  return "";
+};
+
+const getItemServico = (
+  item: OrcamentoItemSupabase,
+  legacyServiceTypeFallback?: string
+) => {
   const tipoServico = item.tipo_servico?.nome?.trim();
   const tipoEquipamento = item.tipo_equipamento?.nome?.trim();
   const descricao = item.descricao?.trim();
-
-  if (tipoServico && tipoEquipamento) {
-    return `${tipoServico} em ${tipoEquipamento}`;
-  }
+  const serviceType = tipoServico || legacyServiceTypeFallback;
 
   if (/conforme rela[cç][aã]o fornecida/i.test(descricao || "")) {
     return formatRelationService(descricao, item.observacoes);
   }
 
-  if (tipoServico && /^(?:em|e)\s+/i.test(descricao || "")) {
+  const explicitEquipment = getExplicitEquipmentDescription(
+    descricao,
+    serviceType
+  );
+  if (serviceType && explicitEquipment) {
+    return `${serviceType} ${explicitEquipment}`;
+  }
+
+  if (tipoServico && tipoEquipamento) {
+    return `${tipoServico} em ${tipoEquipamento}`;
+  }
+
+  if (tipoServico && /^e\s+/i.test(descricao || "")) {
     return `${tipoServico} ${descricao}`;
   }
 
@@ -345,7 +422,10 @@ const buildStatusBadge = (status?: string | null) => `
   <span class="badge ${getStatusClass(status)}">${escapeHtml(formatLabel(status))}</span>
 `;
 
-const buildServicesTable = (items: OrcamentoItemSupabase[]) => {
+const buildServicesTable = (
+  items: OrcamentoItemSupabase[],
+  legacyServiceTypeFallback?: string
+) => {
   if (!items.length) return "";
 
   return `
@@ -368,7 +448,9 @@ const buildServicesTable = (items: OrcamentoItemSupabase[]) => {
                 <tr>
                   <td class="center">${index + 1}</td>
                   <td class="description-cell">
-                    <strong>${escapeHtml(getItemServico(item))}</strong>
+                    <strong>${escapeHtml(
+                      getItemServico(item, legacyServiceTypeFallback)
+                    )}</strong>
                   </td>
                   <td class="center">${escapeHtml(formatQuantity(item.quantidade))}</td>
                   <td class="right">${escapeHtml(formatCurrency(item.valor_unitario))}</td>
@@ -1147,6 +1229,7 @@ export const buildOrcamentoHtml = (
   const nomeOrcamentista =
     assinaturaOrcamentista?.nome || orcamento.responsavel_orcamentista;
   const nomeAprovador = orcamento.aprovado_por || assinaturaAprovacao?.nome;
+  const legacyServiceTypeFallback = getLegacyServiceTypeFallback(orcamento);
 
   return `
 <!doctype html>
@@ -1192,7 +1275,7 @@ export const buildOrcamentoHtml = (
 
     <section class="section">
       ${buildSectionTitle("2", "Itens do Or&ccedil;amento")}
-      ${buildServicesTable(servicos)}
+      ${buildServicesTable(servicos, legacyServiceTypeFallback)}
       ${buildPartsTable(pecas)}
       ${
         !servicos.length && !pecas.length

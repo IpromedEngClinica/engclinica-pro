@@ -8,6 +8,10 @@ import {
   ListarEquipamentosFiltros,
   ListarEquipamentosPaginadoFiltros,
 } from "@/services/equipamentosService";
+import {
+  SESSION_CACHE_GC_TIME,
+  SESSION_CACHE_STALE_TIME,
+} from "@/lib/queryClient";
 
 export const EQUIPAMENTOS_QUERY_KEY = ["equipamentos"];
 const DASHBOARD_QUERY_KEY = ["dashboard-operacional"];
@@ -20,8 +24,8 @@ type UseEquipamentosOptions = {
   gcTime?: number;
 };
 
-export const EQUIPAMENTOS_STALE_TIME = 5 * 60 * 1000;
-export const EQUIPAMENTOS_GC_TIME = 20 * 60 * 1000;
+export const EQUIPAMENTOS_STALE_TIME = SESSION_CACHE_STALE_TIME;
+export const EQUIPAMENTOS_GC_TIME = SESSION_CACHE_GC_TIME;
 export const EQUIPAMENTOS_DEFAULT_PAGINADO_FILTROS: ListarEquipamentosPaginadoFiltros =
   {
     statusFiltro: "ativos",

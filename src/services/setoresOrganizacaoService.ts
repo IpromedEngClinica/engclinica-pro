@@ -137,7 +137,9 @@ export const setoresOrganizacaoService = {
     const [setoresResult, equipamentosResult] = await Promise.all([
       supabase
         .from("empresa_setores")
-        .select("*")
+        .select(
+          "id, organizacao_id, empresa_id, nome, cep, rua, numero, complemento, bairro, cidade, estado, observacoes, mesmo_endereco_cliente, ativo, created_at, updated_at"
+        )
         .eq("empresa_id", empresaId)
         .eq("ativo", true)
         .order("nome", { ascending: true }),
@@ -210,7 +212,9 @@ export const setoresOrganizacaoService = {
         nome: trimmed,
         ativo: true,
       })
-      .select("*")
+      .select(
+        "id, organizacao_id, empresa_id, nome, cep, rua, numero, complemento, bairro, cidade, estado, observacoes, mesmo_endereco_cliente, ativo, created_at, updated_at"
+      )
       .single();
 
     if (error) {

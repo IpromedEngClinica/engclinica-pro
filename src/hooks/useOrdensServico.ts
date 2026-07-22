@@ -1,17 +1,22 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ListarOrdensServicoPaginadoFiltros,
+  OrdemServicoCamposEdicaoLote,
   OrdensServicoFilterOptions,
   OrdemServicoFormInput,
   OrdensServicoPaginadoResult,
   OrdemServicoSupabase,
   ordensServicoService,
 } from "@/services/ordensServicoService";
+import {
+  SESSION_CACHE_GC_TIME,
+  SESSION_CACHE_STALE_TIME,
+} from "@/lib/queryClient";
 
 export const ORDENS_SERVICO_QUERY_KEY = ["ordens-servico"];
 const DASHBOARD_QUERY_KEY = ["dashboard-operacional"];
-export const ORDENS_SERVICO_STALE_TIME = 5 * 60 * 1000;
-export const ORDENS_SERVICO_GC_TIME = 20 * 60 * 1000;
+export const ORDENS_SERVICO_STALE_TIME = SESSION_CACHE_STALE_TIME;
+export const ORDENS_SERVICO_GC_TIME = SESSION_CACHE_GC_TIME;
 export const ORDENS_SERVICO_DEFAULT_PAGINADO_FILTROS: ListarOrdensServicoPaginadoFiltros =
   {
     termo: "",
@@ -115,6 +120,24 @@ export const useAlterarEstadoOrdemServico = () => {
       ordensServicoService.alterarEstado(id, estadoOsId),
     onSuccess: () => {
       invalidateOrdensServico(queryClient);
+    },
+  });
+};
+
+export const useAtualizarOrdensServicoEmLote = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      ids,
+      campos,
+    }: {
+      ids: string[];
+      campos: OrdemServicoCamposEdicaoLote;
+    }) => ordensServicoService.atualizarEmLote(ids, campos),
+    onSuccess: () => {
+      invalidateOrdensServico(queryClient);
+      queryClient.invalidateQueries({ queryKey: ["equipamentos"] });
     },
   });
 };
