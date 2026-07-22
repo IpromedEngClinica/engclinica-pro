@@ -51,8 +51,12 @@ import {
   OrcamentoOrigem,
   OrcamentoSupabase,
   OrcamentoTipo,
+  orcamentosService,
 } from "@/services/orcamentosService";
-import { OrdemServicoSupabase } from "@/services/ordensServicoService";
+import {
+  OrdemServicoSupabase,
+  ordensServicoService,
+} from "@/services/ordensServicoService";
 import {
   useAtualizarOrcamento,
   useCriarOrcamento,
@@ -444,9 +448,14 @@ const OrcamentoFormDialog = ({
     useState(false);
   const [tipoEquipamentoQuickAddIndex, setTipoEquipamentoQuickAddIndex] =
     useState<number | null>(null);
+  const [numeroPrevisto, setNumeroPrevisto] = useState("");
+  const [carregandoOSOrigem, setCarregandoOSOrigem] = useState(false);
 
   const isView = mode === "view";
-  const isSubmitting = criarOrcamento.isPending || atualizarOrcamento.isPending;
+  const isSubmitting =
+    criarOrcamento.isPending ||
+    atualizarOrcamento.isPending ||
+    carregandoOSOrigem;
   const incluiPecas =
     form.tipoOrcamento === "pecas" || form.tipoOrcamento === "pecas_servicos";
   const incluiServicos =
@@ -522,6 +531,7 @@ const OrcamentoFormDialog = ({
     if (!open) return;
 
     if (orcamento && (mode === "edit" || mode === "view")) {
+      setNumeroPrevisto(orcamento.numero);
       setForm({
         ...emptyForm,
         empresaId: orcamento.empresa_id,
@@ -623,9 +633,9 @@ const OrcamentoFormDialog = ({
     }
 
     if (fromOS) {
-      const detalhes =
-        fromOS.descricao_servico || fromOS.problema_relatado || "";
+      const detalhes = fromOS.descricao_servico || "";
       const identificador = montarIdentificadorPorOS(fromOS);
+      setNumeroPrevisto(fromOS.numero);
       setForm({
         ...emptyForm,
         empresaId: fromOS.empresa_id,
@@ -660,6 +670,7 @@ const OrcamentoFormDialog = ({
       ...emptyForm,
       dataOrcamento: toDateTimeLocalValue(),
     });
+    setNumeroPrevisto("");
     setPecas([emptyPeca()]);
     setServicos([emptyServico()]);
     setIncluirFrete(false);
@@ -670,6 +681,78 @@ const OrcamentoFormDialog = ({
     setIncluirDespesasViagem(false);
     setValorDespesasViagem(0);
   }, [open, fromOS, mode, orcamento]);
+
+  useEffect(() => {
+    if (!open || mode !== "create") return;
+
+    let ativo = true;
+
+    if (!fromOS?.id) {
+      orcamentosService
+        .preverProximoNumero()
+        .then((numero) => {
+          if (ativo) setNumeroPrevisto(numero);
+        })
+        .catch((error) => {
+          if (!ativo) return;
+          toast({
+            title: "Erro ao consultar numero do orcamento",
+            description:
+              error instanceof Error ? error.message : "Erro inesperado.",
+            variant: "destructive",
+          });
+        });
+
+      return () => {
+        ativo = false;
+      };
+    }
+
+    setCarregandoOSOrigem(true);
+    ordensServicoService
+      .buscarPorId(fromOS.id)
+      .then((osCompleta) => {
+        if (!ativo) return;
+
+        const detalhes = osCompleta.descricao_servico?.trim() || "";
+        setNumeroPrevisto(osCompleta.numero);
+        setForm((current) => ({
+          ...current,
+          empresaId: osCompleta.empresa_id,
+          equipamentoId: osCompleta.equipamento_id || "",
+          ordemServicoId: osCompleta.id,
+          origem: "os",
+          tipoOrcamento: "servico",
+          detalhesOrcamento: detalhes,
+          identificador: montarIdentificadorPorOS(osCompleta),
+        }));
+        setServicos((current) => [
+          {
+            ...(current[0] || emptyServico()),
+            tipoServicoId: osCompleta.tipo_os_id || "",
+            tipoEquipamentoId:
+              osCompleta.equipamento?.tipo_equipamento?.id || "",
+            descricao: detalhes,
+          },
+        ]);
+      })
+      .catch((error) => {
+        if (!ativo) return;
+        toast({
+          title: "Erro ao carregar dados completos da OS",
+          description:
+            error instanceof Error ? error.message : "Erro inesperado.",
+          variant: "destructive",
+        });
+      })
+      .finally(() => {
+        if (ativo) setCarregandoOSOrigem(false);
+      });
+
+    return () => {
+      ativo = false;
+    };
+  }, [fromOS?.id, mode, open]);
 
   const totalPecas = useMemo(
     () =>
@@ -1058,6 +1141,7 @@ const OrcamentoFormDialog = ({
       : [];
 
     return {
+      numero: mode === "create" ? numeroPrevisto : undefined,
       empresaId: form.empresaId,
       equipamentoId: form.equipamentoId || undefined,
       ordemServicoId: form.ordemServicoId || undefined,
@@ -1205,7 +1289,14 @@ const OrcamentoFormDialog = ({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label>Numero</Label>
-                <Input value={orcamento?.numero || "Gerado automaticamente"} readOnly />
+                <Input
+                  value={
+                    orcamento?.numero ||
+                    numeroPrevisto ||
+                    "Consultando proximo numero..."
+                  }
+                  readOnly
+                />
               </div>
               <div className="space-y-2">
                 <Label>Data de Criacao</Label>
@@ -2292,9 +2383,16 @@ const OrcamentoFormDialog = ({
             {isView ? "Fechar" : "Cancelar"}
           </Button>
           {!isView && (
-            <Button onClick={handleSubmit} disabled={isSubmitting}>
+            <Button
+              onClick={handleSubmit}
+              disabled={isSubmitting || (mode === "create" && !numeroPrevisto)}
+            >
               <Save className="w-4 h-4 mr-2" />
-              {isSubmitting ? "Salvando..." : "Salvar Orcamento"}
+              {carregandoOSOrigem
+                ? "Carregando dados da OS..."
+                : isSubmitting
+                  ? "Salvando..."
+                  : "Salvar Orcamento"}
             </Button>
           )}
         </DialogFooter>

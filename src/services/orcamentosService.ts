@@ -252,6 +252,7 @@ export type OrcamentoItemInput = {
 };
 
 export type OrcamentoFormInput = {
+  numero?: string;
   empresaId: string;
   equipamentoId?: string;
   ordemServicoId?: string;
@@ -443,6 +444,7 @@ const selectOrcamentosResumo = selectOrcamentos.slice(
 );
 
 const toDatabasePayload = (input: OrcamentoFormInput) => ({
+  ...(input.numero ? { numero: input.numero } : {}),
   empresa_id: input.empresaId,
   equipamento_id: input.equipamentoId || null,
   ordem_servico_id: input.ordemServicoId || null,
@@ -808,6 +810,18 @@ export const orcamentosService = {
     }
 
     return data as unknown as OrcamentoSupabase;
+  },
+
+  async preverProximoNumero() {
+    const { data, error } = await supabase.rpc(
+      "prever_proximo_numero_orcamento"
+    );
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return String(data || "");
   },
 
   async criar(input: OrcamentoFormInput) {
