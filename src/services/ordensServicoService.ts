@@ -408,6 +408,56 @@ const selectOrdensServicoListagem = `
   )
 `;
 
+const selectOrdensServicoParaOrcamento = `
+  id,
+  organizacao_id,
+  numero,
+  empresa_id,
+  equipamento_id,
+  tipo_os_id,
+  estado_os_id,
+  tecnico_responsavel_id,
+  solicitante_texto,
+  responsavel_texto,
+  data_abertura,
+  data_fechamento,
+  prioridade,
+  status_sistema,
+  plano_ciclo_id,
+  ativo,
+  created_at,
+  updated_at,
+  equipamento:equipamentos (
+    id,
+    organizacao_id,
+    empresa_id,
+    tipo_equipamento_id,
+    tipo_texto,
+    fabricante,
+    modelo,
+    numero_serie,
+    patrimonio,
+    tag,
+    setor,
+    status,
+    ativo,
+    tipo_equipamento:tipos_equipamento (
+      id,
+      nome
+    )
+  ),
+  tipo_os:tipos_os (
+    id,
+    nome
+  ),
+  estado_os:estados_os (
+    id,
+    nome,
+    finaliza_os,
+    cancela_os
+  )
+`;
+
 type OrdemServicoResumoRpcRow = {
   total_count?: number | string | null;
   id: string;
@@ -1134,6 +1184,37 @@ export const ordensServicoService = {
 
   async buscarPorId(id: string) {
     return buscarOrdemServicoPorId(id);
+  },
+
+  async listarAbertasParaOrcamentoPorEmpresa(empresaId: string) {
+    if (!empresaId) return [];
+
+    const pageSize = 1000;
+    const ordens: OrdemServicoSupabase[] = [];
+
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await supabase
+        .from("ordens_servico")
+        .select(selectOrdensServicoParaOrcamento)
+        .eq("empresa_id", empresaId)
+        .eq("ativo", true)
+        .eq("oculta_operacao", false)
+        .eq("status_sistema", "aberta")
+        .order("numero_ordem", { ascending: false, nullsFirst: false })
+        .order("created_at", { ascending: false })
+        .range(from, from + pageSize - 1);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      const pagina = (data || []) as unknown as OrdemServicoSupabase[];
+      ordens.push(...pagina);
+
+      if (pagina.length < pageSize) break;
+    }
+
+    return ordens;
   },
 
   async listar() {

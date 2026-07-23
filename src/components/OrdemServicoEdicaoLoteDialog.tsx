@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import SearchableSelect from "@/components/SearchableSelect";
 import { useEstadosOS, useTiposOS } from "@/hooks/useCamposOS";
 import { useAtualizarOrdensServicoEmLote } from "@/hooks/useOrdensServico";
-import { usePlanoUsuarios } from "@/hooks/usePlanos";
+import { useTecnicosExecutores } from "@/hooks/useTecnicosExecutores";
 import { toast } from "@/hooks/use-toast";
 import type {
   OrdemServicoCamposEdicaoLote,
@@ -115,7 +115,7 @@ const OrdemServicoEdicaoLoteDialog = ({
 
   const { data: estados = [] } = useEstadosOS();
   const { data: tiposServico = [] } = useTiposOS();
-  const { data: usuarios = [] } = usePlanoUsuarios();
+  const { data: usuarios = [] } = useTecnicosExecutores();
   const atualizarEmLote = useAtualizarOrdensServicoEmLote();
 
   const estadoOptions = useMemo(() => {

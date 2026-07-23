@@ -24,7 +24,7 @@ import {
 import { useEmpresas } from "@/hooks/useEmpresas";
 import { useEquipamentos } from "@/hooks/useEquipamentos";
 import { useEstadosOS, useTiposOS } from "@/hooks/useCamposOS";
-import { usePlanoUsuarios } from "@/hooks/usePlanos";
+import { useTecnicosExecutores } from "@/hooks/useTecnicosExecutores";
 import PreventivaChecklistDialog from "@/components/PreventivaChecklistDialog";
 import { ordenarNomesEstadosOS } from "@/utils/ordemEstadosOS";
 import {
@@ -94,8 +94,6 @@ const getEquipamentoLabel = (equipamento: {
     .join(" - ");
 };
 
-const PERFIS_TECNICO_EXECUTOR = new Set(["admin", "gestor", "tecnico"]);
-
 const getUsuarioLabel = (usuario: { nome: string }) => usuario.nome;
 
 const normalizeText = (value?: string | null) =>
@@ -155,7 +153,7 @@ const OrdemServicoFormDialog = ({
   const { data: empresas = [] } = useEmpresas({ statusFiltro: "ativas" });
   const { data: tiposOS = [] } = useTiposOS();
   const { data: estadosOS = [] } = useEstadosOS();
-  const { data: usuarios = [] } = usePlanoUsuarios();
+  const { data: usuariosTecnicoExecutor = [] } = useTecnicosExecutores();
 
   const [form, setForm] = useState<OrdemServicoFormInput>(createEmptyForm);
   const [acessorios, setAcessorios] = useState<AcessorioFormItem[]>([]);
@@ -209,15 +207,6 @@ const OrdemServicoFormDialog = ({
   const estadoOptions = useMemo(
     () => ordenarNomesEstadosOS(estadosOS.map((estado) => estado.nome)),
     [estadosOS]
-  );
-
-  const usuariosTecnicoExecutor = useMemo(
-    () =>
-      usuarios.filter(
-        (usuario) =>
-          usuario.ativo && PERFIS_TECNICO_EXECUTOR.has(usuario.perfil)
-      ),
-    [usuarios]
   );
 
   const tecnicoExecutorOptions = useMemo(

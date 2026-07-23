@@ -106,4 +106,29 @@ describe("calibracaoCertificadoPdfTemplate", () => {
       })
     ).toBe("CAL-000012-R002.pdf");
   });
+
+  it("preserva a numeracao anual completa no nome do certificado", () => {
+    expect(
+      formatNomeArquivoCertificadoCalibracao({
+        numero_certificado: 2026070001,
+        numero_revisao: 0,
+      })
+    ).toBe("CAL-2026070001.pdf");
+  });
+
+  it("omite o campo de setor quando o equipamento nao possui setor", () => {
+    const html = buildCalibracaoCertificadoHtml(
+      {
+        numero_certificado: 2026070001,
+        data_emissao: "2026-07-22",
+        criterio_conformidade_aplicado: false,
+        equipamento: { setor: "Sem setor" },
+        tabelas: [],
+      } as unknown as CalibracaoExecucao,
+      "logo"
+    );
+
+    expect(html).not.toContain("Setor:");
+    expect(html).not.toContain("Sem setor");
+  });
 });

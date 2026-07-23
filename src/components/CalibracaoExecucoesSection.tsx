@@ -4,7 +4,6 @@ import {
   ChevronDown,
   Download,
   Eye,
-  FileText,
   Loader2,
   MoreHorizontal,
   Pencil,
@@ -65,6 +64,10 @@ import {
 } from "@/services/equipamentosService";
 import { formatarIdentificacaoCompletaEquipamento } from "@/utils/equipamentoFormatters";
 import { gerarPdfCalibracaoCertificado } from "@/utils/gerarPdfCalibracaoCertificado";
+import {
+  exibirPdfBlob,
+  prepararJanelaVisualizacaoPdf,
+} from "@/utils/printToPdfRenderer";
 import type { SortDirection } from "@/utils/sortUtils";
 
 const ALL = "__all__";
@@ -98,7 +101,7 @@ const CalibracaoExecucoesSection = () => {
   const [validadeDe, setValidadeDe] = useState("");
   const [validadeAte, setValidadeAte] = useState("");
   const [sortKey, setSortKey] =
-    useState<CalibracaoExecucoesSortField>("numero_certificado");
+    useState<CalibracaoExecucoesSortField>("data_calibracao");
   const [sortDirection, setSortDirection] =
     useState<SortDirection>("desc");
   const [listLimit, setListLimit] = useState(DEFAULT_LIST_LIMIT);
@@ -250,29 +253,16 @@ const CalibracaoExecucoesSection = () => {
   };
 
   const abrirPdf = async (item: CalibracaoExecucao, download = false) => {
+    const previewWindow = download ? null : prepararJanelaVisualizacaoPdf();
     try {
-      window.open(
-        await calibracaoExecucoesService.criarUrlPdf(item, download),
-        "_blank",
-        "noopener,noreferrer"
-      );
+      const execucaoCompleta =
+        await calibracaoExecucoesService.buscarExecucaoPorId(item.id);
+      const pdf = await gerarPdfCalibracaoCertificado(execucaoCompleta, download);
+      if (!download) exibirPdfBlob(pdf, previewWindow);
     } catch (pdfError) {
+      previewWindow?.close();
       toast({
         title: "Erro ao abrir PDF",
-        description:
-          pdfError instanceof Error ? pdfError.message : "Erro inesperado.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const gerarPdf = async (item: CalibracaoExecucao) => {
-    try {
-      const execucaoCompleta = await carregarExecucaoCompleta(item);
-      await gerarPdfCalibracaoCertificado(execucaoCompleta);
-    } catch (pdfError) {
-      toast({
-        title: "Erro ao gerar PDF",
         description:
           pdfError instanceof Error ? pdfError.message : "Erro inesperado.",
         variant: "destructive",
@@ -646,25 +636,15 @@ const CalibracaoExecucoesSection = () => {
                           )}
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
-                            onClick={() => void gerarPdf(item)}
+                            onClick={() => void abrirPdf(item)}
                           >
-                            <FileText className="mr-2 h-4 w-4" />
-                            {item.pdf_storage_path ? "Regenerar PDF" : "Gerar PDF"}
+                            <Eye className="mr-2 h-4 w-4" /> Visualizar PDF atualizado
                           </DropdownMenuItem>
-                          {item.pdf_storage_path && (
-                            <>
-                              <DropdownMenuItem
-                                onClick={() => void abrirPdf(item)}
-                              >
-                                <Eye className="mr-2 h-4 w-4" /> Visualizar PDF
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => void abrirPdf(item, true)}
-                              >
-                                <Download className="mr-2 h-4 w-4" /> Baixar PDF
-                              </DropdownMenuItem>
-                            </>
-                          )}
+                          <DropdownMenuItem
+                            onClick={() => void abrirPdf(item, true)}
+                          >
+                            <Download className="mr-2 h-4 w-4" /> Baixar PDF atualizado
+                          </DropdownMenuItem>
                           {["rascunho", "em_execucao"].includes(item.status) && (
                             <>
                               <DropdownMenuSeparator />

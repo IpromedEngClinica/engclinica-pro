@@ -52,7 +52,18 @@ const tecnicos = [
     senha: "TecPhillipe@2026",
     responsaveisOs: ["Phillipe Martins Silva"],
   },
+  {
+    nome: "Luis Macedo",
+    email: "luis.macedo@ipromed.local",
+    senha: "TecLuis@2026",
+    responsaveisOs: ["Luis Macedo", "Luís Macedo"],
+  },
 ];
+
+const getSomenteNome = () => {
+  const index = process.argv.indexOf("--somente");
+  return index >= 0 ? process.argv[index + 1]?.trim() || "" : "";
+};
 
 const normalizarEmail = (email) => email.trim().toLowerCase();
 
@@ -219,8 +230,21 @@ const main = async () => {
   const organizacao = await buscarOrganizacao();
   const authUsers = await listarAuthUsers();
   const resultado = [];
+  const somenteNome = getSomenteNome();
+  const tecnicosSelecionados = somenteNome
+    ? tecnicos.filter(
+        (tecnico) =>
+          tecnico.nome.localeCompare(somenteNome, "pt-BR", {
+            sensitivity: "base",
+          }) === 0
+      )
+    : tecnicos;
 
-  for (const tecnico of tecnicos) {
+  if (somenteNome && tecnicosSelecionados.length === 0) {
+    throw new Error(`Tecnico nao encontrado no script: ${somenteNome}`);
+  }
+
+  for (const tecnico of tecnicosSelecionados) {
     const auth = await criarOuAtualizarAuthUser(tecnico, authUsers);
     const usuario = await upsertUsuario(tecnico, organizacao.id, auth.authUserId);
     const ordensServicoVinculadas = await vincularOrdensServico(tecnico, usuario.id);

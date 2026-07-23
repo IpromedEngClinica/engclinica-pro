@@ -1,4 +1,5 @@
 import type { Recibo } from "@/services/utilitariosService";
+import { setorParaDocumento } from "@/utils/setor";
 
 const escapeHtml = (value?: string | number | null) =>
   String(value ?? "")
@@ -61,7 +62,9 @@ const getEquipamentoIdentificacao = (recibo: Recibo) =>
       ? `Patrimônio: ${recibo.equipamento.patrimonio}`
       : null,
     recibo.equipamento?.tag ? `TAG: ${recibo.equipamento.tag}` : null,
-    recibo.equipamento?.setor ? `Setor: ${recibo.equipamento.setor}` : null,
+    setorParaDocumento(recibo.equipamento?.setor)
+      ? `Setor: ${setorParaDocumento(recibo.equipamento?.setor)}`
+      : null,
   ]
     .filter(Boolean)
     .join(" | ") || "-";

@@ -32,6 +32,11 @@ import { useEmpresas } from "@/hooks/useEmpresas";
 import { useTiposEquipamento } from "@/hooks/useTiposEquipamento";
 import EquipamentoHistoricoSection from "@/components/EquipamentoHistoricoSection";
 import TipoEquipamentoQuickAddDialog from "@/components/TipoEquipamentoQuickAddDialog";
+import {
+  montarOpcoesSetor,
+  normalizarSetor,
+  SEM_SETOR_SELECT_VALUE,
+} from "@/utils/setor";
 
 export type DialogMode = "create" | "edit" | "view";
 
@@ -193,21 +198,6 @@ const EquipamentoFormDialog = ({
     });
   }, [open, equipamento, mode, empresaInicialId, empresaInicial]);
 
-  useEffect(() => {
-    if (!open || readOnly || mode !== "create") return;
-    if (!form.empresaId || form.setor || setorOptions.length !== 1) return;
-
-    const setor = selectedEmpresa?.setores?.find(
-      (item) => item.nome === setorOptions[0]
-    );
-
-    setForm((prev) => ({
-      ...prev,
-      setor: setorOptions[0],
-      empresaSetorId: setor?.id || "",
-    }));
-  }, [open, readOnly, mode, form.empresaId, form.setor, setorOptions, selectedEmpresa]);
-
   const update = (field: keyof EquipamentoFormInput, value: string) => {
     if (readOnly) return;
 
@@ -223,31 +213,21 @@ const EquipamentoFormDialog = ({
       return optionLabel === label;
     });
 
-    const setoresEmpresa = getSetoresEmpresaOptions(empresa);
-
     setForm((prev) => ({
       ...prev,
       empresaId: empresa?.id || "",
-      empresaSetorId:
-        setoresEmpresa.length === 1
-          ? empresa?.setores?.find((setor) => setor.nome === setoresEmpresa[0])
-              ?.id || ""
-          : "",
-      setor:
-        setoresEmpresa.length === 1
-          ? setoresEmpresa[0]
-          : setoresEmpresa.includes(prev.setor || "")
-            ? prev.setor
-            : "",
+      empresaSetorId: "",
+      setor: "",
     }));
   };
 
   const handleSetorChange = (value: string) => {
-    const setor = selectedEmpresa?.setores?.find((item) => item.nome === value);
+    const setorNome = value === SEM_SETOR_SELECT_VALUE ? "" : value;
+    const setor = selectedEmpresa?.setores?.find((item) => item.nome === setorNome);
 
     setForm((prev) => ({
       ...prev,
-      setor: value,
+      setor: setorNome,
       empresaSetorId: setor?.id || "",
     }));
   };
@@ -292,7 +272,7 @@ const EquipamentoFormDialog = ({
         numeroSerie: form.numeroSerie?.trim(),
         patrimonio: form.patrimonio?.trim(),
         tag: form.tag?.trim(),
-        setor: form.setor?.trim(),
+        setor: normalizarSetor(form.setor),
         tipoTexto: form.tipoTexto?.trim(),
       };
 
@@ -489,9 +469,9 @@ const EquipamentoFormDialog = ({
               ) : clientePossuiSetores ? (
                 <>
                   <SearchableSelect
-                    value={form.setor || ""}
+                    value={form.setor || SEM_SETOR_SELECT_VALUE}
                     onValueChange={handleSetorChange}
-                    options={setorOptions}
+                    options={montarOpcoesSetor(setorOptions)}
                     placeholder="Selecione o setor cadastrado"
                     emptyText="Nenhum setor encontrado."
                     disabled={saving}

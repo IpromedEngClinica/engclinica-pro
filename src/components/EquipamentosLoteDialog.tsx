@@ -26,6 +26,11 @@ import { toast } from "@/hooks/use-toast";
 import type { EmpresaSupabase } from "@/services/empresasService";
 import type { EquipamentoFormInput } from "@/services/equipamentosService";
 import TipoEquipamentoQuickAddDialog from "@/components/TipoEquipamentoQuickAddDialog";
+import {
+  montarOpcoesSetor,
+  normalizarSetor,
+  SEM_SETOR_SELECT_VALUE,
+} from "@/utils/setor";
 
 interface EquipamentosLoteDialogProps {
   open: boolean;
@@ -135,7 +140,7 @@ const trimInput = (input: EquipamentoFormInput): EquipamentoFormInput => ({
   numeroSerie: input.numeroSerie?.trim(),
   patrimonio: input.patrimonio?.trim(),
   tag: input.tag?.trim(),
-  setor: input.setor?.trim(),
+  setor: normalizarSetor(input.setor),
   observacoes: input.observacoes?.trim(),
 });
 
@@ -211,20 +216,13 @@ const EquipamentosLoteDialog = ({
 
   const handleEmpresaChange = (label: string, rowId?: string) => {
     const empresa = empresas.find((item) => getEmpresaLabel(item) === label);
-    const setores = getSetoresEmpresa(empresa);
 
     if (!rowId) {
       setComum((current) => ({
         ...current,
         empresaId: empresa?.id || "",
-        empresaSetorId:
-          setores.length === 1 ? getSetorEmpresaId(empresa || null, setores[0]) : "",
-        setor:
-          setores.length === 1
-            ? setores[0]
-            : setores.includes(current.setor || "")
-              ? current.setor
-              : "",
+        empresaSetorId: "",
+        setor: "",
       }));
       return;
     }
@@ -235,16 +233,8 @@ const EquipamentosLoteDialog = ({
           ? {
               ...linha,
               empresaId: empresa?.id || "",
-              empresaSetorId:
-                setores.length === 1
-                  ? getSetorEmpresaId(empresa || null, setores[0])
-                  : "",
-              setor:
-                setores.length === 1
-                  ? setores[0]
-                  : setores.includes(linha.setor || "")
-                    ? linha.setor
-                    : "",
+              empresaSetorId: "",
+              setor: "",
             }
           : linha
       )
@@ -467,15 +457,16 @@ const EquipamentosLoteDialog = ({
       const empresa = empresaPorId(empresaId);
       const setores = getSetoresEmpresa(empresa);
       const setSetor = (value: string) => {
-        setValue("setor", value);
-        setValue("empresaSetorId", getSetorEmpresaId(empresa, value));
+        const setorNome = value === SEM_SETOR_SELECT_VALUE ? "" : value;
+        setValue("setor", setorNome);
+        setValue("empresaSetorId", getSetorEmpresaId(empresa, setorNome));
       };
 
       return setores.length ? (
         <SearchableSelect
-          value={form.setor || ""}
+          value={form.setor || SEM_SETOR_SELECT_VALUE}
           onValueChange={setSetor}
-          options={setores}
+          options={montarOpcoesSetor(setores)}
           placeholder="Selecione o setor"
           emptyText="Nenhum setor encontrado."
           disabled={saving}

@@ -1,5 +1,6 @@
 import type { ProtocoloOSSupabase } from "@/services/protocolosService";
 import { PDF_DOCUMENT_BASE_CSS } from "@/utils/pdfDocumentStyles";
+import { setorParaDocumento } from "@/utils/setor";
 
 export const PROTOCOLO_FOOTER =
   "ACI Comercio LTDA - Assistencia Tecnica Hospitalar e Engenharia Clinica - Rua Jose Martins da Silva, 215 - Ceramica - Juiz de Fora - MG - CEP 36.080-370 - PABX: (32) 3221-7944 - E-mail: acicomercio@yahoo.com.br - CNPJ: 71.208.094/0001-37";
@@ -345,7 +346,7 @@ export const buildProtocoloHtml = (
             ${optionalField(text.numeroSerie, protocolo.equipamento?.numero_serie)}
             ${optionalField(text.patrimonio, protocolo.equipamento?.patrimonio)}
             ${optionalField("TAG:", protocolo.equipamento?.tag)}
-            ${optionalField("Setor:", protocolo.equipamento?.setor)}
+            ${optionalField("Setor:", setorParaDocumento(protocolo.equipamento?.setor))}
           </div>
         </section>
 

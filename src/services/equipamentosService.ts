@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabaseClient";
 import type { EmpresaSupabase } from "@/services/empresasService";
+import { normalizarSetor } from "@/utils/setor";
 
 export type EquipamentoSupabase = {
   id: string;
@@ -343,8 +344,10 @@ const toDatabasePayload = (input: EquipamentoFormInput) => ({
   numero_serie: input.numeroSerie || null,
   patrimonio: input.patrimonio || null,
   tag: input.tag || null,
-  setor: input.setor || null,
-  empresa_setor_id: input.empresaSetorId || null,
+  setor: normalizarSetor(input.setor) || null,
+  empresa_setor_id: normalizarSetor(input.setor)
+    ? input.empresaSetorId || null
+    : null,
   status: input.status || "Ativo",
   data_ultima_preventiva: input.dataUltimaPreventiva || null,
   data_proxima_preventiva: input.dataProximaPreventiva || null,

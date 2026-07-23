@@ -60,6 +60,15 @@ const MODULOS = [
   "Utilitarios",
 ];
 
+const moduloLabels: Record<string, string> = {
+  "Ordem de Servico": "Ordem de Serviço",
+  Orcamentos: "Orçamentos",
+  Calibracao: "Calibração",
+  "Seguranca Eletrica": "Segurança Elétrica",
+  "Laudos de Obsolescencia": "Laudos de Obsolescência",
+  Utilitarios: "Utilitários",
+};
+
 const acaoLabel: Record<AuditoriaAcao, string> = {
   criou: "Criou",
   alterou: "Alterou",
@@ -73,25 +82,83 @@ const acaoBadgeClass: Record<AuditoriaAcao, string> = {
 };
 
 const campoLabels: Record<string, string> = {
+  aprovado_em: "Data de aprovação",
+  aprovado_por: "Aprovado por",
   ativo: "Ativo",
+  bairro: "Bairro",
+  cancelado_em: "Data de cancelamento",
+  cidade: "Cidade",
+  complemento: "Complemento",
+  contato: "Contato",
+  cpf_cnpj: "CPF/CNPJ",
+  data_aprovacao: "Data de aprovação",
   status: "Status",
   status_sistema: "Status do sistema",
+  estado_da_os: "Estado da OS",
   estado_os_id: "Estado da OS",
   empresa_id: "Cliente",
   equipamento_id: "Equipamento",
+  fabricante: "Fabricante",
+  modelo: "Modelo",
   nome: "Nome",
   nome_fantasia: "Nome fantasia",
-  numero: "Numero",
-  titulo: "Titulo",
-  observacoes: "Observacoes",
+  numero: "Número",
+  numero_serie: "Número de série",
+  origem_problema: "Origem do problema",
+  patrimonio: "Patrimônio",
+  prioridade: "Prioridade",
+  problema_relatado: "Problema relatado",
+  razao_social: "Razão social",
+  responsavel_texto: "Técnico executor",
+  solicitante_texto: "Solicitante",
+  tecnico_responsavel_id: "Técnico executor",
+  tipo_os_id: "Tipo de serviço",
+  titulo: "Título",
+  observacoes: "Observações",
+  descricao: "Descrição",
+  descricao_servico: "Descrição do serviço",
+  valor_entrada: "Valor de entrada",
+  valor_frete: "Valor do frete",
+  valor_pecas: "Valor das peças",
+  valor_servicos: "Valor dos serviços",
   valor_total: "Valor total",
+  valor_total_antes_desconto: "Valor antes do desconto",
   data_abertura: "Data de abertura",
+  data_criacao: "Data de criação",
   data_fechamento: "Data de fechamento",
   data_validade: "Data de validade",
-  data_inicio: "Data de inicio",
+  data_inicio: "Data de início",
   data_fim: "Data final",
   updated_by: "Atualizado por",
 };
+
+const campoGrupos: Record<string, string> = {
+  estado_da_os: "estado_os",
+  estado_os_id: "estado_os",
+  responsavel_texto: "tecnico_executor",
+  tecnico_responsavel_id: "tecnico_executor",
+  empresa_id: "cliente",
+  solicitante_texto: "cliente",
+};
+
+const campoPrioridade: Record<string, number> = {
+  estado_da_os: 10,
+  responsavel_texto: 10,
+  solicitante_texto: 10,
+};
+
+const camposTecnicos = new Set([
+  "id",
+  "organizacao_id",
+  "created_at",
+  "updated_at",
+  "updated_by",
+  "arkmeds_orcamento_id",
+  "arkmeds_ordem_servico_numero",
+  "arkmeds_status_original",
+  "origem",
+  "raw_json",
+]);
 
 const formatDateTime = (value?: string | null) => {
   if (!value) return "-";
@@ -106,7 +173,7 @@ const formatDateTime = (value?: string | null) => {
 const formatUsuario = (log: AuditoriaLog) =>
   log.usuario_nome_snapshot ||
   log.usuario_email_snapshot ||
-  (log.usuario_id ? "Usuario sem nome" : "Sistema");
+  (log.usuario_id ? "Usuário sem nome" : "Sistema");
 
 const isMigrationMissingError = (error: unknown) => {
   const message = error instanceof Error ? error.message : String(error);
@@ -114,22 +181,87 @@ const isMigrationMissingError = (error: unknown) => {
     /does not exist|not found|schema cache|could not find/i.test(message);
 };
 
-const formatCampo = (campo: string) => campoLabels[campo] || campo;
+const titleCase = (value: string) =>
+  value
+    .replace(/_/g, " ")
+    .replace(/\bos\b/gi, "OS")
+    .replace(/\bid\b/gi, "ID")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
 
-const formatValue = (value: unknown) => {
+const formatCampo = (campo: string) =>
+  campoLabels[campo] || titleCase(campo);
+
+const formatModulo = (modulo: string) => moduloLabels[modulo] || modulo;
+
+const formatValue = (value: unknown, campo?: string) => {
   if (value === null || value === undefined || value === "") return "-";
-  if (typeof value === "boolean") return value ? "Sim" : "Nao";
+  if (typeof value === "boolean") return value ? "Sim" : "Não";
   if (typeof value === "object") return JSON.stringify(value);
-  return String(value);
+
+  const text = String(value);
+
+  if (campo?.startsWith("data_") || campo?.endsWith("_em")) {
+    const date = new Date(text);
+    if (!Number.isNaN(date.getTime())) {
+      return date.toLocaleString("pt-BR", {
+        dateStyle: "short",
+        timeStyle: text.includes("T") ? "short" : undefined,
+      });
+    }
+  }
+
+  if (campo?.startsWith("valor_") && !Number.isNaN(Number(value))) {
+    return Number(value).toLocaleString("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    });
+  }
+
+  if (/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(text)) {
+    return `Referência interna (${text.slice(0, 8)}...)`;
+  }
+
+  if (campo?.includes("status") || campo === "prioridade") {
+    return titleCase(text);
+  }
+
+  return text;
 };
 
-const compactValue = (value: unknown) => {
-  const text = formatValue(value);
+const compactValue = (value: unknown, campo?: string) => {
+  const text = formatValue(value, campo);
   return text.length > 120 ? `${text.slice(0, 120)}...` : text;
 };
 
+const getCamposRepresentativos = (campos: string[]) => {
+  const agrupados = new Map<string, string>();
+
+  campos
+    .filter((campo) => !camposTecnicos.has(campo))
+    .forEach((campo) => {
+      const grupo = campoGrupos[campo] || campo;
+      const atual = agrupados.get(grupo);
+      if (
+        !atual ||
+        (campoPrioridade[campo] || 0) > (campoPrioridade[atual] || 0)
+      ) {
+        agrupados.set(grupo, campo);
+      }
+    });
+
+  return Array.from(agrupados.values());
+};
+
+const getCamposResumo = (log: AuditoriaLog) => {
+  if (log.acao === "criou") return ["Novo registro"];
+  if (log.acao === "excluiu") return ["Registro excluído"];
+
+  const campos = getCamposRepresentativos(log.campos_alterados || []);
+  return campos.length ? campos.map(formatCampo) : ["Dados do registro"];
+};
+
 const getChangedRows = (log: AuditoriaLog) =>
-  (log.campos_alterados || []).map((campo) => ({
+  getCamposRepresentativos(log.campos_alterados || []).map((campo) => ({
     campo,
     anterior: log.dados_anteriores?.[campo],
     novo: log.dados_novos?.[campo],
@@ -201,7 +333,7 @@ const Auditoria = () => {
     <div className="space-y-6 p-6">
       <PageHeader
         title="Auditoria"
-        description="Historico rastreavel de criacoes, alteracoes e exclusoes do sistema."
+        description="Histórico rastreável de criações, alterações e exclusões do sistema."
       >
         <Button variant="outline" onClick={() => refetch()}>
           <RefreshCw
@@ -229,7 +361,7 @@ const Auditoria = () => {
               className="pl-9"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Buscar por usuario, registro, tabela ou campo"
+              placeholder="Buscar por usuário, registro, tabela ou campo"
             />
           </div>
 
@@ -239,10 +371,10 @@ const Auditoria = () => {
               <SelectValue placeholder="Modulo" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={ALL}>Todos os modulos</SelectItem>
+              <SelectItem value={ALL}>Todos os módulos</SelectItem>
               {MODULOS.map((item) => (
                 <SelectItem key={item} value={item}>
-                  {item}
+                  {formatModulo(item)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -256,7 +388,7 @@ const Auditoria = () => {
               <SelectValue placeholder="Acao" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="todas">Todas as acoes</SelectItem>
+              <SelectItem value="todas">Todas as ações</SelectItem>
               <SelectItem value="criou">Criou</SelectItem>
               <SelectItem value="alterou">Alterou</SelectItem>
               <SelectItem value="excluiu">Excluiu</SelectItem>
@@ -267,12 +399,12 @@ const Auditoria = () => {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[150px]">Horario</TableHead>
-              <TableHead className="w-[130px]">Acao</TableHead>
-              <TableHead className="w-[190px]">Modulo</TableHead>
+              <TableHead className="w-[150px]">Horário</TableHead>
+              <TableHead className="w-[130px]">Ação</TableHead>
+              <TableHead className="w-[190px]">Módulo</TableHead>
               <TableHead>Registro</TableHead>
-              <TableHead className="w-[220px]">Usuario</TableHead>
-              <TableHead className="w-[190px]">Campos</TableHead>
+              <TableHead className="w-[220px]">Usuário</TableHead>
+              <TableHead className="w-[280px]">Alterações</TableHead>
               <TableHead className="w-[90px] text-right">Detalhes</TableHead>
             </TableRow>
           </TableHeader>
@@ -333,9 +465,9 @@ const Auditoria = () => {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <div className="font-medium">{log.modulo}</div>
+                    <div className="font-medium">{formatModulo(log.modulo)}</div>
                     <div className="text-xs text-muted-foreground">
-                      {log.tabela}
+                      {formatCampo(log.tabela)}
                     </div>
                   </TableCell>
                   <TableCell>
@@ -357,10 +489,24 @@ const Auditoria = () => {
                     )}
                   </TableCell>
                   <TableCell>
-                    {log.campos_alterados?.length
-                      ? log.campos_alterados.slice(0, 4).map(formatCampo).join(", ")
-                      : "-"}
-                    {(log.campos_alterados?.length || 0) > 4 && " ..."}
+                    <div className="flex flex-wrap gap-1.5">
+                      {getCamposResumo(log)
+                        .slice(0, 3)
+                        .map((campo) => (
+                          <Badge
+                            key={campo}
+                            variant="secondary"
+                            className="whitespace-normal text-left font-normal"
+                          >
+                            {campo}
+                          </Badge>
+                        ))}
+                      {getCamposResumo(log).length > 3 && (
+                        <Badge variant="outline" className="font-normal">
+                          +{getCamposResumo(log).length - 3}
+                        </Badge>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-right">
                     <Button
@@ -413,20 +559,33 @@ const Auditoria = () => {
                 </div>
               )}
               <section className="grid gap-3 rounded-lg border p-4 md:grid-cols-3">
-                <Info label="Horario" value={formatDateTime(selected.criado_em)} />
-                <Info label="Usuario" value={formatUsuario(selected)} />
+                <Info label="Horário" value={formatDateTime(selected.criado_em)} />
+                <Info label="Usuário" value={formatUsuario(selected)} />
                 <Info
                   label="Perfil"
                   value={selected.usuario_perfil_snapshot || "-"}
                 />
-                <Info label="Acao" value={acaoLabel[selected.acao]} />
-                <Info label="Modulo" value={selected.modulo} />
-                <Info label="Tabela" value={selected.tabela} />
+                <Info label="Ação" value={acaoLabel[selected.acao]} />
+                <Info label="Módulo" value={formatModulo(selected.modulo)} />
+                <Info label="Tabela" value={formatCampo(selected.tabela)} />
                 <Info
                   label="Registro"
                   value={selected.registro_descricao || selected.registro_id || "-"}
                 />
                 <Info label="ID do registro" value={selected.registro_id || "-"} />
+              </section>
+
+              <section className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-blue-950">
+                <div className="text-xs font-semibold uppercase text-blue-700">
+                  Resumo do evento
+                </div>
+                <p className="mt-1 text-sm">
+                  {selected.acao === "alterou"
+                    ? `Alterou: ${getCamposResumo(selected).join(", ")}.`
+                    : selected.acao === "criou"
+                      ? "Criou um novo registro."
+                      : "Excluiu o registro."}
+                </p>
               </section>
 
               {selected.acao === "alterou" && (
@@ -449,10 +608,10 @@ const Auditoria = () => {
                             {formatCampo(row.campo)}
                           </TableCell>
                           <TableCell className="max-w-[320px] break-words">
-                            {compactValue(row.anterior)}
+                            {compactValue(row.anterior, row.campo)}
                           </TableCell>
                           <TableCell className="max-w-[320px] break-words">
-                            {compactValue(row.novo)}
+                            {compactValue(row.novo, row.campo)}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -461,13 +620,18 @@ const Auditoria = () => {
                 </section>
               )}
 
-              <section className="grid gap-4 md:grid-cols-2">
-                <JsonBlock
-                  title="Dados anteriores"
-                  value={selected.dados_anteriores}
-                />
-                <JsonBlock title="Dados novos" value={selected.dados_novos} />
-              </section>
+              <details className="rounded-lg border">
+                <summary className="cursor-pointer p-3 text-sm font-semibold">
+                  Dados técnicos do evento
+                </summary>
+                <section className="grid gap-4 border-t p-3 md:grid-cols-2">
+                  <JsonBlock
+                    title="Dados anteriores"
+                    value={selected.dados_anteriores}
+                  />
+                  <JsonBlock title="Dados novos" value={selected.dados_novos} />
+                </section>
+              </details>
             </div>
           )}
 

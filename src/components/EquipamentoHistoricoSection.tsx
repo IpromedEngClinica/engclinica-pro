@@ -43,8 +43,13 @@ import {
   segurancaEletricaService,
 } from "@/services/segurancaEletricaService";
 import { formatarMesAno } from "@/utils/calibracaoValidade";
+import { gerarPdfCalibracaoCertificado } from "@/utils/gerarPdfCalibracaoCertificado";
 import { gerarPdfSegurancaEletrica } from "@/utils/gerarPdfSegurancaEletrica";
 import { formatarTipoHistorico } from "@/utils/historicoLabels";
+import {
+  exibirPdfBlob,
+  prepararJanelaVisualizacaoPdf,
+} from "@/utils/printToPdfRenderer";
 
 interface EquipamentoHistoricoSectionProps {
   equipamentoId?: string;
@@ -224,13 +229,14 @@ const EquipamentoHistoricoSection = ({
   };
 
   const handleAbrirPdfCalibracao = async (calibracao: CalibracaoExecucao) => {
+    const previewWindow = prepararJanelaVisualizacaoPdf();
     try {
-      window.open(
-        await calibracaoExecucoesService.criarUrlPdf(calibracao),
-        "_blank",
-        "noopener,noreferrer"
-      );
+      const execucaoAtual =
+        await calibracaoExecucoesService.buscarExecucaoPorId(calibracao.id);
+      const pdf = await gerarPdfCalibracaoCertificado(execucaoAtual, false);
+      exibirPdfBlob(pdf, previewWindow);
     } catch (error) {
+      previewWindow?.close();
       toast({
         title: "Erro ao abrir certificado",
         description: error instanceof Error ? error.message : "Erro inesperado.",
@@ -611,11 +617,9 @@ const EquipamentoHistoricoSection = ({
                     <td className="px-3 py-2">{formatarMesAno(calibracao.validade_mes || calibracao.data_validade)}</td>
                     <td className="px-3 py-2">{calibracao.resultado_geral ? formatarTipoHistorico(calibracao.resultado_geral) : "-"}</td>
                     <td className="px-3 py-2">
-                      {calibracao.pdf_storage_path ? (
-                        <button type="button" className="flex items-center gap-1 text-primary hover:underline" onClick={() => handleAbrirPdfCalibracao(calibracao)}>
-                          <FileText className="h-4 w-4" /> Abrir
-                        </button>
-                      ) : "-"}
+                      <button type="button" className="flex items-center gap-1 text-primary hover:underline" onClick={() => handleAbrirPdfCalibracao(calibracao)}>
+                        <FileText className="h-4 w-4" /> Abrir atualizado
+                      </button>
                     </td>
                   </tr>
                 ))}

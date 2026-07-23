@@ -469,7 +469,8 @@ const toDatabasePayload = (input: OrcamentoFormInput) => ({
   prazo_entrega: input.prazoEntrega || null,
   frete: input.frete || null,
   detalhes_orcamento: input.detalhesOrcamento || null,
-  responsavel_orcamentista: input.responsavelOrcamentista || "Icaro Rezende",
+  responsavel_orcamentista:
+    input.responsavelOrcamentista || "Icaro Heitor Piris Rezende",
   aprovado_por: input.aprovadoPor || null,
   data_aprovacao: input.dataAprovacao || null,
   data_reprovacao: input.dataReprovacao || null,

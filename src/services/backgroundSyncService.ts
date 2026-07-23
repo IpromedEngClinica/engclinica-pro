@@ -77,7 +77,7 @@ const calibracoesDefaultFilters = {
   validadeAte: undefined,
   page: 1,
   limit: 25,
-  sortBy: "numero_certificado" as const,
+  sortBy: "data_calibracao" as const,
   ascending: false,
 };
 

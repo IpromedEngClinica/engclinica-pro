@@ -7,6 +7,7 @@ import {
   Trash2,
   Wrench,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import SearchableSelect from "@/components/SearchableSelect";
 import PecaQuickCreateDialog, {
@@ -32,6 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/contexts/AuthContext";
 import { useTiposOS } from "@/hooks/useCamposOS";
 import { useEmpresas } from "@/hooks/useEmpresas";
 import {
@@ -139,7 +141,25 @@ type FormState = {
   identificador: string;
 };
 
-const RESPONSAVEL_PADRAO = "Icaro Rezende";
+const ORCAMENTISTAS = [
+  "Icaro Heitor Piris Rezende",
+  "Igor Lelis Rezende",
+] as const;
+
+const RESPONSAVEL_PADRAO = ORCAMENTISTAS[0];
+
+const getOrcamentistaPermitido = (nome?: string | null) => {
+  const nomeNormalizado = (nome || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+
+  if (nomeNormalizado.includes("igor")) return ORCAMENTISTAS[1];
+  if (nomeNormalizado.includes("icaro")) return ORCAMENTISTAS[0];
+
+  return RESPONSAVEL_PADRAO;
+};
 
 const emptyForm: FormState = {
   empresaId: "",
@@ -200,6 +220,24 @@ const emptyServicoRelacao = (): ServicoRelacaoForm => ({
   valorUnitario: 0,
   garantia: "",
 });
+
+const hideZeroValue = (value: number | "") => (value === 0 ? "" : value);
+
+const COMPLEMENTO_PADRAO_DETALHAMENTO = `Limpeza externa do equipamento
+Testes de Funcionamento
+Ajustes Finais`;
+
+const adicionarComplementoPadraoDetalhamento = (value?: string | null) => {
+  const textoAtual = value?.trim() || "";
+
+  if (textoAtual.includes(COMPLEMENTO_PADRAO_DETALHAMENTO)) {
+    return textoAtual;
+  }
+
+  return textoAtual
+    ? `${textoAtual}\n\n${COMPLEMENTO_PADRAO_DETALHAMENTO}`
+    : COMPLEMENTO_PADRAO_DETALHAMENTO;
+};
 
 const DESCRITIVO_PREVENTIVA = `Serviços a serem executados:
 Testes de funcionamento com a utilização de padrões certificados
@@ -417,6 +455,24 @@ const montarIdentificadorPorOS = (os: OrdemServicoSupabase) => {
     .join(" - ");
 };
 
+const montarLabelOrdemServico = (os: OrdemServicoSupabase) => {
+  const equipamento =
+    os.equipamento?.tipo_equipamento?.nome ||
+    os.equipamento?.tipo_texto ||
+    "Equipamento nao informado";
+  const modelo = os.equipamento?.modelo?.trim();
+  const numeroSerie = os.equipamento?.numero_serie?.trim();
+
+  return [
+    `OS ${os.numero}`,
+    equipamento,
+    modelo ? `Modelo: ${modelo}` : "",
+    numeroSerie ? `NS: ${numeroSerie}` : "",
+  ]
+    .filter(Boolean)
+    .join(" | ");
+};
+
 const OrcamentoFormDialog = ({
   open,
   onOpenChange,
@@ -424,6 +480,7 @@ const OrcamentoFormDialog = ({
   orcamento = null,
   fromOS = null,
 }: OrcamentoFormDialogProps) => {
+  const { usuario } = useAuth();
   const { data: empresas = [] } = useEmpresas();
   const { data: tiposOS = [] } = useTiposOS();
   const { data: tiposEquipamento = [] } = useTiposEquipamento();
@@ -452,6 +509,7 @@ const OrcamentoFormDialog = ({
   const [carregandoOSOrigem, setCarregandoOSOrigem] = useState(false);
 
   const isView = mode === "view";
+  const orcamentistaAutenticado = getOrcamentistaPermitido(usuario?.nome);
   const isSubmitting =
     criarOrcamento.isPending ||
     atualizarOrcamento.isPending ||
@@ -468,9 +526,52 @@ const OrcamentoFormDialog = ({
     getEmpresaNome(fromOS || orcamento) ||
     "";
 
+  const podeSelecionarOrigem =
+    mode === "create" && !fromOS && !isView;
+  const {
+    data: ordensAbertasCliente = [],
+    isFetching: carregandoOrdensAbertas,
+    isError: erroOrdensAbertas,
+  } = useQuery({
+    queryKey: [
+      "ordens-servico",
+      "abertas-para-orcamento",
+      form.empresaId,
+    ],
+    queryFn: () =>
+      ordensServicoService.listarAbertasParaOrcamentoPorEmpresa(
+        form.empresaId
+      ),
+    enabled:
+      open &&
+      podeSelecionarOrigem &&
+      form.origem === "os" &&
+      Boolean(form.empresaId),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+  });
+  const ordemSelecionada = ordensAbertasCliente.find(
+    (ordem) => ordem.id === form.ordemServicoId
+  );
+
   const empresaOptions = empresas.map(
     (empresa) => empresa.nome || empresa.nome_fantasia
   );
+  const ordemServicoOptions = ordensAbertasCliente.map((ordem) => ({
+    value: ordem.id,
+    label: montarLabelOrdemServico(ordem),
+    searchText: [
+      ordem.numero,
+      ordem.equipamento?.tipo_equipamento?.nome,
+      ordem.equipamento?.tipo_texto,
+      ordem.equipamento?.modelo,
+      ordem.equipamento?.numero_serie,
+      ordem.equipamento?.patrimonio,
+      ordem.equipamento?.tag,
+    ]
+      .filter(Boolean)
+      .join(" "),
+  }));
   const tipoServicoOptions = tiposOS.map((tipo) => tipo.nome);
   const tipoEquipamentoOptions = tiposEquipamento.map((tipo) => tipo.nome);
   const pecaOptions = pecasCadastro.map((peca) => peca.nome);
@@ -553,7 +654,7 @@ const OrcamentoFormDialog = ({
         frete: orcamento.frete || "",
         detalhesOrcamento: orcamento.detalhes_orcamento || "",
         responsavelOrcamentista:
-          orcamento.responsavel_orcamentista || RESPONSAVEL_PADRAO,
+          getOrcamentistaPermitido(orcamento.responsavel_orcamentista),
         identificador: orcamento.identificador || orcamento.observacoes || "",
       });
 
@@ -634,6 +735,8 @@ const OrcamentoFormDialog = ({
 
     if (fromOS) {
       const detalhes = fromOS.descricao_servico || "";
+      const detalhesComComplemento =
+        adicionarComplementoPadraoDetalhamento(detalhes);
       const identificador = montarIdentificadorPorOS(fromOS);
       setNumeroPrevisto(fromOS.numero);
       setForm({
@@ -644,7 +747,8 @@ const OrcamentoFormDialog = ({
         dataOrcamento: toDateTimeLocalValue(),
         origem: "os",
         tipoOrcamento: "servico",
-        detalhesOrcamento: detalhes,
+        detalhesOrcamento: detalhesComComplemento,
+        responsavelOrcamentista: orcamentistaAutenticado,
         identificador,
       });
       setPecas([emptyPeca()]);
@@ -669,6 +773,8 @@ const OrcamentoFormDialog = ({
     setForm({
       ...emptyForm,
       dataOrcamento: toDateTimeLocalValue(),
+      detalhesOrcamento: adicionarComplementoPadraoDetalhamento(),
+      responsavelOrcamentista: orcamentistaAutenticado,
     });
     setNumeroPrevisto("");
     setPecas([emptyPeca()]);
@@ -680,7 +786,7 @@ const OrcamentoFormDialog = ({
     setValorDeslocamento(0);
     setIncluirDespesasViagem(false);
     setValorDespesasViagem(0);
-  }, [open, fromOS, mode, orcamento]);
+  }, [open, fromOS, mode, orcamento, orcamentistaAutenticado]);
 
   useEffect(() => {
     if (!open || mode !== "create") return;
@@ -688,6 +794,13 @@ const OrcamentoFormDialog = ({
     let ativo = true;
 
     if (!fromOS?.id) {
+      if (form.origem === "os") {
+        setNumeroPrevisto("");
+        return () => {
+          ativo = false;
+        };
+      }
+
       orcamentosService
         .preverProximoNumero()
         .then((numero) => {
@@ -715,6 +828,8 @@ const OrcamentoFormDialog = ({
         if (!ativo) return;
 
         const detalhes = osCompleta.descricao_servico?.trim() || "";
+        const detalhesComComplemento =
+          adicionarComplementoPadraoDetalhamento(detalhes);
         setNumeroPrevisto(osCompleta.numero);
         setForm((current) => ({
           ...current,
@@ -723,7 +838,7 @@ const OrcamentoFormDialog = ({
           ordemServicoId: osCompleta.id,
           origem: "os",
           tipoOrcamento: "servico",
-          detalhesOrcamento: detalhes,
+          detalhesOrcamento: detalhesComComplemento,
           identificador: montarIdentificadorPorOS(osCompleta),
         }));
         setServicos((current) => [
@@ -752,7 +867,7 @@ const OrcamentoFormDialog = ({
     return () => {
       ativo = false;
     };
-  }, [fromOS?.id, mode, open]);
+  }, [form.origem, fromOS?.id, mode, open]);
 
   const totalPecas = useMemo(
     () =>
@@ -901,6 +1016,14 @@ const OrcamentoFormDialog = ({
   const validar = () => {
     if (!form.empresaId) {
       toast({ title: "Solicitante obrigatorio.", variant: "destructive" });
+      return false;
+    }
+
+    if (form.origem === "os" && !form.ordemServicoId) {
+      toast({
+        title: "Selecione a OS que sera vinculada ao orcamento.",
+        variant: "destructive",
+      });
       return false;
     }
 
@@ -1176,7 +1299,7 @@ const OrcamentoFormDialog = ({
       frete: incluirFrete ? "fob" : form.frete || undefined,
       detalhesOrcamento: form.detalhesOrcamento.trim(),
       responsavelOrcamentista:
-        form.responsavelOrcamentista.trim() || RESPONSAVEL_PADRAO,
+        getOrcamentistaPermitido(form.responsavelOrcamentista),
       dataAprovacao: orcamento?.data_aprovacao || undefined,
       dataReprovacao: orcamento?.data_reprovacao || undefined,
       dataFaturamento: orcamento?.data_faturamento || undefined,
@@ -1214,14 +1337,125 @@ const OrcamentoFormDialog = ({
     }
   };
 
+  const limparDadosDaOrdemServico = () => {
+    setNumeroPrevisto("");
+    setPecas([emptyPeca()]);
+    setServicos([emptyServico()]);
+    setIncluirFrete(false);
+    setValorFrete(0);
+    setServicoRelacao(emptyServicoRelacao());
+    setIncluirDeslocamento(false);
+    setValorDeslocamento(0);
+    setIncluirDespesasViagem(false);
+    setValorDespesasViagem(0);
+  };
+
   const handleEmpresaChange = (label: string) => {
     const empresa = empresas.find(
       (item) => (item.nome || item.nome_fantasia) === label
     );
+
+    const empresaId = empresa?.id || "";
+    const mudouEmpresa = empresaId !== form.empresaId;
+
     setForm((current) => ({
       ...current,
-      empresaId: empresa?.id || "",
+      empresaId,
+      ...(mudouEmpresa && current.origem === "os"
+        ? {
+            equipamentoId: "",
+            ordemServicoId: "",
+            identificador: "",
+            detalhesOrcamento: adicionarComplementoPadraoDetalhamento(),
+          }
+        : {}),
     }));
+
+    if (mudouEmpresa && form.origem === "os") {
+      limparDadosDaOrdemServico();
+    }
+  };
+
+  const handleOrigemChange = (value: OrcamentoOrigem) => {
+    if (!podeSelecionarOrigem || value === form.origem) return;
+
+    setForm((current) => ({
+      ...current,
+      origem: value,
+      equipamentoId: "",
+      ordemServicoId: "",
+      tipoOrcamento: "servico",
+      identificador: "",
+      detalhesOrcamento: adicionarComplementoPadraoDetalhamento(),
+    }));
+    limparDadosDaOrdemServico();
+  };
+
+  const handleOrdemServicoChange = async (ordemServicoId: string) => {
+    if (!podeSelecionarOrigem || !ordemServicoId) return;
+
+    setCarregandoOSOrigem(true);
+
+    try {
+      const osCompleta = await ordensServicoService.buscarPorId(
+        ordemServicoId
+      );
+
+      if (osCompleta.empresa_id !== form.empresaId) {
+        throw new Error("A OS selecionada nao pertence ao solicitante.");
+      }
+
+      if (osCompleta.status_sistema !== "aberta") {
+        throw new Error("A OS selecionada ja foi fechada ou cancelada.");
+      }
+
+      const detalhes = osCompleta.descricao_servico?.trim() || "";
+
+      setNumeroPrevisto(osCompleta.numero);
+      setForm((current) => ({
+        ...current,
+        empresaId: osCompleta.empresa_id,
+        equipamentoId: osCompleta.equipamento_id || "",
+        ordemServicoId: osCompleta.id,
+        origem: "os",
+        tipoOrcamento: "servico",
+        identificador: montarIdentificadorPorOS(osCompleta),
+        detalhesOrcamento:
+          adicionarComplementoPadraoDetalhamento(detalhes),
+      }));
+      setPecas([emptyPeca()]);
+      setServicos([
+        {
+          ...emptyServico(),
+          tipoServicoId: osCompleta.tipo_os_id || "",
+          tipoEquipamentoId:
+            osCompleta.equipamento?.tipo_equipamento?.id || "",
+          descricao: detalhes,
+        },
+      ]);
+      setIncluirFrete(false);
+      setValorFrete(0);
+      setServicoRelacao(emptyServicoRelacao());
+      setIncluirDeslocamento(false);
+      setValorDeslocamento(0);
+      setIncluirDespesasViagem(false);
+      setValorDespesasViagem(0);
+    } catch (error) {
+      setNumeroPrevisto("");
+      setForm((current) => ({
+        ...current,
+        equipamentoId: "",
+        ordemServicoId: "",
+      }));
+      toast({
+        title: "Erro ao carregar a OS",
+        description:
+          error instanceof Error ? error.message : "Erro inesperado.",
+        variant: "destructive",
+      });
+    } finally {
+      setCarregandoOSOrigem(false);
+    }
   };
 
   const title =
@@ -1236,7 +1470,15 @@ const OrcamentoFormDialog = ({
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+      <DialogContent
+        className="sm:max-w-5xl max-h-[90vh] overflow-hidden flex flex-col p-0"
+        onWheelCapture={(event) => {
+          const target = event.target;
+          if (target instanceof HTMLInputElement && target.type === "number") {
+            target.blur();
+          }
+        }}
+      >
         <DialogHeader className="px-6 py-4 border-b">
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
@@ -1293,7 +1535,9 @@ const OrcamentoFormDialog = ({
                   value={
                     orcamento?.numero ||
                     numeroPrevisto ||
-                    "Consultando proximo numero..."
+                    (form.origem === "os"
+                      ? "Selecione uma OS"
+                      : "Consultando proximo numero...")
                   }
                   readOnly
                 />
@@ -1313,17 +1557,28 @@ const OrcamentoFormDialog = ({
                 />
               </div>
               <div className="space-y-2">
-                <Label>Responsavel Orcamentista</Label>
-                <Input
+                <Label>Responsável Orçamentista</Label>
+                <Select
                   value={form.responsavelOrcamentista}
                   disabled={isView}
-                  onChange={(event) =>
+                  onValueChange={(value) =>
                     setForm((current) => ({
                       ...current,
-                      responsavelOrcamentista: event.target.value,
+                      responsavelOrcamentista: value,
                     }))
                   }
-                />
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o orçamentista" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ORCAMENTISTAS.map((orcamentista) => (
+                      <SelectItem key={orcamentista} value={orcamentista}>
+                        {orcamentista}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
@@ -1349,7 +1604,7 @@ const OrcamentoFormDialog = ({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label>Solicitante *</Label>
-                {form.origem === "os" ? (
+                {form.origem === "os" && !podeSelecionarOrigem ? (
                   <Input value={empresaLabel || "Nao informado"} readOnly />
                 ) : (
                   <SearchableSelect
@@ -1358,30 +1613,81 @@ const OrcamentoFormDialog = ({
                     options={empresaOptions}
                     placeholder="Selecione o solicitante"
                     emptyText="Nenhum solicitante encontrado."
+                    disabled={isView}
                   />
                 )}
               </div>
               <div className="space-y-2">
                 <Label>Origem</Label>
-                <Input value={form.origem === "os" ? "OS" : "Avulso"} readOnly />
+                <Select
+                  value={form.origem}
+                  disabled={!podeSelecionarOrigem}
+                  onValueChange={(value) =>
+                    handleOrigemChange(value as OrcamentoOrigem)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="avulso">Avulsa</SelectItem>
+                    <SelectItem value="os">OS</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label>OS vinculada</Label>
-                <Input
-                  value={
-                    fromOS?.numero ||
-                    orcamento?.ordem_servico?.numero ||
-                    (form.ordemServicoId ? form.ordemServicoId : "-")
-                  }
-                  readOnly
-                />
+                {form.origem === "os" && podeSelecionarOrigem ? (
+                  <SearchableSelect
+                    value={form.ordemServicoId}
+                    onValueChange={handleOrdemServicoChange}
+                    options={ordemServicoOptions}
+                    placeholder={
+                      !form.empresaId
+                        ? "Selecione o solicitante primeiro"
+                        : carregandoOrdensAbertas
+                          ? "Carregando OS abertas..."
+                          : "Selecione a OS"
+                    }
+                    emptyText={
+                      erroOrdensAbertas
+                        ? "Nao foi possivel carregar as OS abertas."
+                        : "Nenhuma OS aberta encontrada para este solicitante."
+                    }
+                    disabled={
+                      !form.empresaId ||
+                      carregandoOrdensAbertas ||
+                      carregandoOSOrigem
+                    }
+                  />
+                ) : (
+                  <Input
+                    value={
+                      form.origem === "os"
+                        ? fromOS?.numero ||
+                          orcamento?.ordem_servico?.numero ||
+                          (form.ordemServicoId
+                            ? form.ordemServicoId
+                            : "Nao informada")
+                        : "Nao se aplica"
+                    }
+                    readOnly
+                  />
+                )}
               </div>
             </div>
 
             {form.origem === "os" && (
               <div className="space-y-2">
                 <Label>Equipamento da OS</Label>
-                <Input value={getEquipamentoLabel(fromOS || orcamento)} readOnly />
+                <Input
+                  value={
+                    getEquipamentoLabel(
+                      fromOS || ordemSelecionada || orcamento
+                    ) || "Selecione uma OS"
+                  }
+                  readOnly
+                />
               </div>
             )}
           </section>
@@ -1500,7 +1806,7 @@ const OrcamentoFormDialog = ({
                         type="number"
                         min="0"
                         step="0.01"
-                        value={item.valorUnitario}
+                        value={hideZeroValue(item.valorUnitario)}
                         disabled={isView}
                         onChange={(event) =>
                           updatePeca(index, {
@@ -1694,7 +2000,7 @@ const OrcamentoFormDialog = ({
                         type="number"
                         min="0"
                         step="0.01"
-                        value={valorFrete}
+                        value={hideZeroValue(valorFrete)}
                         disabled={isView}
                         onChange={(event) =>
                           setValorFrete(Number(event.target.value))
@@ -1857,7 +2163,7 @@ const OrcamentoFormDialog = ({
                             type="number"
                             min="0"
                             step="0.01"
-                            value={servicoRelacao.valorUnitario}
+                            value={hideZeroValue(servicoRelacao.valorUnitario)}
                             disabled={isView}
                             onChange={(event) =>
                               setServicoRelacao((current) => ({
@@ -1961,7 +2267,7 @@ const OrcamentoFormDialog = ({
                             type="number"
                             min="0"
                             step="0.01"
-                            value={item.valorUnitario}
+                            value={hideZeroValue(item.valorUnitario)}
                             disabled={isView}
                             onChange={(event) =>
                               updateServico(index, {
@@ -2032,7 +2338,7 @@ const OrcamentoFormDialog = ({
                             type="number"
                             min="0"
                             step="0.01"
-                            value={valorDeslocamento}
+                            value={hideZeroValue(valorDeslocamento)}
                             disabled={isView}
                             onChange={(event) =>
                               setValorDeslocamento(Number(event.target.value))
@@ -2060,7 +2366,7 @@ const OrcamentoFormDialog = ({
                             type="number"
                             min="0"
                             step="0.01"
-                            value={valorDespesasViagem}
+                            value={hideZeroValue(valorDespesasViagem)}
                             disabled={isView}
                             onChange={(event) =>
                               setValorDespesasViagem(Number(event.target.value))
@@ -2139,7 +2445,7 @@ const OrcamentoFormDialog = ({
                   min="0"
                   max={form.descontoTipo === "percentual" ? 100 : undefined}
                   step="0.01"
-                  value={form.descontoValor}
+                  value={hideZeroValue(form.descontoValor)}
                   disabled={isView}
                   onChange={(event) =>
                     setForm((current) => ({
@@ -2242,7 +2548,7 @@ const OrcamentoFormDialog = ({
                       type="number"
                       min="0"
                       step="0.01"
-                      value={form.valorEntrada}
+                      value={hideZeroValue(form.valorEntrada)}
                       disabled={isView}
                       onChange={(event) =>
                         setForm((current) => ({

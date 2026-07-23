@@ -6,6 +6,7 @@ import { formatNumeroCertificadoSegurancaEletrica } from "@/services/segurancaEl
 import { formatDecimalSeguranca } from "@/utils/segurancaEletricaTemplate";
 import type { AssinaturasDocumento } from "@/services/assinaturasService";
 import { PDF_DOCUMENT_BASE_CSS } from "@/utils/pdfDocumentStyles";
+import { setorParaDocumento } from "@/utils/setor";
 
 export const SEGURANCA_ELETRICA_FOOTER =
   "ACI Comercio LTDA - Assistencia Tecnica Hospitalar e Engenharia Clinica - Rua Jose Martins da Silva, 215 - Ceramica - Juiz de Fora - MG - CEP 36.080-370 - PABX: (32) 3221-7944 - E-mail: acicomercio@yahoo.com.br - CNPJ: 71.208.094/0001-37";
@@ -276,7 +277,7 @@ export const buildSegurancaEletricaHtml = (
             ${optionalField("Número de Série:", equipamento?.numero_serie)}
             ${optionalField("Patrimônio:", equipamento?.patrimonio)}
             ${optionalField("TAG:", equipamento?.tag)}
-            ${optionalField("Setor:", equipamento?.setor)}
+            ${optionalField("Setor:", setorParaDocumento(equipamento?.setor))}
             ${optionalField("Classe:", execucao.classe_equipamento)}
             ${optionalField("Parte aplicada:", execucao.tipo_parte_aplicada)}
           </div>

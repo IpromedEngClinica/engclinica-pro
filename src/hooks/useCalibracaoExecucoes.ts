@@ -28,7 +28,7 @@ export const CALIBRACAO_EXECUCOES_DEFAULT_PAGINADO_FILTROS: ListarCalibracaoExec
     validadeAte: undefined,
     page: 1,
     limit: 25,
-    sortBy: "numero_certificado",
+    sortBy: "data_calibracao",
     ascending: false,
   };
 

@@ -174,6 +174,10 @@ export type CalibracaoExecucao = {
   updated_at: string;
   empresa?: EmpresaSupabase | null;
   equipamento?: EquipamentoSupabase | null;
+  ordem_servico?: {
+    id: string;
+    numero: string;
+  } | null;
   tabelas?: CalibracaoExecucaoTabela[];
 };
 
@@ -332,8 +336,13 @@ const selectExecucao = `
   status, numero_revisao, atualizado_apos_finalizacao,
   criterio_conformidade_aplicado, regra_decisao, resultado_geral, os_id,
   pdf_storage_path, pdf_hash, fechado_em, ativo, created_at, updated_at,
+  ordem_servico:ordens_servico (id, numero),
   empresa:empresas (*),
-  equipamento:equipamentos (*, tipo_equipamento:tipos_equipamento (id, nome)),
+  equipamento:equipamentos (
+    *,
+    empresa:empresas (*),
+    tipo_equipamento:tipos_equipamento (id, nome)
+  ),
   tabelas:calibracao_execucao_tabelas (${selectTabela})
 `;
 
@@ -346,21 +355,29 @@ const buscarOrganizacaoAtual = async () => {
   return data as string;
 };
 
-const normalizeExecucao = (execucao: CalibracaoExecucao) => ({
-  ...execucao,
-  tabelas: [...(execucao.tabelas || [])]
-    .sort((a, b) => a.ordem - b.ordem)
-    .map((tabela) => ({
-      ...tabela,
-      pontos: [...(tabela.pontos || [])]
-        .sort((a, b) => a.ordem - b.ordem)
-        .map((ponto) => ({
-          ...ponto,
-          leituras: [...(ponto.leituras || [])].sort((a, b) => a.ordem - b.ordem),
-          componentes: [...(ponto.componentes || [])].sort((a, b) => a.ordem - b.ordem),
-        })),
-    })),
-});
+const normalizeExecucao = (execucao: CalibracaoExecucao): CalibracaoExecucao => {
+  // O cadastro do equipamento e de seu proprietario e a fonte atual dos dados
+  // cadastrais. Os snapshots metrologicos abaixo permanecem historicos.
+  const empresaAtual = execucao.equipamento?.empresa || execucao.empresa || null;
+
+  return {
+    ...execucao,
+    empresa_id: empresaAtual?.id || execucao.empresa_id,
+    empresa: empresaAtual,
+    tabelas: [...(execucao.tabelas || [])]
+      .sort((a, b) => a.ordem - b.ordem)
+      .map((tabela) => ({
+        ...tabela,
+        pontos: [...(tabela.pontos || [])]
+          .sort((a, b) => a.ordem - b.ordem)
+          .map((ponto) => ({
+            ...ponto,
+            leituras: [...(ponto.leituras || [])].sort((a, b) => a.ordem - b.ordem),
+            componentes: [...(ponto.componentes || [])].sort((a, b) => a.ordem - b.ordem),
+          })),
+      })),
+  };
+};
 
 const validarCabecalho = (input: CalibracaoExecucaoFormInput) => {
   if (!input.empresaId) throw new Error("Selecione a empresa.");
@@ -938,7 +955,7 @@ export const calibracaoExecucoesService = {
           : null,
         p_offset: (page - 1) * limit,
         p_limit: limit,
-        p_sort_by: filtros.sortBy || "numero_certificado",
+        p_sort_by: filtros.sortBy || "data_calibracao",
         p_ascending: filtros.ascending ?? false,
       }
     );

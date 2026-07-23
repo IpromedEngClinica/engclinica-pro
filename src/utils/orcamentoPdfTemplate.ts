@@ -4,6 +4,7 @@ import type {
   OrcamentoSupabase,
 } from "@/services/orcamentosService";
 import { PDF_DOCUMENT_BASE_CSS } from "@/utils/pdfDocumentStyles";
+import { setorParaDocumento } from "@/utils/setor";
 
 const EMPTY = "-";
 
@@ -599,7 +600,7 @@ const buildTechnicalSection = (
                 ${buildField("N. S&eacute;rie", orcamento.equipamento?.numero_serie)}
                 ${buildField("Patrim&ocirc;nio", orcamento.equipamento?.patrimonio)}
                 ${buildField("TAG", orcamento.equipamento?.tag)}
-                ${buildField("Setor", orcamento.equipamento?.setor)}
+                ${buildField("Setor", setorParaDocumento(orcamento.equipamento?.setor))}
               </div>
             `
             : ""

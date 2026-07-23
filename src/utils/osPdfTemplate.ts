@@ -2,6 +2,7 @@ import type { EmpresaSupabase } from "@/services/empresasService";
 import type { OrdemServicoSupabase } from "@/services/ordensServicoService";
 import type { AssinaturasDocumento } from "@/services/assinaturasService";
 import { PDF_DOCUMENT_BASE_CSS } from "@/utils/pdfDocumentStyles";
+import { setorParaDocumento } from "@/utils/setor";
 
 export const ORDEM_SERVICO_FOOTER_TEXT =
   "ACI Comercio LTDA - Assistencia Tecnica Hospitalar e Engenharia Clinica - Rua Jose Martins da Silva, 215 - Ceramica - Juiz de Fora - MG Cep 36.080-370 - Pabx 32 3221-7944 - E-mail: acicomercio@yahoo.com.br - CNPJ: 71.208.094/0001-37";
@@ -853,7 +854,7 @@ export const buildOrdemServicoHtml = (
         ${field("N. S&eacute;rie:", os.equipamento?.numero_serie)}
         ${field("Patrim&ocirc;nio:", os.equipamento?.patrimonio)}
         ${field("TAG:", os.equipamento?.tag)}
-        ${field("Setor:", os.equipamento?.setor)}
+        ${setorParaDocumento(os.equipamento?.setor) ? field("Setor:", setorParaDocumento(os.equipamento?.setor)) : ""}
         ${field("Status:", os.equipamento?.status)}
       </div>
     </section>

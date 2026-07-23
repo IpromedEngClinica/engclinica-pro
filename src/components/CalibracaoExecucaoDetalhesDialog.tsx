@@ -29,6 +29,10 @@ import {
 import { formatarIdentificacaoCompletaEquipamento } from "@/utils/equipamentoFormatters";
 import { gerarPdfCalibracaoCertificado } from "@/utils/gerarPdfCalibracaoCertificado";
 import {
+  exibirPdfBlob,
+  prepararJanelaVisualizacaoPdf,
+} from "@/utils/printToPdfRenderer";
+import {
   formatarNumeroComCasas,
   formatDecimalPtBr,
   obterCasasResolucaoEquipamento,
@@ -101,6 +105,7 @@ const CalibracaoExecucaoDetalhesDialog = ({
 }: Props) => {
   const [revisoes, setRevisoes] = useState<CalibracaoExecucaoRevisao[]>([]);
   const [carregandoRevisoes, setCarregandoRevisoes] = useState(false);
+  const [gerandoPdf, setGerandoPdf] = useState(false);
 
   useEffect(() => {
     if (!open || !execucao?.id) {
@@ -135,20 +140,25 @@ const CalibracaoExecucaoDetalhesDialog = ({
   if (!execucao) return null;
 
   const editavel = execucao.status !== "cancelada";
-  const gerarPdf = () => gerarPdfCalibracaoCertificado(execucao);
   const abrirPdf = async (download = false) => {
+    if (gerandoPdf) return;
+
+    const previewWindow = download ? null : prepararJanelaVisualizacaoPdf();
+    setGerandoPdf(true);
     try {
-      window.open(
-        await calibracaoExecucoesService.criarUrlPdf(execucao, download),
-        "_blank",
-        "noopener,noreferrer"
-      );
+      const execucaoAtual =
+        await calibracaoExecucoesService.buscarExecucaoPorId(execucao.id);
+      const pdf = await gerarPdfCalibracaoCertificado(execucaoAtual, download);
+      if (!download) exibirPdfBlob(pdf, previewWindow);
     } catch (error) {
+      previewWindow?.close();
       toast({
         title: "Erro ao abrir certificado",
         description: error instanceof Error ? error.message : "Erro inesperado.",
         variant: "destructive",
       });
+    } finally {
+      setGerandoPdf(false);
     }
   };
   const editar = () => {
@@ -183,23 +193,23 @@ const CalibracaoExecucaoDetalhesDialog = ({
               <Pencil className="mr-2 h-4 w-4" /> Editar
             </Button>
           )}
-          {!execucao.pdf_storage_path ? (
-            <Button size="sm" variant="outline" onClick={gerarPdf}>
-              <FileText className="mr-2 h-4 w-4" /> Gerar PDF
-            </Button>
-          ) : (
-            <>
-              <Button size="sm" variant="outline" onClick={() => abrirPdf()}>
-                <FileText className="mr-2 h-4 w-4" /> Visualizar PDF
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => abrirPdf(true)}>
-                <Download className="mr-2 h-4 w-4" /> Baixar PDF
-              </Button>
-              <Button size="sm" variant="outline" onClick={gerarPdf}>
-                <FileText className="mr-2 h-4 w-4" /> Regenerar PDF
-              </Button>
-            </>
-          )}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => abrirPdf()}
+            disabled={gerandoPdf}
+          >
+            <FileText className="mr-2 h-4 w-4" />
+            {gerandoPdf ? "Atualizando PDF..." : "Visualizar PDF"}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => abrirPdf(true)}
+            disabled={gerandoPdf}
+          >
+            <Download className="mr-2 h-4 w-4" /> Baixar PDF
+          </Button>
           {["rascunho", "em_execucao"].includes(execucao.status) &&
             onCancelar && (
               <Button
@@ -220,7 +230,16 @@ const CalibracaoExecucaoDetalhesDialog = ({
               <Field label="Status" value={resultado(execucao.status)} />
               <Field label="Procedimento" value={execucao.procedimento_nome_snapshot} />
               <Field label="Versao do procedimento" value={execucao.procedimento_versao_snapshot} />
-              <Field label="OS vinculada" value={execucao.os_id} />
+              <Field
+                label="OS vinculada"
+                value={
+                  execucao.ordem_servico?.numero
+                    ? `OS ${execucao.ordem_servico.numero}`
+                    : execucao.os_id
+                      ? "OS vinculada"
+                      : null
+                }
+              />
             </Grid>
           </Section>
 
