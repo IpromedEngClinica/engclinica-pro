@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { matchesSearchableFilter } from "@/utils/searchableFilter";
 
 type SearchableSelectOption =
   | string
@@ -48,20 +49,11 @@ const SearchableSelect = ({
             .join(" "),
         }
   );
-  const normalize = (text: string) =>
-    text
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[.\-/]/g, "")
-      .toLowerCase()
-      .trim();
   const selectedOption = normalizedOptions.find((option) => option.value === value);
-  const searchTerms = normalize(query).split(/\s+/).filter(Boolean);
-  const filteredOptions = searchTerms.length
-    ? normalizedOptions.filter((option) => {
-        const searchable = normalize(option.searchText);
-        return searchTerms.every((term) => searchable.includes(term));
-      })
+  const filteredOptions = query.trim()
+    ? normalizedOptions.filter((option) =>
+        matchesSearchableFilter(option.searchText, query)
+      )
     : normalizedOptions;
 
   useEffect(() => {

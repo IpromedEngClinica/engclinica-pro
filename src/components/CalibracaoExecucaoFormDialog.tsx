@@ -2,6 +2,7 @@ import { AlertCircle, Loader2, Save } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import CalibracaoExecucaoTabelaEditor from "@/components/CalibracaoExecucaoTabelaEditor";
+import SearchableSelect from "@/components/SearchableSelect";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -120,6 +121,65 @@ const CalibracaoExecucaoFormDialog = ({
     (tabela) =>
       Boolean(tabela.padraoId) &&
       !padroes.some((padrao) => padrao.id === tabela.padraoId)
+  );
+  const empresasOptions = useMemo(
+    () =>
+      [...empresas]
+        .sort((a, b) =>
+          (a.nome || a.nome_fantasia || "").localeCompare(
+            b.nome || b.nome_fantasia || "",
+            "pt-BR"
+          )
+        )
+        .map((item) => ({
+          value: item.id,
+          label: item.nome || item.nome_fantasia || "Cliente sem nome",
+          searchText: [
+            item.nome,
+            item.nome_fantasia,
+            item.cpf_cnpj,
+            item.cidade,
+            item.estado,
+            item.contato,
+            item.email,
+            item.celular,
+            item.telefone,
+          ]
+            .filter(Boolean)
+            .join(" "),
+        })),
+    [empresas]
+  );
+  const equipamentosOptions = useMemo(
+    () =>
+      [...equipamentos]
+        .map((item) => {
+          const label = [
+            item.tipo_equipamento?.nome || item.tipo_texto,
+            item.modelo,
+            item.numero_serie || item.tag || item.patrimonio,
+          ]
+            .filter(Boolean)
+            .join(" - ");
+
+          return {
+            value: item.id,
+            label: label || "Equipamento sem identificação",
+            searchText: [
+              item.tipo_equipamento?.nome,
+              item.tipo_texto,
+              item.fabricante,
+              item.modelo,
+              item.numero_serie,
+              item.patrimonio,
+              item.tag,
+            ]
+              .filter(Boolean)
+              .join(" "),
+          };
+        })
+        .sort((a, b) => a.label.localeCompare(b.label, "pt-BR")),
+    [equipamentos]
   );
 
   const procedimentosCompativeis = useMemo(() =>
@@ -336,8 +396,31 @@ const CalibracaoExecucaoFormDialog = ({
       <div className="space-y-3 p-3 sm:p-4">
         <div className="grid gap-3 xl:grid-cols-2">
           <Card><Header title="1. Identificacao" /><CardContent className="grid gap-3 p-3 md:grid-cols-2">
-            <SelectField label="Empresa *" value={form.empresaId} onChange={selecionarEmpresa} options={empresas.map((item) => [item.id, item.nome || item.nome_fantasia])} />
-            <SelectField label="Equipamento *" value={form.equipamentoId} onChange={selecionarEquipamento} options={equipamentos.map((item) => [item.id, [item.tipo_equipamento?.nome || item.tipo_texto, item.modelo, item.numero_serie || item.tag || item.patrimonio].filter(Boolean).join(" - ")])} />
+            <div className="space-y-1">
+              <Label className="text-xs">Empresa *</Label>
+              <SearchableSelect
+                value={form.empresaId}
+                onValueChange={selecionarEmpresa}
+                options={empresasOptions}
+                placeholder="Selecione o cliente"
+                emptyText="Nenhum cliente encontrado."
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Equipamento *</Label>
+              <SearchableSelect
+                value={form.equipamentoId}
+                onValueChange={selecionarEquipamento}
+                options={equipamentosOptions}
+                placeholder={
+                  form.empresaId
+                    ? "Selecione o equipamento"
+                    : "Selecione um cliente primeiro"
+                }
+                emptyText="Nenhum equipamento encontrado."
+                disabled={!form.empresaId}
+              />
+            </div>
             <SelectField label="Procedimento *" value={form.procedimentoId} onChange={selecionarProcedimento} options={procedimentosCompativeis.map((item) => [item.id, item.nome])} />
             {form.equipamentoId && procedimentosCompativeis.length === 0 && <div className="flex gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 md:col-span-2"><AlertCircle className="h-4 w-4 shrink-0" /><div><p>Nenhum procedimento de calibração cadastrado para este tipo de equipamento.</p><Button type="button" variant="link" className="h-auto p-0 text-amber-900" onClick={() => navigate("/calibracao/procedimentos")}>Cadastrar procedimento</Button></div></div>}
             <Area label="Observacoes" value={form.observacoes} onChange={(value) => update("observacoes", value)} />
