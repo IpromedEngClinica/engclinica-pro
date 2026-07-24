@@ -2,6 +2,7 @@ import chromium from "@sparticuz/chromium";
 import puppeteer, { type Browser } from "puppeteer-core";
 
 const MAX_PDF_PAYLOAD_BYTES = 4 * 1024 * 1024;
+const ASSET_READY_TIMEOUT_MS = 5_000;
 
 type PdfRenderPayload = {
   html?: string;
@@ -120,6 +121,30 @@ const getBrowser = () => {
   });
 };
 
+const waitForEmbeddedAssets = async (page: Awaited<ReturnType<Browser["newPage"]>>) => {
+  await page.evaluate(async (timeoutMs) => {
+    const waitForImage = (image: HTMLImageElement) => {
+      if (image.complete) return Promise.resolve();
+
+      return new Promise<void>((resolve) => {
+        const finish = () => resolve();
+        image.addEventListener("load", finish, { once: true });
+        image.addEventListener("error", finish, { once: true });
+      });
+    };
+
+    const assetsReady = Promise.all([
+      document.fonts?.ready || Promise.resolve(),
+      ...Array.from(document.images).map(waitForImage),
+    ]);
+    const timeout = new Promise<void>((resolve) => {
+      window.setTimeout(resolve, timeoutMs);
+    });
+
+    await Promise.race([assetsReady, timeout]);
+  }, ASSET_READY_TIMEOUT_MS);
+};
+
 const isAuthenticated = async (request: Request) => {
   const authorization = request.headers.get("authorization");
   const supabaseUrl = process.env.VITE_SUPABASE_URL;
@@ -171,6 +196,8 @@ export async function POST(request: Request) {
 
   const landscape = payload.orientation === "l";
   const footerEnabled = Boolean(payload.footerText);
+  const startedAt = Date.now();
+  const htmlSizeBytes = Buffer.byteLength(payload.html, "utf8");
   const browser = await getBrowser();
   const page = await browser.newPage();
 
@@ -181,10 +208,10 @@ export async function POST(request: Request) {
       deviceScaleFactor: 1,
     });
     await page.setContent(payload.html, {
-      waitUntil: "load",
-      timeout: 30_000,
+      waitUntil: "domcontentloaded",
+      timeout: 15_000,
     });
-    await page.waitForNetworkIdle({ idleTime: 500, timeout: 30_000 });
+    await waitForEmbeddedAssets(page);
     await page.emulateMediaType("print");
     await page.addStyleTag({
       content: buildPdfPrintOverrides({
@@ -205,7 +232,7 @@ export async function POST(request: Request) {
         payload.footerText,
         payload.footerFontSizePx
       ),
-      timeout: 45_000,
+      timeout: 90_000,
     });
 
     const fileName = (payload.fileName || "documento.pdf").replace(
@@ -222,6 +249,13 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
+    console.error("[PDF] Falha ao renderizar documento.", {
+      fileName: payload.fileName || "documento.pdf",
+      htmlSizeBytes,
+      elapsedMs: Date.now() - startedAt,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
     return jsonResponse(
       500,
       error instanceof Error
