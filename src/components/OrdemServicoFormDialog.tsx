@@ -109,14 +109,14 @@ const normalizarChaveAcessorio = (descricao: string) =>
 
 type AcessorioFormItem = {
   descricao: string;
-  quantidade: number;
+  quantidade: number | "";
   observacoes: string;
 };
 
 const dedupeAcessoriosForm = (
   acessorios?: Array<{
     descricao?: string | null;
-    quantidade?: number | null;
+    quantidade?: number | string | null;
     observacoes?: string | null;
   }>
 ) => {
@@ -129,9 +129,12 @@ const dedupeAcessoriosForm = (
     const chave = normalizarChaveAcessorio(descricao);
 
     if (!map.has(chave)) {
+      const quantidade = Number(item.quantidade || 1);
+
       map.set(chave, {
         descricao,
-        quantidade: Number(item.quantidade || 1),
+        quantidade:
+          Number.isFinite(quantidade) && quantidade > 0 ? quantidade : 1,
         observacoes: item.observacoes || "",
       });
     }
@@ -422,6 +425,26 @@ const OrdemServicoFormDialog = ({
 
   const handleRemoveAcessorio = (i: number) => {
     setAcessorios((prev) => prev.filter((_, idx) => idx !== i));
+  };
+
+  const handleQuantidadeAcessorio = (i: number, value: string) => {
+    if (value === "") {
+      setAcessorios((prev) =>
+        prev.map((item, idx) =>
+          idx === i ? { ...item, quantidade: "" } : item
+        )
+      );
+      return;
+    }
+
+    const parsed = Number.parseInt(value, 10);
+    const quantidade = Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+
+    setAcessorios((prev) =>
+      prev.map((item, idx) =>
+        idx === i ? { ...item, quantidade } : item
+      )
+    );
   };
 
   const handleSave = async (gerarPdfDepois = false) => {
@@ -793,23 +816,56 @@ const OrdemServicoFormDialog = ({
                     key={`${a.descricao}-${i}`}
                     className="flex items-center justify-between gap-3 px-3 py-2"
                   >
-                    <span className="min-w-0 text-sm">
-                      <span className="font-medium">{a.descricao}</span>
-                      <span className="ml-2 text-muted-foreground">
-                        Qtd. {a.quantidade}
-                      </span>
+                    <span className="min-w-0 flex-1 text-sm font-medium">
+                      {a.descricao}
                     </span>
 
-                    {!readOnly && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleRemoveAcessorio(i)}
-                        className="text-muted-foreground hover:text-destructive"
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
+                    {readOnly ? (
+                      <span className="shrink-0 text-sm text-muted-foreground">
+                        Qtd. {a.quantidade}
+                      </span>
+                    ) : (
+                      <>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <Label
+                            htmlFor={`acessorio-quantidade-${i}`}
+                            className="text-xs text-muted-foreground"
+                          >
+                            Quantidade
+                          </Label>
+                          <Input
+                            id={`acessorio-quantidade-${i}`}
+                            type="number"
+                            min={1}
+                            step={1}
+                            value={a.quantidade}
+                            onChange={(e) =>
+                              handleQuantidadeAcessorio(i, e.target.value)
+                            }
+                            onBlur={(e) => {
+                              if (!e.currentTarget.value) {
+                                handleQuantidadeAcessorio(i, "1");
+                              }
+                            }}
+                            onFocus={(e) => e.currentTarget.select()}
+                            onWheel={(e) => e.currentTarget.blur()}
+                            disabled={busy}
+                            className="h-8 w-20 px-2 text-center"
+                          />
+                        </div>
+
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleRemoveAcessorio(i)}
+                          disabled={busy}
+                          className="shrink-0 text-muted-foreground hover:text-destructive"
+                          aria-label={`Remover acessório ${a.descricao}`}
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </>
                     )}
                   </li>
                 ))}
