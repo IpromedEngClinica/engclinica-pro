@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { PackageCheck } from "lucide-react";
+import { FileText, PackageCheck } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -25,6 +25,7 @@ import {
   OrdemServicoAcessorioSupabase,
   OrdemServicoSupabase,
 } from "@/services/ordensServicoService";
+import { gerarPdfProtocolo } from "@/utils/gerarPdfProtocolo";
 
 interface ProtocoloEntregaDialogProps {
   open: boolean;
@@ -109,8 +110,10 @@ const ProtocoloEntregaDialog = ({
     useState<EstadoDestinoEntrega>("fechada");
   const [observacoes, setObservacoes] = useState("");
   const [acessorios, setAcessorios] = useState<AcessorioEntrega[]>([]);
+  const [gerandoPdfAposSalvar, setGerandoPdfAposSalvar] = useState(false);
 
   const saving = criarEntrega.isPending;
+  const busy = saving || gerandoPdfAposSalvar;
 
   useEffect(() => {
     if (!open) return;
@@ -133,7 +136,7 @@ const ProtocoloEntregaDialog = ({
     );
   };
 
-  const handleSave = async () => {
+  const handleSave = async (gerarPdfDepois = false) => {
     if (!os) {
       toast({
         title: "Selecione uma OS.",
@@ -159,7 +162,7 @@ const ProtocoloEntregaDialog = ({
     }
 
     try {
-      await criarEntrega.mutateAsync({
+      const protocoloCriado = await criarEntrega.mutateAsync({
         ordemServicoId: os.id,
         empresaId: os.empresa_id,
         equipamentoId: os.equipamento_id,
@@ -185,6 +188,26 @@ const ProtocoloEntregaDialog = ({
             ? "Protocolo de entrega criado e OS fechada com sucesso."
             : "Protocolo de entrega criado e OS liberada para entrega.",
       });
+
+      if (gerarPdfDepois) {
+        setGerandoPdfAposSalvar(true);
+
+        try {
+          await gerarPdfProtocolo(protocoloCriado);
+        } catch (pdfError) {
+          toast({
+            title: "Protocolo salvo, mas o PDF não foi gerado",
+            description:
+              pdfError instanceof Error
+                ? pdfError.message
+                : "Tente gerar o PDF pela visualização do protocolo.",
+            variant: "destructive",
+          });
+        } finally {
+          setGerandoPdfAposSalvar(false);
+        }
+      }
+
       onOpenChange(false);
     } catch (error) {
       const message =
@@ -235,7 +258,7 @@ const ProtocoloEntregaDialog = ({
                   type="datetime-local"
                   value={dataEntrega}
                   onChange={(e) => setDataEntrega(e.target.value)}
-                  disabled={saving}
+                  disabled={busy}
                 />
               </div>
 
@@ -245,7 +268,7 @@ const ProtocoloEntregaDialog = ({
                   placeholder="Nome do responsável"
                   value={responsavelNome}
                   onChange={(e) => setResponsavelNome(e.target.value)}
-                  disabled={saving}
+                  disabled={busy}
                 />
               </div>
 
@@ -255,7 +278,7 @@ const ProtocoloEntregaDialog = ({
                   placeholder="CPF/RG, se necessário"
                   value={responsavelDocumento}
                   onChange={(e) => setResponsavelDocumento(e.target.value)}
-                  disabled={saving}
+                  disabled={busy}
                 />
               </div>
 
@@ -265,7 +288,7 @@ const ProtocoloEntregaDialog = ({
                   placeholder="Telefone, e-mail ou setor"
                   value={responsavelContato}
                   onChange={(e) => setResponsavelContato(e.target.value)}
-                  disabled={saving}
+                  disabled={busy}
                 />
               </div>
 
@@ -276,7 +299,7 @@ const ProtocoloEntregaDialog = ({
                   onValueChange={(value) =>
                     setEstadoDestino(value as EstadoDestinoEntrega)
                   }
-                  disabled={saving}
+                  disabled={busy}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -298,7 +321,7 @@ const ProtocoloEntregaDialog = ({
                 rows={4}
                 value={observacoes}
                 onChange={(e) => setObservacoes(e.target.value)}
-                disabled={saving}
+                disabled={busy}
               />
             </div>
           </div>
@@ -333,7 +356,7 @@ const ProtocoloEntregaDialog = ({
                               conferido: checked === true,
                             })
                           }
-                          disabled={saving}
+                          disabled={busy}
                         />
                         <span>
                           <span className="font-medium">{item.descricao}</span>
@@ -351,7 +374,7 @@ const ProtocoloEntregaDialog = ({
                             observacoes: e.target.value,
                           })
                         }
-                        disabled={saving}
+                        disabled={busy}
                       />
                     </div>
                   );
@@ -373,13 +396,33 @@ const ProtocoloEntregaDialog = ({
 
         <DialogFooter className="px-6 pb-6 pt-2 border-t">
           <Button
+            type="button"
             variant="outline"
             onClick={() => onOpenChange(false)}
-            disabled={saving}
+            disabled={busy}
           >
             Cancelar
           </Button>
-          <Button onClick={handleSave} disabled={saving}>
+
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => handleSave(true)}
+            disabled={busy}
+          >
+            <FileText className="mr-2 h-4 w-4" />
+            {gerandoPdfAposSalvar
+              ? "Gerando PDF..."
+              : saving
+                ? "Salvando..."
+                : "Salvar e gerar PDF"}
+          </Button>
+
+          <Button
+            type="button"
+            onClick={() => handleSave(false)}
+            disabled={busy}
+          >
             {saving ? "Salvando..." : "Salvar Protocolo"}
           </Button>
         </DialogFooter>

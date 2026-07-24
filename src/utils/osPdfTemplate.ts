@@ -356,7 +356,7 @@ export const buildOrdemServicoHtml = (
       background: #fff;
       color: var(--ink);
       font-family: Inter, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      font-size: 10.8px;
+      font-size: 16.2px;
       line-height: 1.22;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
@@ -393,7 +393,7 @@ export const buildOrdemServicoHtml = (
     .header-title h1 {
       margin: 0 0 5px;
       color: var(--ink);
-      font-size: 19px;
+      font-size: 28.5px;
       line-height: 1.05;
       font-weight: 750;
       letter-spacing: -0.2px;
@@ -402,7 +402,7 @@ export const buildOrdemServicoHtml = (
     .header-title p {
       margin: 0;
       color: var(--muted);
-      font-size: 10.5px;
+      font-size: 15.75px;
       line-height: 1.25;
     }
 
@@ -425,7 +425,7 @@ export const buildOrdemServicoHtml = (
     .section-title strong {
       display: block;
       color: var(--ink);
-      font-size: 14px;
+      font-size: 21px;
       line-height: 1;
       font-weight: 750;
       letter-spacing: -0.1px;
@@ -472,7 +472,7 @@ export const buildOrdemServicoHtml = (
       border-radius: 999px;
       background: #f0f2f4;
       color: #3f454b;
-      font-size: 9.8px;
+      font-size: 14.7px;
       font-weight: 650;
     }
 
@@ -498,9 +498,14 @@ export const buildOrdemServicoHtml = (
       color: var(--value);
     }
 
-    .checklist-section {
-      break-inside: auto;
-      page-break-inside: auto;
+    section.checklist-section {
+      break-inside: auto !important;
+      page-break-inside: auto !important;
+    }
+
+    section.checklist-section table.check-table {
+      break-inside: auto !important;
+      page-break-inside: auto !important;
     }
 
     .checklist-meta {
@@ -514,7 +519,7 @@ export const buildOrdemServicoHtml = (
 
     .checklist-meta strong {
       display: block;
-      font-size: 11.5px;
+      font-size: 17.25px;
       font-weight: 750;
     }
 
@@ -522,7 +527,7 @@ export const buildOrdemServicoHtml = (
       display: block;
       margin-top: 2px;
       color: var(--muted);
-      font-size: 9.5px;
+      font-size: 14.25px;
       font-weight: 600;
     }
 
@@ -532,7 +537,7 @@ export const buildOrdemServicoHtml = (
       justify-content: flex-end;
       gap: 6px;
       color: var(--muted);
-      font-size: 9px;
+      font-size: 13.5px;
       font-weight: 650;
     }
 
@@ -548,7 +553,7 @@ export const buildOrdemServicoHtml = (
       margin: 0 auto;
       border-collapse: collapse;
       border: 1px solid var(--line);
-      font-size: 10.2px;
+      font-size: 15.3px;
       page-break-inside: auto;
     }
 
@@ -569,7 +574,7 @@ export const buildOrdemServicoHtml = (
       border: 1px solid var(--line);
       background: var(--soft);
       color: var(--ink);
-      font-size: 9px;
+      font-size: 13.5px;
       font-weight: 750;
       text-align: center;
       text-transform: uppercase;
@@ -616,7 +621,7 @@ export const buildOrdemServicoHtml = (
       min-width: 0;
       padding: 2px 8px;
       border-radius: 999px;
-      font-size: 9.2px;
+      font-size: 13.8px;
       line-height: 1.05;
       font-weight: 700;
     }
@@ -692,7 +697,7 @@ export const buildOrdemServicoHtml = (
     .check-summary span {
       display: block;
       color: var(--muted);
-      font-size: 7.5px;
+      font-size: 11.25px;
       font-weight: 750;
       text-transform: uppercase;
     }
@@ -700,7 +705,7 @@ export const buildOrdemServicoHtml = (
     .check-summary strong {
       display: block;
       margin-top: 2px;
-      font-size: 10.5px;
+      font-size: 15.75px;
       font-weight: 750;
     }
 
@@ -718,7 +723,7 @@ export const buildOrdemServicoHtml = (
       display: block;
       margin-bottom: 3px;
       color: var(--muted);
-      font-size: 7.5px;
+      font-size: 11.25px;
       font-weight: 750;
       text-transform: uppercase;
     }
@@ -753,7 +758,7 @@ export const buildOrdemServicoHtml = (
     .signature-block {
       min-height: 58px;
       text-align: center;
-      font-size: 9.8px;
+      font-size: 14.7px;
       color: var(--ink);
     }
 
@@ -793,7 +798,7 @@ export const buildOrdemServicoHtml = (
     .date-block {
       min-height: 58px;
       text-align: center;
-      font-size: 9.8px;
+      font-size: 14.7px;
       color: var(--ink);
     }
 
@@ -803,7 +808,7 @@ export const buildOrdemServicoHtml = (
       justify-content: center;
       gap: 3px;
       height: 1px;
-      font-size: 10px;
+      font-size: 15px;
       white-space: nowrap;
     }
 

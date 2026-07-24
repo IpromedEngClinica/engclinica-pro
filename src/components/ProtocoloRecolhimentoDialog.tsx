@@ -10,10 +10,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, X } from "lucide-react";
+import { FileText, Plus, X } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { EquipamentoSupabase } from "@/services/equipamentosService";
 import { useCriarRecolhimentoComOS } from "@/hooks/useProtocolos";
+import { gerarPdfProtocolo } from "@/utils/gerarPdfProtocolo";
 
 interface ProtocoloRecolhimentoDialogProps {
   open: boolean;
@@ -62,8 +63,10 @@ const ProtocoloRecolhimentoDialog = ({
   const [observacoes, setObservacoes] = useState("");
   const [acessorios, setAcessorios] = useState<string[]>([]);
   const [novoAcessorio, setNovoAcessorio] = useState("");
+  const [gerandoPdfAposSalvar, setGerandoPdfAposSalvar] = useState(false);
 
   const saving = criarRecolhimento.isPending;
+  const busy = saving || gerandoPdfAposSalvar;
 
   useEffect(() => {
     if (!open) return;
@@ -103,7 +106,7 @@ const ProtocoloRecolhimentoDialog = ({
     setAcessorios((prev) => prev.filter((_, idx) => idx !== index));
   };
 
-  const handleSave = async () => {
+  const handleSave = async (gerarPdfDepois = false) => {
     if (!equipamento) {
       toast({
         title: "Selecione um equipamento.",
@@ -121,7 +124,7 @@ const ProtocoloRecolhimentoDialog = ({
     }
 
     try {
-      await criarRecolhimento.mutateAsync({
+      const protocoloCriado = await criarRecolhimento.mutateAsync({
         equipamentoId: equipamento.id,
         empresaId: equipamento.empresa_id,
         dataRecolhimento: dataRecolhimento
@@ -143,6 +146,26 @@ const ProtocoloRecolhimentoDialog = ({
       toast({
         title: "Protocolo de recolhimento criado e OS aberta com sucesso.",
       });
+
+      if (gerarPdfDepois) {
+        setGerandoPdfAposSalvar(true);
+
+        try {
+          await gerarPdfProtocolo(protocoloCriado);
+        } catch (pdfError) {
+          toast({
+            title: "Protocolo salvo, mas o PDF não foi gerado",
+            description:
+              pdfError instanceof Error
+                ? pdfError.message
+                : "Tente gerar o PDF pela visualização do protocolo.",
+            variant: "destructive",
+          });
+        } finally {
+          setGerandoPdfAposSalvar(false);
+        }
+      }
+
       onOpenChange(false);
     } catch (error) {
       const message =
@@ -199,7 +222,7 @@ const ProtocoloRecolhimentoDialog = ({
                   type="datetime-local"
                   value={dataRecolhimento}
                   onChange={(e) => setDataRecolhimento(e.target.value)}
-                  disabled={saving}
+                  disabled={busy}
                 />
               </div>
 
@@ -209,7 +232,7 @@ const ProtocoloRecolhimentoDialog = ({
                   placeholder="Nome do responsável"
                   value={responsavelNome}
                   onChange={(e) => setResponsavelNome(e.target.value)}
-                  disabled={saving}
+                  disabled={busy}
                 />
               </div>
 
@@ -219,7 +242,7 @@ const ProtocoloRecolhimentoDialog = ({
                   placeholder="CPF/RG, se necessário"
                   value={responsavelDocumento}
                   onChange={(e) => setResponsavelDocumento(e.target.value)}
-                  disabled={saving}
+                  disabled={busy}
                 />
               </div>
 
@@ -229,7 +252,7 @@ const ProtocoloRecolhimentoDialog = ({
                   placeholder="Telefone, e-mail ou setor"
                   value={responsavelContato}
                   onChange={(e) => setResponsavelContato(e.target.value)}
-                  disabled={saving}
+                  disabled={busy}
                 />
               </div>
             </div>
@@ -241,7 +264,7 @@ const ProtocoloRecolhimentoDialog = ({
                 rows={4}
                 value={problemaRelatado}
                 onChange={(e) => setProblemaRelatado(e.target.value)}
-                disabled={saving}
+                disabled={busy}
               />
             </div>
 
@@ -252,7 +275,7 @@ const ProtocoloRecolhimentoDialog = ({
                 rows={4}
                 value={observacoes}
                 onChange={(e) => setObservacoes(e.target.value)}
-                disabled={saving}
+                disabled={busy}
               />
             </div>
           </div>
@@ -273,12 +296,12 @@ const ProtocoloRecolhimentoDialog = ({
                     handleAddAcessorio();
                   }
                 }}
-                disabled={saving}
+                disabled={busy}
               />
               <Button
                 type="button"
                 onClick={handleAddAcessorio}
-                disabled={saving}
+                disabled={busy}
               >
                 <Plus className="w-4 h-4 mr-2" /> Adicionar
               </Button>
@@ -298,7 +321,7 @@ const ProtocoloRecolhimentoDialog = ({
                       size="icon"
                       onClick={() => handleRemoveAcessorio(index)}
                       className="text-muted-foreground hover:text-destructive"
-                      disabled={saving}
+                      disabled={busy}
                     >
                       <X className="w-4 h-4" />
                     </Button>
@@ -320,13 +343,33 @@ const ProtocoloRecolhimentoDialog = ({
 
         <DialogFooter className="px-6 pb-6 pt-2 border-t">
           <Button
+            type="button"
             variant="outline"
             onClick={() => onOpenChange(false)}
-            disabled={saving}
+            disabled={busy}
           >
             Cancelar
           </Button>
-          <Button onClick={handleSave} disabled={saving}>
+
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => handleSave(true)}
+            disabled={busy}
+          >
+            <FileText className="mr-2 h-4 w-4" />
+            {gerandoPdfAposSalvar
+              ? "Gerando PDF..."
+              : saving
+                ? "Salvando..."
+                : "Salvar e gerar PDF"}
+          </Button>
+
+          <Button
+            type="button"
+            onClick={() => handleSave(false)}
+            disabled={busy}
+          >
             {saving ? "Salvando..." : "Salvar Protocolo"}
           </Button>
         </DialogFooter>
