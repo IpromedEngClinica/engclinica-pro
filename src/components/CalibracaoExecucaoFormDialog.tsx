@@ -20,6 +20,7 @@ import {
 import { useCalibracaoPadroesValidos, useCalibracaoProcedimentos } from "@/hooks/useCalibracaoProcedimentos";
 import { useEmpresas } from "@/hooks/useEmpresas";
 import { useEquipamentos } from "@/hooks/useEquipamentos";
+import { useTecnicosExecutores } from "@/hooks/useTecnicosExecutores";
 import { toast } from "@/hooks/use-toast";
 import {
   criarTabelasExecucaoDoProcedimento,
@@ -75,12 +76,12 @@ const hoje = () => {
   return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, "0")}-${String(data.getDate()).padStart(2, "0")}`;
 };
 
-const vazio = (tecnico = "") => ({
+const vazio = (tecnico = "", tecnicoUsuarioId = "") => ({
   empresaId: "", equipamentoId: "", procedimentoId: "",
   local: "dependencias_contratada", temperatura: "21,0", incertezaTemperatura: "0,5",
   umidade: "50", incertezaUmidade: "5", pressao: "", incertezaPressao: "",
   observacoes: "", dataCalibracao: hoje(), dataEmissao: hoje(),
-  validadeMes: mesValidadeAposMeses(new Date()), tecnico, registroTecnico: "",
+  validadeMes: mesValidadeAposMeses(new Date()), tecnico, tecnicoUsuarioId, registroTecnico: "",
   solicitante: "", criterioPadraoCliente: false,
 });
 
@@ -108,6 +109,7 @@ const CalibracaoExecucaoFormDialog = ({
   );
   const { data: procedimentos = [] } = useCalibracaoProcedimentos();
   const { data: padroes = [] } = useCalibracaoPadroesValidos(form.dataCalibracao);
+  const { data: tecnicos = [] } = useTecnicosExecutores();
   const criar = useSalvarCalibracaoFinalizada();
   const atualizar = useEditarCalibracaoFinalizada();
   const criarRascunho = useCriarCalibracaoExecucao();
@@ -181,6 +183,15 @@ const CalibracaoExecucaoFormDialog = ({
         .sort((a, b) => a.label.localeCompare(b.label, "pt-BR")),
     [equipamentos]
   );
+  const tecnicosOptions = useMemo(
+    () =>
+      tecnicos.map((tecnico) => ({
+        value: tecnico.id,
+        label: tecnico.nome,
+        searchText: tecnico.nome,
+      })),
+    [tecnicos]
+  );
 
   const procedimentosCompativeis = useMemo(() =>
     [...procedimentos]
@@ -199,7 +210,7 @@ const CalibracaoExecucaoFormDialog = ({
         ? procedimentos.find((item) => item.id === procedimentoInicialId)
         : null;
       setForm({
-        ...vazio(usuario?.nome || ""),
+        ...vazio(usuario?.nome || "", usuario?.id || ""),
         empresaId: empresaInicialId || "",
         equipamentoId: equipamentoInicialId || "",
         procedimentoId: procedimentoInicial?.id || "",
@@ -218,13 +229,25 @@ const CalibracaoExecucaoFormDialog = ({
       incertezaPressao: formatDecimalPtBr(execucao.incerteza_pressao), observacoes: execucao.observacoes || "",
       dataCalibracao: execucao.data_calibracao, dataEmissao: execucao.data_emissao,
       validadeMes: (execucao.validade_mes || execucao.data_validade || "").slice(0, 7),
-      tecnico: execucao.tecnico_executor_nome, registroTecnico: execucao.tecnico_executor_registro || "",
+      tecnico: execucao.tecnico_executor_nome,
+      tecnicoUsuarioId: execucao.tecnico_executor_usuario_id || "",
+      registroTecnico: execucao.tecnico_executor_registro || "",
       solicitante: execucao.responsavel_solicitante || "",
       criterioPadraoCliente: execucao.criterio_conformidade_aplicado,
     });
     setTabelas(criarTabelasInputDaExecucao(execucao));
     setActiveTabela("0");
-  }, [dataEmissaoInicial, dataRealizacaoInicial, empresaInicialId, equipamentoInicialId, execucao, open, procedimentoInicialId, procedimentos, usuario?.nome]);
+  }, [dataEmissaoInicial, dataRealizacaoInicial, empresaInicialId, equipamentoInicialId, execucao, open, procedimentoInicialId, procedimentos, usuario?.id, usuario?.nome]);
+
+  useEffect(() => {
+    if (!open || form.tecnicoUsuarioId || !form.tecnico || !tecnicos.length) return;
+    const nomeNormalizado = form.tecnico.trim().toLocaleLowerCase("pt-BR");
+    const tecnico = tecnicos.find(
+      (item) => item.nome.trim().toLocaleLowerCase("pt-BR") === nomeNormalizado
+    );
+    if (!tecnico) return;
+    setForm((current) => ({ ...current, tecnicoUsuarioId: tecnico.id }));
+  }, [form.tecnico, form.tecnicoUsuarioId, open, tecnicos]);
 
   useEffect(() => {
     if (!open || execucao || !equipamentoInicialId) return;
@@ -319,6 +342,7 @@ const CalibracaoExecucaoFormDialog = ({
     umidadeRelativa: optional(form.umidade), incertezaUmidade: optional(form.incertezaUmidade),
     pressaoAtmosferica: optional(form.pressao), incertezaPressao: optional(form.incertezaPressao), observacoes: form.observacoes,
     dataCalibracao: form.dataCalibracao, dataEmissao: form.dataEmissao, validadeMes: form.validadeMes,
+    tecnicoExecutorUsuarioId: form.tecnicoUsuarioId || null,
     tecnicoExecutorNome: form.tecnico, tecnicoExecutorRegistro: form.registroTecnico,
     responsavelTecnicoNome: RESPONSAVEL_TECNICO, responsavelTecnicoRegistro: REGISTRO_RESPONSAVEL,
     responsavelSolicitante: form.solicitante, criterioConformidadeAplicado: possuiCriterio,
@@ -437,7 +461,24 @@ const CalibracaoExecucaoFormDialog = ({
           <Field type="date" label="Data da calibracao *" value={form.dataCalibracao} onChange={(value) => update("dataCalibracao", value)} />
           <Field type="date" label="Data de emissao *" value={form.dataEmissao} onChange={(value) => update("dataEmissao", value)} />
           <Field type="month" label="Validade *" value={form.validadeMes} onChange={(value) => update("validadeMes", value)} />
-          <Field label="Tecnico executor *" value={form.tecnico} onChange={(value) => update("tecnico", value)} />
+          <div className="space-y-1">
+            <Label className="text-xs">Técnico executor *</Label>
+            <SearchableSelect
+              value={form.tecnicoUsuarioId}
+              onValueChange={(tecnicoUsuarioId) => {
+                const tecnico = tecnicos.find((item) => item.id === tecnicoUsuarioId);
+                setForm((current) => ({
+                  ...current,
+                  tecnicoUsuarioId,
+                  tecnico: tecnico?.nome || "",
+                  registroTecnico: "",
+                }));
+              }}
+              options={tecnicosOptions}
+              placeholder="Selecione o técnico executor"
+              emptyText="Nenhum técnico cadastrado."
+            />
+          </div>
           <Field label="Responsavel solicitante" value={form.solicitante} onChange={(value) => update("solicitante", value)} />
           {empresa && <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm"><span className="block text-xs text-muted-foreground">Declaração de conformidade</span>{possuiCriterio ? "Aplicada nas tabelas marcadas" : "Não aplicada nesta calibração"}</div>}
         </CardContent></Card>

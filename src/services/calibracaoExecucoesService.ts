@@ -154,6 +154,7 @@ export type CalibracaoExecucao = {
   data_validade: string | null;
   validade_mes: string | null;
   validade_meses: number;
+  tecnico_executor_usuario_id: string | null;
   tecnico_executor_nome: string;
   tecnico_executor_registro: string | null;
   responsavel_tecnico_nome: string;
@@ -267,6 +268,7 @@ export type CalibracaoExecucaoFormInput = {
   dataCalibracao: string;
   dataEmissao: string;
   validadeMes: string;
+  tecnicoExecutorUsuarioId?: string | null;
   tecnicoExecutorNome: string;
   tecnicoExecutorRegistro?: string | null;
   responsavelTecnicoNome: string;
@@ -331,7 +333,8 @@ const selectExecucao = `
   local_calibracao, temperatura_ambiente, incerteza_temperatura, unidade_temperatura,
   umidade_relativa, incerteza_umidade, unidade_umidade, pressao_atmosferica,
   incerteza_pressao, unidade_pressao, observacoes, data_calibracao, data_emissao,
-  data_validade, validade_mes, validade_meses, tecnico_executor_nome, tecnico_executor_registro,
+  data_validade, validade_mes, validade_meses, tecnico_executor_usuario_id,
+  tecnico_executor_nome, tecnico_executor_registro,
   responsavel_tecnico_nome, responsavel_tecnico_registro, responsavel_solicitante,
   status, numero_revisao, atualizado_apos_finalizacao,
   criterio_conformidade_aplicado, regra_decisao, resultado_geral, os_id,
@@ -434,6 +437,7 @@ const criarPayloadExecucao = (
   data_validade: fimDoMesValidade(input.validadeMes),
   validade_mes: primeiroDiaMesValidade(input.validadeMes),
   validade_meses: 12,
+  tecnico_executor_usuario_id: input.tecnicoExecutorUsuarioId || null,
   tecnico_executor_nome: input.tecnicoExecutorNome.trim(),
   tecnico_executor_registro: trimOrNull(input.tecnicoExecutorRegistro),
   responsavel_tecnico_nome: input.responsavelTecnicoNome.trim(),
@@ -556,6 +560,7 @@ const criarInputDaExecucao = (
   dataCalibracao: execucao.data_calibracao,
   dataEmissao: execucao.data_emissao,
   validadeMes: (execucao.validade_mes || execucao.data_validade || "").slice(0, 7),
+  tecnicoExecutorUsuarioId: execucao.tecnico_executor_usuario_id,
   tecnicoExecutorNome: execucao.tecnico_executor_nome,
   tecnicoExecutorRegistro: execucao.tecnico_executor_registro,
   responsavelTecnicoNome: execucao.responsavel_tecnico_nome,

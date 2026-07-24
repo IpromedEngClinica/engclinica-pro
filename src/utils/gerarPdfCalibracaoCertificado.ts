@@ -17,6 +17,7 @@ export const gerarPdfCalibracaoCertificado = async (
   const [logo, assinaturas] = await Promise.all([
     imageToDataUrl(aciLogo),
     assinaturasService.resolverDocumento({
+      tecnicoUsuarioId: execucao.tecnico_executor_usuario_id,
       tecnicoNome: execucao.tecnico_executor_nome,
       responsavelNome: execucao.responsavel_tecnico_nome,
       solicitanteNome: execucao.responsavel_solicitante,

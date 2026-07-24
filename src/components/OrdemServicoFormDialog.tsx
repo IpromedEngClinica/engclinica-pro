@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import SearchableSelect from "@/components/SearchableSelect";
-import { Plus, X } from "lucide-react";
+import { FileText, Plus, X } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import {
   OrdemServicoFormInput,
@@ -31,6 +31,7 @@ import {
   localDateTimeToIso,
   toLocalDateTimeInput,
 } from "@/utils/planoDatas";
+import { gerarPdfOrdemServico } from "@/utils/gerarPdfOrdemServico";
 
 export type DialogMode = "create" | "edit" | "view";
 
@@ -159,6 +160,7 @@ const OrdemServicoFormDialog = ({
   const [acessorios, setAcessorios] = useState<AcessorioFormItem[]>([]);
   const [novoAcessorio, setNovoAcessorio] = useState("");
   const [checklistEditOpen, setChecklistEditOpen] = useState(false);
+  const [gerandoPdfAposSalvar, setGerandoPdfAposSalvar] = useState(false);
   const {
     data: equipamentos = [],
     isFetching: isFetchingEquipamentos,
@@ -169,6 +171,7 @@ const OrdemServicoFormDialog = ({
 
   const readOnly = mode === "view";
   const saving = criarOS.isPending || atualizarOS.isPending;
+  const busy = saving || gerandoPdfAposSalvar;
   const fromEquipamentoId = fromEquipamento?.id || "";
   const fromEquipamentoEmpresaId = fromEquipamento?.empresaId || "";
   const hasChecklistPreventiva = Boolean(
@@ -421,7 +424,7 @@ const OrdemServicoFormDialog = ({
     setAcessorios((prev) => prev.filter((_, idx) => idx !== i));
   };
 
-  const handleSave = async () => {
+  const handleSave = async (gerarPdfDepois = false) => {
     if (!form.empresaId) {
       toast({
         title: "Selecione o solicitante.",
@@ -522,9 +525,28 @@ const OrdemServicoFormDialog = ({
 
         toast({ title: "Ordem de Serviço atualizada com sucesso!" });
       } else {
-        await criarOS.mutateAsync(payload);
+        const osCriada = await criarOS.mutateAsync(payload);
 
         toast({ title: "Ordem de Serviço criada com sucesso!" });
+
+        if (gerarPdfDepois) {
+          setGerandoPdfAposSalvar(true);
+
+          try {
+            await gerarPdfOrdemServico(osCriada);
+          } catch (pdfError) {
+            toast({
+              title: "OS salva, mas o PDF não foi gerado",
+              description:
+                pdfError instanceof Error
+                  ? pdfError.message
+                  : "Tente gerar o PDF pela visualização da OS.",
+              variant: "destructive",
+            });
+          } finally {
+            setGerandoPdfAposSalvar(false);
+          }
+        }
       }
 
       onOpenChange(false);
@@ -594,7 +616,7 @@ const OrdemServicoFormDialog = ({
                   type="datetime-local"
                   value={form.dataAbertura || ""}
                   onChange={(event) => handleDataAberturaChange(event.target.value)}
-                  disabled={readOnly || saving}
+                  disabled={readOnly || busy}
                 />
               </div>
 
@@ -604,7 +626,7 @@ const OrdemServicoFormDialog = ({
                   type="datetime-local"
                   value={form.dataFechamento || ""}
                   onChange={(event) => update("dataFechamento", event.target.value)}
-                  disabled={readOnly || saving}
+                  disabled={readOnly || busy}
                 />
                 {!readOnly && !selectedEstado?.finaliza_os && !selectedEstado?.cancela_os && (
                   <p className="text-xs text-muted-foreground">
@@ -713,7 +735,7 @@ const OrdemServicoFormDialog = ({
                   rows={3}
                   value={form.problemaRelatado}
                   onChange={(e) => update("problemaRelatado", e.target.value)}
-                  disabled={readOnly || saving}
+                  disabled={readOnly || busy}
                 />
               </div>
 
@@ -723,7 +745,7 @@ const OrdemServicoFormDialog = ({
                   placeholder="Ex: Relato do operador, alarme, falha observada..."
                   value={form.origemProblema}
                   onChange={(e) => update("origemProblema", e.target.value)}
-                  disabled={readOnly || saving}
+                  disabled={readOnly || busy}
                 />
               </div>
 
@@ -734,7 +756,7 @@ const OrdemServicoFormDialog = ({
                   rows={5}
                   value={form.descricaoServico}
                   onChange={(e) => update("descricaoServico", e.target.value)}
-                  disabled={readOnly || saving}
+                  disabled={readOnly || busy}
                 />
               </div>
             </div>
@@ -755,10 +777,10 @@ const OrdemServicoFormDialog = ({
                       handleAddAcessorio();
                     }
                   }}
-                  disabled={saving}
+                  disabled={busy}
                 />
 
-                <Button type="button" onClick={handleAddAcessorio} disabled={saving}>
+                <Button type="button" onClick={handleAddAcessorio} disabled={busy}>
                   <Plus className="w-4 h-4 mr-2" /> Adicionar
                 </Button>
               </div>
@@ -809,7 +831,7 @@ const OrdemServicoFormDialog = ({
               rows={5}
               value={form.observacoes}
               onChange={(e) => update("observacoes", e.target.value)}
-              disabled={readOnly || saving}
+              disabled={readOnly || busy}
             />
           </div>
         </div>
@@ -820,22 +842,43 @@ const OrdemServicoFormDialog = ({
               type="button"
               variant="outline"
               onClick={() => setChecklistEditOpen(true)}
-              disabled={saving}
+              disabled={busy}
             >
               {hasChecklistPreventiva ? "Editar checklist" : "Acessar checklist"}
             </Button>
           )}
 
           <Button
+            type="button"
             variant="outline"
             onClick={() => onOpenChange(false)}
-            disabled={saving}
+            disabled={busy}
           >
             {readOnly ? "Fechar" : "Cancelar"}
           </Button>
 
+          {mode === "create" && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleSave(true)}
+              disabled={busy}
+            >
+              <FileText className="mr-2 h-4 w-4" />
+              {gerandoPdfAposSalvar
+                ? "Gerando PDF..."
+                : saving
+                  ? "Salvando..."
+                  : "Salvar e gerar PDF"}
+            </Button>
+          )}
+
           {!readOnly && (
-            <Button onClick={handleSave} disabled={saving}>
+            <Button
+              type="button"
+              onClick={() => handleSave(false)}
+              disabled={busy}
+            >
               {saving ? "Salvando..." : "Salvar OS"}
             </Button>
           )}
